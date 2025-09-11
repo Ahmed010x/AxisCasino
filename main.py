@@ -642,6 +642,19 @@ async def deduct_balance(user_id: int, amount: int, transaction_type: str = "gam
     return new_bal
 
 
+# --- Cooldown System ---
+cooldown_tracker = defaultdict(float)
+
+def is_on_cooldown(user_id: int, cooldown_seconds: int = 2) -> bool:
+    """Check if user is on cooldown"""
+    current_time = time.time()
+    last_action = cooldown_tracker[user_id]
+    return (current_time - last_action) < cooldown_seconds
+
+def set_cooldown(user_id: int):
+    """Set cooldown for user"""
+    cooldown_tracker[user_id] = time.time()
+
 # --- Enhanced Game Engine ---
 class GameEngine:
     def __init__(self):
@@ -1459,14 +1472,11 @@ async def stake_wallet_callback(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer()
     user_id = query.from_user.id
     user = await get_user(user_id)
-    
     if not user:
         await query.answer("Please /start first", show_alert=True)
         return
-    
     # Calculate some wallet stats
     balance = user['balance']
-    
     # Simulated transaction history
     transactions = [
         ("🎰 Mega Slots Win", "+2,500", "2 hours ago"),
@@ -1475,409 +1485,159 @@ async def stake_wallet_callback(update: Update, context: ContextTypes.DEFAULT_TY
         ("💣 Mines Win", "+750", "1 day ago"),
         ("🏆 Tournament Entry", "-25", "2 days ago")
     ]
-    
     text = f"""
-💰 **WALLET & TRANSACTIONS** 💰
+💼 *WALLET*
 
-**💎 Current Balance:** `{balance:,}` chips
+💰 *Balance:* {balance:,} chips
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-**📊 Account Overview:**
-• Total Wagered: `{balance * 5:,}` chips (est.)
-• Total Won: `{balance * 3:,}` chips (est.)
-• Net P&L: `{balance - 100:,}` chips
-• Win Rate: `65.8%`
-
-**🎯 VIP Progress:**
-• Current Tier: {'💎 Diamond' if balance >= 10000 else '🥇 Gold' if balance >= 5000 else '🥈 Silver' if balance >= 1000 else '🥉 Bronze'}
-• Wager Progress: `{min(100, (balance / 1000) * 100):.1f}%` to next tier
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-**📈 Recent Transactions:**
+📜 *Recent Transactions:*
 """
-    
-    for desc, amount, time in transactions:
-        text += f"`{desc}` {amount} chips `({time})`\n"
-    
-    text += "\n**💡 Quick Actions:**"
-    
+    for desc, amt, when in transactions:
+        text += f"{desc}: {amt} ({when})\n"
     keyboard = [
-        [InlineKeyboardButton("🎁 Daily Bonus", callback_data="daily_bonus"), InlineKeyboardButton("💎 VIP Rewards", callback_data="vip_rewards")],
-        [InlineKeyboardButton("📊 Full History", callback_data="wallet_history"), InlineKeyboardButton("📈 Statistics", callback_data="wallet_stats")],
-        [InlineKeyboardButton("🔄 Refresh Balance", callback_data="wallet_refresh"), InlineKeyboardButton("⚙️ Settings", callback_data="wallet_settings")],
         [InlineKeyboardButton("🔙 Back to Casino", callback_data="mini_casino_app")]
     ]
-    
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
+# --- Global Error Handler ---
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.error(f"Exception: {context.error}")
+    try:
+        if update and hasattr(update, 'message') and update.message:
+            await update.message.reply_text("❌ An unexpected error occurred. Please try again later.")
+        elif update and hasattr(update, 'callback_query') and update.callback_query:
+            await update.callback_query.answer("❌ An error occurred. Please try again.", show_alert=True)
+    except Exception:
+        pass
 
-# --- Missing Stake-Style Callback Functions ---
-
-async def stake_mega_slots_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Enhanced slots with Stake-style interface"""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    user = await get_user(user_id)
-    
-    if not user:
-        await query.answer("Please /start first", show_alert=True)
-        return
-    
-    # Simulated progressive jackpot
-    import time
-    jackpot_base = 1000000
-    jackpot_current = jackpot_base + int(time.time() % 100000)
-    
-    text = f"""
-🎰 **MEGA SLOTS** - *Progressive Jackpot* 🎰
-
-💰 **Your Balance:** `{user['balance']:,}` chips
-🏆 **Progressive Jackpot:** `{jackpot_current:,}` chips
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-**🎮 Game Features:**
-• **5 Reels, 25 Paylines** - Maximum winning potential
-• **Wild Symbols** - Substitute for any symbol  
-• **Scatter Bonus** - 3+ scatters = Free spins
-• **Progressive Jackpot** - Hit 5 diamonds for mega win!
-• **Auto Spin** - Up to 100 automatic spins
-
-**🎯 Paytable (per line bet):**
-```
-💎 5x = JACKPOT! 
-🔔 5x = 1000x bet
-🍊 5x = 500x bet  
-🍋 5x = 250x bet
-🍒 5x = 100x bet
-```
-
-**⚡ RTP: 96.8%** | **Max Win: 50,000x**
-
-Choose your bet per line:
+# --- /help Command ---
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = """
+🎰 *Casino Bot Help*
+/start - Register or open main menu
+/balance - Show your chip balance
+/daily - Claim daily bonus
+/games - Open games menu
+/stat - Show your stats
+/leaderboard - Top 10 players
+/help - Show this help message
+/about - About this bot
 """
-    
-    keyboard = [
-        [InlineKeyboardButton("💎 1 chip/line (25 total)", callback_data="mega_slots_bet_25"), InlineKeyboardButton("🔥 2 chips/line (50 total)", callback_data="mega_slots_bet_50")],
-        [InlineKeyboardButton("⚡ 4 chips/line (100 total)", callback_data="mega_slots_bet_100"), InlineKeyboardButton("💰 10 chips/line (250 total)", callback_data="mega_slots_bet_250")],
-        [InlineKeyboardButton("🎰 Auto Spin Mode", callback_data="mega_slots_auto"), InlineKeyboardButton("📊 Game Info", callback_data="mega_slots_info")],
-        [InlineKeyboardButton("🔙 Back to Slots", callback_data="stake_slots")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
-async def stake_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Enhanced dice game with multiplier selection"""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    user = await get_user(user_id)
-    
-    if not user:
-        await query.answer("Please /start first", show_alert=True)
+# --- /leaderboard Command ---
+async def leaderboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10")
+        rows = await cur.fetchall()
+    if not rows:
+        await update.message.reply_text("🏆 No players found yet!")
         return
-    
+    text = "🏆 *Top 10 Players* 🏆\n\n"
+    for i, (username, balance) in enumerate(rows, 1):
+        medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
+        text += f"{medal} {username or 'Anonymous'}: *{balance:,}* chips\n"
+    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+
+# --- /about Command ---
+async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = f"""
-🎲 **DICE GAME** - *Provably Fair* 🎲
-
-💰 **Your Balance:** `{user['balance']:,}` chips
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-**🎯 How to Play:**
-Set your target number (0-100) and bet Over or Under!
-
-**Current Settings:**
-• Target: `50.00` (Default)
-• Prediction: `Over 50.00`
-• Win Chance: `49.5%`  
-• Multiplier: `1.98x`
-• House Edge: `1%`
-
-**🎮 Popular Presets:**
-```
-🟢 Safe (90% win) = 1.09x payout
-🟡 Balanced (50% win) = 1.98x payout  
-🟠 Risky (25% win) = 3.96x payout
-🔴 YOLO (5% win) = 19.8x payout
-```
-
-**⚡ Features:**
-• Instant results • Provably fair • Custom targets
-• Auto-bet • Statistics tracking • Max 10,000x win
-
-Choose your strategy:
+🤖 *About Casino Bot*
+Version: {BOT_VERSION}
+Developer: @casino_support
+Stake-style casino for Telegram. Play responsibly!
 """
-    
-    keyboard = [
-        [InlineKeyboardButton("🟢 Safe Bet (1.09x)", callback_data="dice_safe_25"), InlineKeyboardButton("🟡 Balanced (1.98x)", callback_data="dice_balanced_25")],
-        [InlineKeyboardButton("🟠 Risky (3.96x)", callback_data="dice_risky_25"), InlineKeyboardButton("🔴 YOLO (19.8x)", callback_data="dice_yolo_25")],
-        [InlineKeyboardButton("⚙️ Custom Settings", callback_data="dice_custom"), InlineKeyboardButton("🤖 Auto Bet", callback_data="dice_auto")],
-        [InlineKeyboardButton("📊 Game Stats", callback_data="dice_stats"), InlineKeyboardButton("🔙 Back to Originals", callback_data="stake_originals")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
-async def stake_roulette_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Enhanced roulette with multiple bet types"""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    user = await get_user(user_id)
-    
-    if not user:
-        await query.answer("Please /start first", show_alert=True)
+# --- Admin Ban/Unban Commands ---
+async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in ADMIN_USER_IDS:
+        await update.message.reply_text("❌ You are not authorized to use this command.")
         return
-    
-    # Generate recent results
-    recent_results = []
-    for i in range(5):
-        num = random.randint(0, 36)
-        color = "red" if num in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else "⚫" if num != 0 else "🟢"
-        recent_results.append(f"{color}{num}")
-    
-    text = f"""
-🎡 **EUROPEAN ROULETTE** 🎡
+    if not context.args:
+        await update.message.reply_text("Usage: /ban <user_id>")
+        return
+    ban_id = int(context.args[0])
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE users SET is_banned = 1 WHERE id = ?", (ban_id,))
+        await db.commit()
+    await update.message.reply_text(f"User {ban_id} has been banned.")
 
-💰 **Your Balance:** `{user['balance']:,}` chips
+async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in ADMIN_USER_IDS:
+        await update.message.reply_text("❌ You are not authorized to use this command.")
+        return
+    if not context.args:
+        await update.message.reply_text("Usage: /unban <user_id>")
+        return
+    unban_id = int(context.args[0])
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE users SET is_banned = 0 WHERE id = ?", (unban_id,))
+        await db.commit()
+    await update.message.reply_text(f"User {unban_id} has been unbanned.")
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# --- Fallback Handler ---
+async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("❓ Unknown command. Use /help for a list of commands.")
 
-**🎯 Recent Results:**
-{' → '.join(recent_results)} → `?`
+# --- Health Check Endpoint (for production monitoring) ---
+async def health_check_handler(request):
+    return aiohttp.web.json_response({"status": "ok", "service": "casino-bot"})
 
-**🎮 Betting Options:**
-
-**Outside Bets (Higher chance):**
-• 🔴 Red / ⚫ Black - `1:1` payout (48.6% chance)
-• 🔢 Even / Odd - `1:1` payout (48.6% chance)  
-• 📊 1-18 / 19-36 - `1:1` payout (48.6% chance)
-• 📈 Dozens (1-12, 13-24, 25-36) - `2:1` payout
-
-**Inside Bets (Higher payout):**
-• 🎯 Straight Up (1 number) - `35:1` payout
-• ➗ Split (2 numbers) - `17:1` payout
-• 🔺 Street (3 numbers) - `11:1` payout
-
-**🟢 Zero:** `0` - House edge number
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-**⚡ RTP: 97.3%** | **Max Win: 3,500x**
-
-Place your bets:
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("🔴 Red (25)", callback_data="roulette_red_25"), InlineKeyboardButton("⚫ Black (25)", callback_data="roulette_black_25")],
-        [InlineKeyboardButton("🔢 Even (25)", callback_data="roulette_even_25"), InlineKeyboardButton("🔢 Odd (25)", callback_data="roulette_odd_25")],
-        [InlineKeyboardButton("🎯 Lucky Number (100)", callback_data="roulette_straight_100"), InlineKeyboardButton("📊 Dozens (50)", callback_data="roulette_dozen_50")],
-        [InlineKeyboardButton("💰 High Roller (500)", callback_data="roulette_high_500"), InlineKeyboardButton("📈 Statistics", callback_data="roulette_stats")],
-        [InlineKeyboardButton("🔙 Back to Live", callback_data="stake_live")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-
-# --- Enhanced Crash Game Implementation ---
-class CrashGame:
-    def __init__(self):
-        self.crash_history = deque(maxlen=20)
-        self.current_multiplier = 1.0
-    
-    def generate_crash_point(self) -> float:
-        """Generate crash point using house edge algorithm"""
-        # Use a more realistic crash distribution
-        random_value = random.random()
-        
-        if random_value < 0.33:  # 33% chance of early crash (1.0x - 1.5x)
-            crash_point = round(random.uniform(1.01, 1.50), 2)
-        elif random_value < 0.6:  # 27% chance of medium crash (1.5x - 3.0x)
-            crash_point = round(random.uniform(1.50, 3.0), 2)
-        elif random_value < 0.85:  # 25% chance of good run (3.0x - 10.0x)
-            crash_point = round(random.uniform(3.0, 10.0), 2)
-        elif random_value < 0.97:  # 12% chance of big run (10.0x - 50.0x)
-            crash_point = round(random.uniform(10.0, 50.0), 2)
-        else:  # 3% chance of moon shot (50.0x - 1000.0x)
-            crash_point = round(random.uniform(50.0, 1000.0), 2)
-        
-        self.crash_history.append(crash_point)
-        return crash_point
-    
-    def get_recent_crashes(self, limit: int = 10):
-        """Get recent crash history"""
-        return list(self.crash_history)[-limit:]
-    
-    def calculate_auto_cashout(self, target_multiplier: float, crash_point: float) -> tuple:
-        """Calculate if auto cashout triggered"""
-        if target_multiplier <= crash_point:
-            return True, target_multiplier
-        return False, 0.0
-
-# Initialize crash game
-crash_game = CrashGame()
-
-# --- Enhanced Plinko Game ---
-class PlinkoGame:
-    def __init__(self):
-        self.payout_slots = [
-            {'multiplier': 1000, 'probability': 0.001, 'emoji': '💎'},  # 0.1% jackpot
-            {'multiplier': 130, 'probability': 0.02, 'emoji': '🔥'},    # 2%
-            {'multiplier': 43, 'probability': 0.08, 'emoji': '⚡'},     # 8%
-            {'multiplier': 10, 'probability': 0.20, 'emoji': '💰'},     # 20%
-            {'multiplier': 5, 'probability': 0.30, 'emoji': '🎯'},      # 30%
-            {'multiplier': 0, 'probability': 0.10, 'emoji': '💀'},      # 10% no payout
-            {'multiplier': 5, 'probability': 0.30, 'emoji': '🎯'},      # 30%
-            {'multiplier': 10, 'probability': 0.20, 'emoji': '💰'},     # 20%
-            {'multiplier': 43, 'probability': 0.08, 'emoji': '⚡'},     # 8%
-            {'multiplier': 130, 'probability': 0.02, 'emoji': '🔥'},    # 2%
-            {'multiplier': 1000, 'probability': 0.001, 'emoji': '💎'},  # 0.1% jackpot
-        ]
-    
-    def drop_ball(self) -> dict:
-        """Simulate ball drop with weighted probabilities"""
-        rand = random.random()
-        cumulative_prob = 0
-        
-        for i, slot in enumerate(self.payout_slots):
-            cumulative_prob += slot['probability']
-            if rand <= cumulative_prob:
-                return {
-                    'slot_index': i,
-                    'multiplier': slot['multiplier'],
-                    'emoji': slot['emoji'],
-                    'animation': self._generate_drop_animation(i)
-                }
-        
-        # Fallback to middle slot
-        return {
-            'slot_index': 5,
-            'multiplier': 0,
-            'emoji': '💀',
-            'animation': self._generate_drop_animation(5)
-        }
-    
-    def _generate_drop_animation(self, final_slot: int) -> list:
-        """Generate ball drop animation path"""
-        path = []
-        current_pos = 5  # Start in middle
-        
-        for level in range(8):  # 8 levels of pegs
-            # Ball bounces left or right
-            if random.random() < 0.5:
-                current_pos = max(0, current_pos - 1)
-                path.append('◀️')
-            else:
-                current_pos = min(10, current_pos + 1)
-                path.append('▶️')
-        
-        return path
-
-# Initialize plinko game
-plinko_game = PlinkoGame()
-
-# --- Advanced Mines Game ---
-class MinesGame:
-    def __init__(self):
-        self.active_games = {}
-    
-    def start_game(self, user_id: int, mines_count: int, bet_amount: int) -> str:
-        """Start new mines game"""
-        game_id = str(uuid.uuid4())
-        grid_size = 25  # 5x5 grid
-        
-        # Place mines randomly
-        mine_positions = set(random.sample(range(grid_size), mines_count))
-        
-        game_state = {
-            'game_id': game_id,
-            'user_id': user_id,
-            'mines_count': mines_count,
-            'bet_amount': bet_amount,
-            'mine_positions': mine_positions,
-            'revealed_tiles': set(),
-            'current_multiplier': 1.0,
-            'safe_tiles_found': 0,
-            'game_over': False,
-            'created_at': datetime.now()
-        }
-        
-        self.active_games[game_id] = game_state
-        return game_id
-    
-    def reveal_tile(self, game_id: str, tile_index: int) -> dict:
-        """Reveal a tile and update game state"""
-        game = self.active_games.get(game_id)
-        if not game or game['game_over']:
-            return {'error': 'Game not found or already ended'}
-        
-        if tile_index in game['revealed_tiles']:
-            return {'error': 'Tile already revealed'}
-        
-        game['revealed_tiles'].add(tile_index)
-        
-        if tile_index in game['mine_positions']:
-            # Hit a mine - game over
-            game['game_over'] = True
-            return {
-                'hit_mine': True,
-                'game_over': True,
-                'final_multiplier': 0,
-                'mine_positions': list(game['mine_positions'])
-            }
+# --- Register Handlers in Main ---
+# ...existing code...
+async def show_simple_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if query:
+        await query.answer()
+        user_id = query.from_user.id
+    else:
+        user_id = update.effective_user.id
+    user_data = await get_user(user_id)
+    if not user_data:
+        if query:
+            await query.answer("Please /start first", show_alert=True)
         else:
-            # Safe tile found
-            game['safe_tiles_found'] += 1
-            
-            # Calculate new multiplier based on risk
-            safe_tiles_left = 25 - game['mines_count'] - game['safe_tiles_found']
-            mines_left = game['mines_count']
-            
-            if safe_tiles_left > 0:
-                # Higher multiplier as risk increases
-                risk_factor = (25 - game['safe_tiles_found']) / (25 - game['mines_count'])
-                game['current_multiplier'] = round(1 + (game['safe_tiles_found'] * 0.2 * (1 + game['mines_count'] * 0.1)), 2)
-            
-            return {
-                'hit_mine': False,
-                'safe_tile': True,
-                'current_multiplier': game['current_multiplier'],
-                'safe_tiles_found': game['safe_tiles_found'],
-                'can_cashout': True
-            }
-    
-    def cashout(self, game_id: str) -> dict:
-        """Cash out current winnings"""
-        game = self.active_games.get(game_id)
-        if not game or game['game_over']:
-            return {'error': 'Cannot cashout'}
-        
-        final_payout = int(game['bet_amount'] * game['current_multiplier'])
-        game['game_over'] = True
-        
-        return {
-            'success': True,
-            'final_multiplier': game['current_multiplier'],
-            'payout': final_payout,
-            'safe_tiles_found': game['safe_tiles_found']
-        }
-    
-    def get_game_state(self, game_id: str) -> dict:
-        """Get current game state for display"""
-        game = self.active_games.get(game_id)
-        if not game:
-            return {}
-        
-        return {
-            'mines_count': game['mines_count'],
-            'revealed_tiles': list(game['revealed_tiles']),
-            'current_multiplier': game['current_multiplier'],
-            'safe_tiles_found': game['safe_tiles_found'],
-            'game_over': game['game_over']
-        }
+            await update.message.reply_text("Please /start first")
+        return
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("SELECT COUNT(*) FROM users WHERE balance > ?", (user_data['balance'],))
+        rank = (await cur.fetchone())[0] + 1
+    balance = user_data['balance']
+    if balance >= VIP_DIAMOND_REQUIRED:
+        status = "💎 Diamond VIP"
+        status_emoji = "💎"
+    elif balance >= VIP_GOLD_REQUIRED:
+        status = "🥇 Gold VIP"
+        status_emoji = "🥇"
+    elif balance >= VIP_SILVER_REQUIRED:
+        status = "🥈 Silver VIP"
+        status_emoji = "🥈"
+    else:
+        status = "🥉 Bronze Member"
+        status_emoji = "🆕"
+    keyboard = [
+        [InlineKeyboardButton("🎮 Enter Mini Casino", callback_data="mini_casino_app")],
+        [InlineKeyboardButton("🎁 Daily Bonus", callback_data="daily_bonus"), InlineKeyboardButton("📊 My Stats", callback_data="show_stats")],
+        [InlineKeyboardButton("🏆 Leaderboard", callback_data="show_leaderboard"), InlineKeyboardButton("❓ Help", callback_data="show_help")]
+    ]
+    text = f"""
+{status_emoji} *Welcome to Casino Bot* {status_emoji}
 
-# Initialize mines game
-mines_game = MinesGame()
+💰 *Balance:* {user_data['balance']:,} chips
+🏆 *Rank:* `#{rank}`
+👤 *Status:* {status}
+
+🎮 Ready to play? Enter the Mini Casino for all games!
+🎁 Don't forget to claim your daily bonus
+📊 Check your stats and ranking anytime
+
+Have fun and play responsibly! 🍀
+"""
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode=ParseMode.MARKDOWN)
+    else:
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode=ParseMode.MARKDOWN)
