@@ -87,7 +87,15 @@ SUPPORT_CHANNEL = os.environ.get("SUPPORT_CHANNEL", "@casino_support")
 BOT_VERSION = "2.0.1"
 
 # WebApp Configuration  
-WEBAPP_URL = os.environ.get("WEBAPP_URL", f"http://localhost:{PORT}")
+# Auto-detect environment and set appropriate WebApp URL
+if RENDER_EXTERNAL_URL:
+    # Production environment (Render)
+    default_webapp_url = f"{RENDER_EXTERNAL_URL}/casino"
+else:
+    # Local development environment
+    default_webapp_url = f"http://localhost:{PORT}/casino"
+
+WEBAPP_URL = os.environ.get("WEBAPP_URL", default_webapp_url)
 WEBAPP_ENABLED = os.environ.get("WEBAPP_ENABLED", "true").lower() == "true"
 WEBAPP_SECRET_KEY = os.environ.get("WEBAPP_SECRET_KEY", "your-secret-key-here")
 
