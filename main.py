@@ -1117,15 +1117,34 @@ def get_daily_bonus_amount(vip_level):
     return int(base_bonus * multiplier)
 
 # --- Main Application Setup ---
-async def main():
+def main():
     """Main application entry point"""
+    try:
+        # Use asyncio.run to create a new event loop
+        asyncio.run(run_bot())
+    except KeyboardInterrupt:
+        logger.info("🛑 Application terminated by user")
+    except Exception as e:
+        logger.error(f"❌ Application failed to start: {e}")
+        sys.exit(1)
+
+async def run_bot():
+    """Run the bot with proper async handling"""
+    application = None
+    runner = None
+    heartbeat_task = None
+    
     try:
         # Initialize database
         await init_db()
         logger.info("✅ Database initialized successfully")
         
-        # Create application
-        application = ApplicationBuilder().token(BOT_TOKEN).build()
+        # Create application with proper configuration
+        application = (
+            ApplicationBuilder()
+            .token(BOT_TOKEN)
+            .build()
+        )
         
         # Add command handlers
         application.add_handler(CommandHandler("start", start_command))
@@ -1141,8 +1160,6 @@ async def main():
         await setup_webapp_menu_button(application)
         
         # Start health check server (optional for local development)
-        runner = None
-        heartbeat_task = None
         try:
             runner = await start_web_server()
             logger.info(f"✅ Health check server started on port {PORT}")
@@ -1162,49 +1179,46 @@ async def main():
         logger.info(f"⚡ WebApp Enabled: {WEBAPP_ENABLED}")
         logger.info(f"🔗 Health Check Server: http://0.0.0.0:{PORT}")
         
-        # Setup graceful shutdown
-        def signal_handler(sig, frame):
-            logger.info("🛑 Received shutdown signal, stopping bot...")
-            if heartbeat_task:
-                heartbeat_task.cancel()
-            if runner:
-                asyncio.create_task(runner.cleanup())
-            sys.exit(0)
-        
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
-        
-        # Start the bot
+        # Initialize application
         await application.initialize()
+        
+        # Start the application
         await application.start()
-        await application.updater.start_polling(drop_pending_updates=True)
         
         logger.info("✅ Bot is running and ready to receive messages!")
         logger.info("Press Ctrl+C to stop the bot")
         
-        # Keep the application running
+        # Start polling
+        await application.updater.start_polling(drop_pending_updates=True)
+        
+        # Keep running
         await asyncio.Event().wait()
         
     except KeyboardInterrupt:
         logger.info("🛑 Bot stopped by user")
     except Exception as e:
         logger.error(f"❌ Critical error: {e}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         raise
     finally:
         # Cleanup
-        if 'application' in locals():
-            await application.stop()
-            await application.shutdown()
-        if 'runner' in locals() and runner:
-            await runner.cleanup()
+        if heartbeat_task:
+            heartbeat_task.cancel()
+        if application:
+            try:
+                await application.updater.stop()
+                await application.stop()
+                await application.shutdown()
+            except Exception as cleanup_error:
+                logger.error(f"Error during application cleanup: {cleanup_error}")
+        if runner:
+            try:
+                await runner.cleanup()
+            except Exception as cleanup_error:
+                logger.error(f"Error cleaning up web server: {cleanup_error}")
         logger.info("✅ Bot shutdown complete")
 
 if __name__ == "__main__":
     """Entry point for the application"""
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("🛑 Application terminated by user")
-    except Exception as e:
-        logger.error(f"❌ Application failed to start: {e}")
-        sys.exit(1)
+    main()
