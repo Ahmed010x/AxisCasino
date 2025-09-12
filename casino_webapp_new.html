@@ -148,16 +148,42 @@
             margin: 0 auto;
         }
         
-        .banner-placeholder {
-            height: 40px;
-            margin-bottom: 10px;
+        .banner-section {
+            height: 120px;
+            margin-bottom: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
-            background: rgba(255,255,255,0.04);
-            border-radius: 10px;
-            color: #4ecdc4;
-            font-weight: bold;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid #333;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        
+        .banner-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
+            border-radius: 12px;
+            transition: transform 0.3s ease;
+        }
+        
+        .banner-section:hover .banner-image {
+            transform: scale(1.02);
+        }
+        
+        .banner-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.1) 100%);
+            border-radius: 12px;
+            pointer-events: none;
             font-size: 1em;
         }
         
@@ -332,6 +358,33 @@
             box-shadow: 0 4px 16px rgba(78,205,196,0.12);
             transform: translateY(-2px) scale(1.04);
         }
+        /* Make image fill the entire carousel-card for image-based games and enlarge the image even more */
+        .carousel-card.img-fill {
+            padding: 0;
+            background: none;
+            border: none;
+            box-shadow: none;
+            min-width: 120px;
+            max-width: 140px;
+            width: 130px;
+            height: 130px;
+            display: flex;
+            align-items: stretch;
+            justify-content: stretch;
+            overflow: hidden;
+        }
+        .carousel-card.img-fill img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 18px;
+            box-shadow: 0 4px 18px rgba(0,0,0,0.20);
+            display: block;
+            transition: transform 0.2s;
+        }
+        .carousel-card.img-fill:hover img {
+            transform: scale(1.08);
+        }
         @media (max-width: 600px) {
             .carousel-card {
                 min-width: 70px;
@@ -419,6 +472,74 @@
                 margin-top: 8px;
             }
         }
+        
+        /* Live Chat Styles */
+        .chat-message {
+            animation: fadeInUp 0.3s ease;
+        }
+        
+        .own-message {
+            text-align: right;
+        }
+        
+        .own-message span:first-child {
+            color: #4ecdc4 !important;
+        }
+        
+        .other-message {
+            text-align: left;
+        }
+        
+        .system-message {
+            animation: fadeIn 0.5s ease;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+        
+        #chat-messages::-webkit-scrollbar {
+            width: 4px;
+        }
+        
+        #chat-messages::-webkit-scrollbar-track {
+            background: #181818;
+        }
+        
+        #chat-messages::-webkit-scrollbar-thumb {
+            background: #4ecdc4;
+            border-radius: 2px;
+        }
+        
+        #send-btn:hover {
+            background: #3bb3a8 !important;
+            transform: scale(1.05);
+        }
+        
+        #send-btn:active {
+            transform: scale(0.95);
+        }
+        
+        #chat-input:focus {
+            border: 1px solid #4ecdc4;
+            box-shadow: 0 0 8px rgba(78,205,196,0.3);
+        }
     </style>
 </head>
 <body>
@@ -444,6 +565,17 @@
     </div>
     
     <div class="main-content">
+        <div class="banner-section">
+            <img src="https://moneymade.io/learn/wp-content/uploads/2025/05/1_d35f7201e7.jpg" 
+                 alt="Casino Banner" 
+                 class="banner-image"
+                 loading="lazy">
+            <div class="banner-overlay"></div>
+        </div>
+        <div class="search-bar-container">
+            <input type="text" class="search-bar" id="game-search-bar" placeholder="Search games..." autocomplete="off" />
+        </div>
+        <div id="games-grid" class="games-grid" style="display:none;"></div>
         <!-- Crisp Chat Support Integration -->
         <script type="text/javascript">
         window.$crisp=[];window.CRISP_WEBSITE_ID="YOUR_CRISP_WEBSITE_ID";
@@ -453,12 +585,7 @@
             d.getElementsByTagName("head")[0].appendChild(s);
         })();
         </script>
-        <div class="banner-placeholder">
-            <span style="opacity:0.7;">[Banner Space]</span>
-        </div>
-        <div class="search-bar-container">
-            <input type="text" class="search-bar" placeholder="Search games..." />
-        </div>
+        
         <h3 class="top-games-heading" style="color:#fff; font-size:1.05em; font-weight:bold; margin:0 0 10px 4px; letter-spacing:0.5px;">🔥 Top Games</h3>
         <div class="carousel" id="top-games-carousel" style="overflow-x:auto; display:flex; gap:12px; padding-bottom:8px; margin-bottom:18px;">
             <div class="carousel-card game" onclick="playGame('Slots')">
@@ -484,9 +611,14 @@
         </div>
         <h3 class="axis-originals-heading" style="color:#4ecdc4; font-size:1em; font-weight:bold; margin:0 0 10px 4px; letter-spacing:0.5px;">🛡️ Axis Originals</h3>
         <div class="carousel" id="axis-originals-carousel" style="overflow-x:auto; display:flex; gap:12px; padding-bottom:8px; margin-bottom:18px;">
-            <div class="carousel-card game" onclick="playGame('Plinko')">
-                <div class="game-icon">[Plinko Img]</div>
-                <div class="game-name">Plinko</div>
+            <div class="carousel-card img-fill game" onclick="playGame('Plinko')">
+                <img src="https://mediumrare.imgix.net/5cbb2498c956527e6584c6af216489b85bbb7a909c7d3c4e131a3be9bd1cc6bf?w=300&h=400&fit=min&auto=format" alt="Plinko">
+            </div>
+            <div class="carousel-card img-fill game" onclick="playGame('Mines')">
+                <img src="https://mediumrare.imgix.net/15a51a2ae2895872ae2b600fa6fe8d7f8d32c9814766b66ddea2b288d04ba89c?w=300&h=400&fit=min&auto=format" alt="Mines">
+            </div>
+            <div class="carousel-card img-fill game" onclick="playGame('Blackjack')">
+                <img src="https://mediumrare.imgix.net/5fcbd552a53b9be85428ecd7fa0ef663f9d763bd8a504dd0de222bc873b79887?w=360&h=472&fit=min&auto=format" alt="Blackjack">
             </div>
             <div class="carousel-card game" onclick="playGame('Roll')">
                 <div class="game-icon">[Roll Img]</div>
@@ -500,19 +632,25 @@
                 <div class="game-icon">[Crash Img]</div>
                 <div class="game-name">Crash</div>
             </div>
+            <div class="carousel-card img-fill game" onclick="playGame('Hilo')">
+                <img src="https://mediumrare.imgix.net/7324297ac3a60dd5705db514330c5c363aca538432fda98be261bef8df232a77?w=300&h=400&fit=min&auto=format" alt="Hilo">
+            </div>
         </div>
         
         <!-- Live Chat Section -->
         <div class="live-chat-section" style="background:#181818; border-radius:12px; margin:0 0 18px 0; padding:10px 8px; max-width:400px; margin-left:auto; margin-right:auto; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-            <div style="color:#4ecdc4; font-weight:bold; font-size:1em; margin-bottom:6px;">💬 Live Chat</div>
-            <div id="chat-messages" style="height:90px; overflow-y:auto; background:#111; border-radius:8px; padding:6px 8px; font-size:0.95em; color:#fff; margin-bottom:8px; border:1px solid #232323;">
-                <div style="color:#888;">Chat coming soon! Users will be able to talk here in real time.</div>
+            <div style="color:#4ecdc4; font-weight:bold; font-size:1em; margin-bottom:6px; display:flex; align-items:center; justify-content:space-between;">
+                <span>💬 Live Chat</span>
+                <span id="online-count" style="font-size:0.8em; color:#888;">0 online</span>
+            </div>
+            <div id="chat-messages" style="height:120px; overflow-y:auto; background:#111; border-radius:8px; padding:6px 8px; font-size:0.9em; color:#fff; margin-bottom:8px; border:1px solid #232323; scroll-behavior: smooth;">
+                <div class="system-message" style="color:#888; font-style:italic; text-align:center; margin:4px 0;">Welcome to the casino chat! Be respectful to other players.</div>
             </div>
             <form id="chat-form" style="display:flex; gap:6px;">
-                <input type="text" id="chat-input" placeholder="Type a message..." style="flex:1; border-radius:16px; border:none; padding:6px 12px; background:#232323; color:#fff; font-size:1em; outline:none;" disabled />
-                <button type="submit" style="background:#4ecdc4; color:#000; border:none; border-radius:16px; padding:6px 14px; font-weight:bold; cursor:not-allowed;">Send</button>
+                <input type="text" id="chat-input" placeholder="Type a message..." style="flex:1; border-radius:16px; border:none; padding:6px 12px; background:#232323; color:#fff; font-size:1em; outline:none;" maxlength="200" />
+                <button type="submit" id="send-btn" style="background:#4ecdc4; color:#000; border:none; border-radius:16px; padding:6px 14px; font-weight:bold; cursor:pointer; transition:all 0.2s;">Send</button>
             </form>
-            <div style="color:#888; font-size:0.85em; margin-top:4px;">(Feature in development)</div>
+            <div id="chat-status" style="color:#888; font-size:0.85em; margin-top:4px;">Connected to live chat</div>
         </div>
         
         <div class="coming-soon">
@@ -589,7 +727,350 @@
             if (balanceElement) {
                 balanceElement.style.animation = 'pulse 2s infinite';
             }
+            
+            // Initialize live chat
+            initializeChat();
         });
+        
+        // --- Game Search & Dynamic Grid ---
+        const games = [
+            { name: 'Slots', icon: '🎰', type: 'slots' },
+            { name: 'Blackjack', icon: '🃏', type: 'blackjack' },
+            { name: 'Roulette', icon: '🎯', type: 'roulette' },
+            { name: 'Dice', icon: '🎲', type: 'dice' },
+            { name: 'Poker', icon: '♠️', type: 'poker' },
+            { name: 'Crash', icon: '🚀', type: 'crash' },
+            { name: 'Plinko', icon: '🟢', type: 'plinko' },
+            { name: 'Roll', icon: '🔵', type: 'roll' },
+            { name: 'Limbo', icon: '🟣', type: 'limbo' }
+        ];
+
+        function renderGamesGrid(filteredGames, show) {
+            const grid = document.getElementById('games-grid');
+            if (!grid) return;
+            if (!show) {
+                grid.style.display = 'none';
+                grid.innerHTML = '';
+                return;
+            }
+            grid.style.display = '';
+            grid.innerHTML = '';
+            if (filteredGames.length === 0) {
+                grid.innerHTML = '<div style="color:#888; text-align:center; padding:24px 0;">No games found.</div>';
+                return;
+            }
+            filteredGames.forEach(game => {
+                const div = document.createElement('div');
+                div.className = 'game';
+                div.onclick = () => playGame(game.name);
+                div.innerHTML = `<div class="game-icon">${game.icon}</div><div class="game-name">${game.name}</div>`;
+                grid.appendChild(div);
+            });
+        }
+
+        function filterGames(query) {
+            query = query.trim().toLowerCase();
+            if (!query) return [];
+            return games.filter(g => g.name.toLowerCase().includes(query));
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hide games grid initially
+            renderGamesGrid([], false);
+            // Live search
+            const searchBar = document.getElementById('game-search-bar');
+            searchBar.addEventListener('input', function(e) {
+                const value = e.target.value;
+                const filtered = filterGames(value);
+                renderGamesGrid(filtered, value.trim().length > 0);
+            });
+        });
+        
+        // Live Chat System
+        let chatSocket = null;
+        let chatMessages = [];
+        let onlineUsers = new Set();
+        let currentUser = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+        
+        function initializeChat() {
+            // Get current user info
+            if (user && user.first_name) {
+                currentUser = {
+                    id: user.id || Date.now(),
+                    name: user.first_name,
+                    username: user.username || null
+                };
+            } else {
+                currentUser = {
+                    id: Date.now(),
+                    name: 'Player' + Math.floor(Math.random() * 1000),
+                    username: null
+                };
+            }
+            
+            // Set up chat form
+            const chatForm = document.getElementById('chat-form');
+            const chatInput = document.getElementById('chat-input');
+            const sendBtn = document.getElementById('send-btn');
+            
+            chatForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                sendMessage();
+            });
+            
+            chatInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+            
+            // Connect to chat (simulated for now)
+            connectToChat();
+            
+            // Add some initial demo messages
+            addDemoMessages();
+        }
+        
+        function connectToChat() {
+            // Connect to WebSocket chat server
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/chat?user_id=${currentUser.id}&username=${encodeURIComponent(currentUser.name)}`;
+            
+            try {
+                chatSocket = new WebSocket(wsUrl);
+                
+                chatSocket.onopen = function(event) {
+                    updateChatStatus('Connected to live chat', '#4ecdc4');
+                    reconnectAttempts = 0;
+                };
+                
+                chatSocket.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleChatMessage(data);
+                    } catch (e) {
+                        console.error('Error parsing chat message:', e);
+                    }
+                };
+                
+                chatSocket.onclose = function(event) {
+                    updateChatStatus('Disconnected from chat', '#ff6b6b');
+                    // Attempt to reconnect
+                    if (reconnectAttempts < maxReconnectAttempts) {
+                        reconnectAttempts++;
+                        setTimeout(() => {
+                            updateChatStatus('Reconnecting...', '#ffa500');
+                            connectToChat();
+                        }, 2000 * reconnectAttempts);
+                    }
+                };
+                
+                chatSocket.onerror = function(error) {
+                    console.error('WebSocket error:', error);
+                    updateChatStatus('Connection error', '#ff6b6b');
+                };
+                
+            } catch (e) {
+                console.error('Failed to connect to chat:', e);
+                updateChatStatus('Failed to connect', '#ff6b6b');
+                // Fall back to demo mode
+                addDemoMessages();
+            }
+        }
+        
+        function handleChatMessage(data) {
+            switch(data.type) {
+                case 'message':
+                    const isOwn = data.user.id === currentUser.id;
+                    addMessage(data, isOwn);
+                    break;
+                case 'online_count':
+                    updateOnlineCount(data.count);
+                    break;
+                case 'system':
+                    addSystemMessage(data.message);
+                    break;
+                case 'error':
+                    updateChatStatus(data.message, '#ff6b6b');
+                    break;
+            }
+        }
+        
+        function updateOnlineCount(count) {
+            const countElement = document.getElementById('online-count');
+            if (countElement) {
+                countElement.textContent = count + ' online';
+            }
+        }
+        
+        function sendMessage() {
+            const chatInput = document.getElementById('chat-input');
+            const message = chatInput.value.trim();
+            
+            if (!message) return;
+            
+            // Send message via WebSocket if connected
+            if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+                try {
+                    chatSocket.send(JSON.stringify({
+                        type: 'message',
+                        message: message
+                    }));
+                    
+                    // Clear input
+                    chatInput.value = '';
+                } catch (e) {
+                    console.error('Failed to send message:', e);
+                    updateChatStatus('Failed to send message', '#ff6b6b');
+                }
+            } else {
+                // Fallback to demo mode
+                addMessage({
+                    id: Date.now(),
+                    user: currentUser,
+                    message: message,
+                    timestamp: new Date()
+                }, true);
+                
+                // Clear input
+                chatInput.value = '';
+                
+                // Simulate response
+                setTimeout(() => {
+                    simulateRandomMessage();
+                }, Math.random() * 3000 + 1000);
+            }
+        }
+        
+        function addMessage(messageData, isOwn = false) {
+            const messagesContainer = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message';
+            
+            const time = messageData.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            const userColor = isOwn ? '#4ecdc4' : '#ff6b6b';
+            const messageClass = isOwn ? 'own-message' : 'other-message';
+            
+            messageDiv.innerHTML = `
+                <div class="${messageClass}" style="margin-bottom:6px; padding:4px 0;">
+                    <span style="color:${userColor}; font-weight:bold; font-size:0.85em;">${messageData.user.name}</span>
+                    <span style="color:#666; font-size:0.75em; margin-left:6px;">${time}</span>
+                    <div style="color:#fff; margin-top:2px; word-wrap:break-word;">${escapeHtml(messageData.message)}</div>
+                </div>
+            `;
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            // Add fade-in animation
+            messageDiv.style.opacity = '0';
+            messageDiv.style.transform = 'translateY(10px)';
+            requestAnimationFrame(() => {
+                messageDiv.style.transition = 'all 0.3s ease';
+                messageDiv.style.opacity = '1';
+                messageDiv.style.transform = 'translateY(0)';
+            });
+        }
+        
+        function addSystemMessage(message) {
+            const messagesContainer = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'system-message';
+            messageDiv.style.cssText = 'color:#888; font-style:italic; text-align:center; margin:4px 0; font-size:0.85em;';
+            messageDiv.textContent = message;
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        function updateChatStatus(message, color = '#888') {
+            const statusElement = document.getElementById('chat-status');
+            if (statusElement) {
+                statusElement.textContent = message;
+                statusElement.style.color = color;
+            }
+        }
+        
+        function updateOnlineCount(count) {
+            const countElement = document.getElementById('online-count');
+            if (countElement) {
+                if (typeof count === 'number') {
+                    countElement.textContent = count + ' online';
+                } else {
+                    countElement.textContent = onlineUsers.size + ' online';
+                }
+            }
+        }
+        
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
+        
+        function addDemoMessages() {
+            // Add some demo messages to show how chat works
+            setTimeout(() => {
+                addMessage({
+                    id: 1,
+                    user: {name: 'Sarah', id: 'demo1'},
+                    message: 'Hey everyone! Just hit a big win on slots! 🎰',
+                    timestamp: new Date(Date.now() - 60000)
+                });
+            }, 2000);
+            
+            setTimeout(() => {
+                addMessage({
+                    id: 2,
+                    user: {name: 'Mike', id: 'demo2'},
+                    message: 'Nice! What was your multiplier?',
+                    timestamp: new Date(Date.now() - 30000)
+                });
+            }, 3500);
+            
+            setTimeout(() => {
+                addMessage({
+                    id: 3,
+                    user: {name: 'Sarah', id: 'demo1'},
+                    message: '15x on a 100 chip bet! 💰',
+                    timestamp: new Date(Date.now() - 10000)
+                });
+            }, 5000);
+        }
+        
+        function simulateRandomMessage() {
+            const demoMessages = [
+                'Good luck everyone! 🍀',
+                'Anyone playing blackjack?',
+                'This casino is amazing! 🎲',
+                'Just joined, loving the interface!',
+                'Who\'s ready for some poker? ♠️',
+                'Big win incoming! I can feel it! ⭐',
+                'The graphics here are so smooth',
+                'Anyone know when tournaments start?',
+                'Love the VIP system here! 💎',
+                'Playing some roulette, wish me luck! 🎯'
+            ];
+            
+            const demoUsers = ['Alex', 'Emma', 'David', 'Lisa', 'Ryan', 'Maya'];
+            
+            const randomMessage = demoMessages[Math.floor(Math.random() * demoMessages.length)];
+            const randomUser = demoUsers[Math.floor(Math.random() * demoUsers.length)];
+            
+            addMessage({
+                id: Date.now(),
+                user: {name: randomUser, id: 'demo_' + randomUser},
+                message: randomMessage,
+                timestamp: new Date()
+            });
+        }
         
         // Add pulse animation
         const style = document.createElement('style');
