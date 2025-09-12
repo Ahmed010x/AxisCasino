@@ -86,8 +86,8 @@ ADMIN_USER_IDS = list(map(int, os.environ.get("ADMIN_USER_IDS", "").split(",")))
 SUPPORT_CHANNEL = os.environ.get("SUPPORT_CHANNEL", "@casino_support")
 BOT_VERSION = "2.0.1"
 
-# WebApp Configuration
-WEBAPP_URL = os.environ.get("WEBAPP_URL", "http://localhost:5001")
+# WebApp Configuration  
+WEBAPP_URL = os.environ.get("WEBAPP_URL", f"http://localhost:{PORT}")
 WEBAPP_ENABLED = os.environ.get("WEBAPP_ENABLED", "true").lower() == "true"
 WEBAPP_SECRET_KEY = os.environ.get("WEBAPP_SECRET_KEY", "your-secret-key-here")
 
@@ -95,6 +95,7 @@ print("🎰 Mini App Integration Status:")
 print(f"✅ WebApp URL: {WEBAPP_URL}")
 print(f"✅ WebApp Enabled: {WEBAPP_ENABLED}")
 print(f"✅ Secret Key: {'Set' if WEBAPP_SECRET_KEY != 'your-secret-key-here' else 'Default'}")
+print(f"✅ Server Port: {PORT}")
 
 # Rest of the configuration (keeping existing)
 # VIP Level Requirements
@@ -524,10 +525,12 @@ async def keep_alive_heartbeat():
                 continue
 
 async def start_web_server():
-    """Start web server for health checks"""
+    """Start web server for health checks and WebApp"""
     app = web.Application()
     app.router.add_get('/health', health_check)
-    app.router.add_get('/', health_check)
+    app.router.add_get('/', casino_webapp)
+    app.router.add_get('/casino', casino_webapp)
+    app.router.add_static('/', path=os.path.join(os.path.dirname(__file__), 'static'), name='static')
     
     runner = web.AppRunner(app)
     await runner.setup()
@@ -537,6 +540,145 @@ async def start_web_server():
     
     logger.info(f"✅ Health check server started on port {PORT}")
     return runner
+
+async def casino_webapp(request):
+    """Serve a simple casino WebApp interface"""
+    user_id = request.query.get('user_id', 'guest')
+    balance = request.query.get('balance', '1000')
+    
+    html = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🎰 Casino WebApp</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; 
+            text-align: center; 
+            padding: 20px;
+            margin: 0;
+            min-height: 100vh;
+        }
+        .card { 
+            background: rgba(255,255,255,0.1); 
+            border-radius: 20px; 
+            padding: 25px; 
+            margin: 20px auto;
+            backdrop-filter: blur(10px);
+            max-width: 400px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .balance {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 15px 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .games-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .game { 
+            background: rgba(255,255,255,0.2); 
+            border-radius: 15px; 
+            padding: 20px; 
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        .game:hover { 
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-3px);
+        }
+        .game-icon {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        .btn {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            border: none;
+            padding: 15px 25px;
+            border-radius: 25px;
+            color: white;
+            font-weight: bold;
+            margin: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .btn:hover {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🎰 CASINO WEBAPP</h1>
+        <div class="balance">""" + str(balance) + """ chips</div>
+        <p>Player ID: """ + str(user_id) + """</p>
+    </div>
+    
+    <div class="card">
+        <h3>🎮 Casino Games</h3>
+        <div class="games-grid">
+            <div class="game" onclick="playGame('Slots')">
+                <div class="game-icon">🎰</div>
+                <div>Slots</div>
+            </div>
+            <div class="game" onclick="playGame('Blackjack')">
+                <div class="game-icon">🃏</div>
+                <div>Blackjack</div>
+            </div>
+            <div class="game" onclick="playGame('Roulette')">
+                <div class="game-icon">🎯</div>
+                <div>Roulette</div>
+            </div>
+            <div class="game" onclick="playGame('Dice')">
+                <div class="game-icon">🎲</div>
+                <div>Dice</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <p>✨ Professional casino games coming soon!</p>
+        <p>🎮 This is a preview of the full casino experience</p>
+        <button class="btn" onclick="goBack()">� Back to Bot</button>
+    </div>
+    
+    <script>
+        // Initialize Telegram WebApp
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
+            
+            // Set theme
+            const webApp = window.Telegram.WebApp;
+            webApp.BackButton.show();
+            webApp.BackButton.onClick(() => webApp.close());
+        }
+        
+        function playGame(gameType) {
+            alert('🎮 ' + gameType + ' game will be available soon!\\n\\nFull casino games are being developed.\\n\\nStay tuned for updates!');
+        }
+        
+        function goBack() {
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.close();
+            } else {
+                window.history.back();
+            }
+        }
+    </script>
+</body>
+</html>
+"""
+    return web.Response(text=html, content_type='text/html')
 async def setup_webapp_menu_button(application):
     """Set up the WebApp menu button for the bot"""
     if WEBAPP_ENABLED and WEBAPP_IMPORTS_AVAILABLE:
