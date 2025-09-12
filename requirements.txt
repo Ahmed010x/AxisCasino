@@ -1,5 +1,5 @@
 # Core Telegram Bot dependencies
-python-telegram-bot==20.6
+python-telegram-bot==20.3
 aiosqlite==0.19.0
 
 # Flask API dependencies

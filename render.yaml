@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: telegram-casino-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    plan: free
+    autoDeploy: false
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: WEBAPP_URL
+        value: https://your-casino-webapp.vercel.app
+      - key: WEBAPP_ENABLED
+        value: true
+      - key: WEBAPP_SECRET_KEY
+        sync: false
+      - key: PORT
+        value: 10000
+      - key: RENDER_EXTERNAL_URL
+        sync: false
+      - key: HEARTBEAT_INTERVAL
+        value: 300
+      - key: CASINO_DB
+        value: casino.db
+      - key: VIP_SILVER_REQUIRED
+        value: 1000
+      - key: VIP_GOLD_REQUIRED
+        value: 5000
+      - key: VIP_DIAMOND_REQUIRED
+        value: 10000

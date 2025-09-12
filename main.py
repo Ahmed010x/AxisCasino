@@ -1117,6 +1117,31 @@ def get_daily_bonus_amount(vip_level):
     return int(base_bonus * multiplier)
 
 # --- Main Application Setup ---
+async def manual_polling_loop(application):
+    """Manual polling loop as a last resort for compatibility issues"""
+    logger.info("🔄 Starting manual polling loop...")
+    offset = 0
+    
+    while True:
+        try:
+            # Get updates manually
+            updates = await application.bot.get_updates(offset=offset, timeout=30)
+            
+            for update in updates:
+                try:
+                    # Process each update
+                    await application.process_update(update)
+                    offset = update.update_id + 1
+                except Exception as update_error:
+                    logger.error(f"Error processing update {update.update_id}: {update_error}")
+                    
+        except asyncio.CancelledError:
+            logger.info("Manual polling loop cancelled")
+            break
+        except Exception as e:
+            logger.error(f"Error in manual polling loop: {e}")
+            await asyncio.sleep(5)  # Wait before retrying
+
 def main():
     """Main application entry point"""
     try:
@@ -1210,8 +1235,26 @@ async def run_bot():
         logger.info("✅ Bot is running and ready to receive messages!")
         logger.info("Press Ctrl+C to stop the bot")
         
-        # Start polling manually
-        await application.updater.start_polling(drop_pending_updates=True)
+        # Start polling manually with error handling for Python 3.13 compatibility
+        try:
+            await application.updater.start_polling(drop_pending_updates=True)
+            logger.info("✅ Polling started successfully")
+        except AttributeError as attr_error:
+            if "_Updater__polling_cleanup_cb" in str(attr_error):
+                logger.warning("⚠️ Detected Python 3.13 compatibility issue with Updater")
+                logger.info("🔄 Attempting fallback polling method...")
+                
+                # Try alternative polling method for Python 3.13
+                try:
+                    # Use direct polling without problematic attributes
+                    logger.info("🔄 Trying direct polling approach...")
+                    await manual_polling_loop(application)
+                    logger.info("✅ Manual polling started successfully")
+                except Exception as fallback_error:
+                    logger.error(f"❌ Manual polling failed: {fallback_error}")
+                    raise fallback_error
+            else:
+                raise attr_error
         
         # Keep the application running
         try:
