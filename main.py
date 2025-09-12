@@ -1115,3 +1115,96 @@ def get_daily_bonus_amount(vip_level):
     base_bonus = 50
     multiplier = get_vip_multiplier(vip_level)
     return int(base_bonus * multiplier)
+
+# --- Main Application Setup ---
+async def main():
+    """Main application entry point"""
+    try:
+        # Initialize database
+        await init_db()
+        logger.info("✅ Database initialized successfully")
+        
+        # Create application
+        application = ApplicationBuilder().token(BOT_TOKEN).build()
+        
+        # Add command handlers
+        application.add_handler(CommandHandler("start", start_command))
+        application.add_handler(CommandHandler("app", mini_app_centre_command))
+        application.add_handler(CommandHandler("webapp", webapp_command))
+        application.add_handler(CommandHandler("casino", webapp_command))
+        application.add_handler(CommandHandler("help", help_command))
+        
+        # Add callback handler
+        application.add_handler(CallbackQueryHandler(handle_callback))
+        
+        # Setup WebApp menu button
+        await setup_webapp_menu_button(application)
+        
+        # Start health check server (optional for local development)
+        runner = None
+        heartbeat_task = None
+        try:
+            runner = await start_web_server()
+            logger.info(f"✅ Health check server started on port {PORT}")
+        except Exception as e:
+            logger.warning(f"⚠️ Health check server failed to start: {e}")
+            logger.info("ℹ️ Continuing without health check server (normal for local development)")
+        
+        # Start heartbeat task for Render (only if URL is set)
+        if RENDER_EXTERNAL_URL:
+            heartbeat_task = asyncio.create_task(keep_alive_heartbeat())
+        else:
+            logger.info("ℹ️ Skipping heartbeat (no RENDER_EXTERNAL_URL set)")
+        
+        logger.info("🚀 Starting Telegram Casino Bot...")
+        logger.info(f"🎰 Bot Version: {BOT_VERSION}")
+        logger.info(f"🌐 WebApp URL: {WEBAPP_URL}")
+        logger.info(f"⚡ WebApp Enabled: {WEBAPP_ENABLED}")
+        logger.info(f"🔗 Health Check Server: http://0.0.0.0:{PORT}")
+        
+        # Setup graceful shutdown
+        def signal_handler(sig, frame):
+            logger.info("🛑 Received shutdown signal, stopping bot...")
+            if heartbeat_task:
+                heartbeat_task.cancel()
+            if runner:
+                asyncio.create_task(runner.cleanup())
+            sys.exit(0)
+        
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+        
+        # Start the bot
+        await application.initialize()
+        await application.start()
+        await application.updater.start_polling(drop_pending_updates=True)
+        
+        logger.info("✅ Bot is running and ready to receive messages!")
+        logger.info("Press Ctrl+C to stop the bot")
+        
+        # Keep the application running
+        await asyncio.Event().wait()
+        
+    except KeyboardInterrupt:
+        logger.info("🛑 Bot stopped by user")
+    except Exception as e:
+        logger.error(f"❌ Critical error: {e}")
+        raise
+    finally:
+        # Cleanup
+        if 'application' in locals():
+            await application.stop()
+            await application.shutdown()
+        if 'runner' in locals() and runner:
+            await runner.cleanup()
+        logger.info("✅ Bot shutdown complete")
+
+if __name__ == "__main__":
+    """Entry point for the application"""
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("🛑 Application terminated by user")
+    except Exception as e:
+        logger.error(f"❌ Application failed to start: {e}")
+        sys.exit(1)
