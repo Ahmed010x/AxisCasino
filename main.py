@@ -1120,8 +1120,37 @@ def get_daily_bonus_amount(vip_level):
 def main():
     """Main application entry point"""
     try:
+        # Import the necessary modules for the simple approach
+        import nest_asyncio
+        nest_asyncio.apply()  # Allow nested event loops
+        
         # Use asyncio.run to create a new event loop
         asyncio.run(run_bot())
+    except ImportError:
+        # If nest_asyncio is not available, use alternative approach
+        logger.info("Using alternative startup method...")
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(run_bot())
+        except Exception as e:
+            logger.error(f"❌ Alternative startup failed: {e}")
+            # Last resort: direct execution
+            app = ApplicationBuilder().token(BOT_TOKEN).build()
+            
+            # Add handlers
+            app.add_handler(CommandHandler("start", start_command))
+            app.add_handler(CommandHandler("app", mini_app_centre_command))
+            app.add_handler(CommandHandler("webapp", webapp_command))
+            app.add_handler(CommandHandler("casino", webapp_command))
+            app.add_handler(CommandHandler("help", help_command))
+            app.add_handler(CallbackQueryHandler(handle_callback))
+            
+            logger.info("🚀 Starting bot with direct method...")
+            app.run_polling(drop_pending_updates=True)
+        finally:
+            if 'loop' in locals():
+                loop.close()
     except KeyboardInterrupt:
         logger.info("🛑 Application terminated by user")
     except Exception as e:
@@ -1130,7 +1159,6 @@ def main():
 
 async def run_bot():
     """Run the bot with proper async handling"""
-    application = None
     runner = None
     heartbeat_task = None
     
@@ -1139,12 +1167,8 @@ async def run_bot():
         await init_db()
         logger.info("✅ Database initialized successfully")
         
-        # Create application with proper configuration
-        application = (
-            ApplicationBuilder()
-            .token(BOT_TOKEN)
-            .build()
-        )
+        # Create application
+        application = ApplicationBuilder().token(BOT_TOKEN).build()
         
         # Add command handlers
         application.add_handler(CommandHandler("start", start_command))
@@ -1179,23 +1203,22 @@ async def run_bot():
         logger.info(f"⚡ WebApp Enabled: {WEBAPP_ENABLED}")
         logger.info(f"🔗 Health Check Server: http://0.0.0.0:{PORT}")
         
-        # Initialize application
+        # Initialize and start application manually for better control
         await application.initialize()
-        
-        # Start the application
         await application.start()
         
         logger.info("✅ Bot is running and ready to receive messages!")
         logger.info("Press Ctrl+C to stop the bot")
         
-        # Start polling
+        # Start polling manually
         await application.updater.start_polling(drop_pending_updates=True)
         
-        # Keep running
-        await asyncio.Event().wait()
+        # Keep the application running
+        try:
+            await asyncio.Event().wait()
+        except KeyboardInterrupt:
+            logger.info("🛑 Received interrupt signal")
         
-    except KeyboardInterrupt:
-        logger.info("🛑 Bot stopped by user")
     except Exception as e:
         logger.error(f"❌ Critical error: {e}")
         import traceback
@@ -1203,15 +1226,22 @@ async def run_bot():
         raise
     finally:
         # Cleanup
+        logger.info("🔄 Starting cleanup...")
         if heartbeat_task:
             heartbeat_task.cancel()
-        if application:
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
+        
+        if 'application' in locals():
             try:
                 await application.updater.stop()
                 await application.stop()
                 await application.shutdown()
             except Exception as cleanup_error:
                 logger.error(f"Error during application cleanup: {cleanup_error}")
+        
         if runner:
             try:
                 await runner.cleanup()
