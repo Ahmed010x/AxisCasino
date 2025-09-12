@@ -21,7 +21,7 @@
         
         .header {
             background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-            padding: 20px;
+            padding: 20px 24px 20px 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -32,7 +32,7 @@
         .logo-section {
             display: flex;
             align-items: center;
-            gap: 15px;
+            gap: 10px;
         }
         
         .logo {
@@ -58,15 +58,22 @@
             text-shadow: 0 0 10px rgba(255,255,255,0.3);
         }
         
+        .right-section {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+        }
+        
         .balance-section {
             display: flex;
             flex-direction: column;
-            align-items: center;
+            align-items: flex-end;
             background: rgba(255,255,255,0.1);
             padding: 10px 20px;
             border-radius: 15px;
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255,255,255,0.2);
+            margin-right: 0;
         }
         
         .balance-label {
@@ -86,6 +93,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            margin-left: 0;
         }
         
         .profile-pic {
@@ -105,6 +113,7 @@
         .user-info {
             display: flex;
             flex-direction: column;
+            align-items: flex-start;
         }
         
         .username {
@@ -234,22 +243,38 @@
             transform: translateY(0);
         }
         
-        @media (max-width: 768px) {
+        @media (max-width: 900px) {
             .header {
                 flex-direction: column;
+                align-items: stretch;
                 gap: 15px;
             }
             
-            .logo-section {
-                justify-content: center;
+            .right-section {
+                justify-content: flex-end;
             }
             
-            .profile-section {
-                order: -1;
+            .balance-section {
+                align-items: flex-end;
+            }
+        }
+        
+        @media (max-width: 600px) {
+            .header {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+                padding: 16px 6px 16px 6px;
             }
             
-            .games-grid {
-                grid-template-columns: repeat(2, 1fr);
+            .right-section {
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 8px;
+            }
+            
+            .balance-section {
+                align-items: flex-end;
             }
         }
     </style>
@@ -261,16 +286,18 @@
             <div class="brand-text">CASINO</div>
         </div>
         
-        <div class="balance-section">
-            <div class="balance-label">Your Balance</div>
-            <div class="balance-amount">{BALANCE} chips</div>
-        </div>
-        
-        <div class="profile-section">
-            <div class="profile-pic" id="profilePic">👤</div>
-            <div class="user-info">
-                <div class="username" id="username">Player</div>
-                <div class="user-id">ID: {USER_ID}</div>
+        <div class="right-section">
+            <div class="balance-section">
+                <div class="balance-label">Your Balance</div>
+                <div class="balance-amount">{BALANCE} chips</div>
+            </div>
+            
+            <div class="profile-section">
+                <div class="profile-pic" id="profilePic">👤</div>
+                <div class="user-info">
+                    <div class="username" id="username">Player</div>
+                    <div class="user-id">ID: {USER_ID}</div>
+                </div>
             </div>
         </div>
     </div>
