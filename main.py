@@ -550,11 +550,22 @@ async def start_web_server():
     return runner
 
 async def casino_webapp(request):
-    """Serve a simple casino WebApp interface"""
+    """Serve a modern black-themed casino WebApp interface"""
     user_id = request.query.get('user_id', 'guest')
     balance = request.query.get('balance', '1000')
     
-    html = """
+    # Read the HTML template
+    template_path = os.path.join(os.path.dirname(__file__), 'casino_webapp_new.html')
+    try:
+        with open(template_path, 'r', encoding='utf-8') as f:
+            html_template = f.read()
+        
+        # Replace placeholders with actual values
+        html = html_template.replace('{BALANCE}', str(balance))
+        html = html.replace('{USER_ID}', str(user_id))
+    except FileNotFoundError:
+        # Fallback to inline HTML if template file is not found
+        html = f"""
 <!DOCTYPE html>
 <html>
 <head>
@@ -562,130 +573,397 @@ async def casino_webapp(request):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; 
-            text-align: center; 
-            padding: 20px;
+        * {{
             margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        
+        body {{ 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000000;
+            color: white; 
             min-height: 100vh;
-        }
-        .card { 
-            background: rgba(255,255,255,0.1); 
+            overflow-x: hidden;
+        }}
+        
+        .header {{
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #333;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.5);
+        }}
+        
+        .logo-section {{
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }}
+        
+        .logo {{
+            font-size: 2.5em;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1);
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradientShift 3s ease infinite;
+            font-weight: bold;
+        }}
+        
+        @keyframes gradientShift {{
+            0%, 100% {{ background-position: 0% 50%; }}
+            50% {{ background-position: 100% 50%; }}
+        }}
+        
+        .brand-text {{
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(255,255,255,0.3);
+        }}
+        
+        .balance-section {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(255,255,255,0.1);
+            padding: 10px 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }}
+        
+        .balance-label {{
+            font-size: 0.9em;
+            color: #ccc;
+            margin-bottom: 5px;
+        }}
+        
+        .balance-amount {{
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #4ecdc4;
+            text-shadow: 0 0 10px rgba(78,205,196,0.5);
+        }}
+        
+        .profile-section {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+        
+        .profile-pic {{
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 3px solid #4ecdc4;
+            box-shadow: 0 0 15px rgba(78,205,196,0.3);
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            font-weight: bold;
+        }}
+        
+        .user-info {{
+            display: flex;
+            flex-direction: column;
+        }}
+        
+        .username {{
+            font-size: 1em;
+            font-weight: bold;
+            color: #fff;
+        }}
+        
+        .user-id {{
+            font-size: 0.8em;
+            color: #888;
+        }}
+        
+        .main-content {{
+            padding: 30px 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }}
+        
+        .games-section {{
+            margin-top: 30px;
+        }}
+        
+        .section-title {{
+            font-size: 1.8em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-align: center;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }}
+        
+        .games-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }}
+        
+        .game {{ 
+            background: linear-gradient(145deg, #1a1a1a, #2d2d2d);
             border-radius: 20px; 
             padding: 25px; 
-            margin: 20px auto;
-            backdrop-filter: blur(10px);
-            max-width: 400px;
-            border: 1px solid rgba(255,255,255,0.2);
-        }
-        .balance {
-            font-size: 2.5em;
-            font-weight: bold;
-            margin: 15px 0;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-        .games-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin: 20px 0;
-        }
-        .game { 
-            background: rgba(255,255,255,0.2); 
-            border-radius: 15px; 
-            padding: 20px; 
             cursor: pointer;
             transition: all 0.3s ease;
-            border: 1px solid rgba(255,255,255,0.3);
-        }
-        .game:hover { 
-            background: rgba(255,255,255,0.3);
-            transform: translateY(-3px);
-        }
-        .game-icon {
-            font-size: 2em;
+            border: 1px solid #333;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }}
+        
+        .game:before {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(78,205,196,0.1), transparent);
+            transition: left 0.5s;
+        }}
+        
+        .game:hover:before {{
+            left: 100%;
+        }}
+        
+        .game:hover {{ 
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: 0 10px 30px rgba(78,205,196,0.2);
+            border-color: #4ecdc4;
+        }}
+        
+        .game-icon {{
+            font-size: 3em;
+            margin-bottom: 15px;
+            filter: drop-shadow(0 0 10px rgba(255,255,255,0.3));
+        }}
+        
+        .game-name {{
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #fff;
+        }}
+        
+        .coming-soon {{
+            background: linear-gradient(145deg, #1a1a1a, #2d2d2d);
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            margin-top: 30px;
+            border: 1px solid #333;
+        }}
+        
+        .coming-soon h3 {{
+            color: #4ecdc4;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }}
+        
+        .coming-soon p {{
+            color: #ccc;
             margin-bottom: 10px;
-        }
-        .btn {
-            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+        }}
+        
+        .btn {{
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
             border: none;
-            padding: 15px 25px;
+            padding: 15px 30px;
             border-radius: 25px;
             color: white;
             font-weight: bold;
-            margin: 10px;
+            margin: 20px 10px;
             cursor: pointer;
             transition: all 0.3s ease;
-        }
-        .btn:hover {
-            transform: scale(1.05);
-        }
+            font-size: 1em;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }}
+        
+        .btn:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 7px 20px rgba(0,0,0,0.4);
+        }}
+        
+        .btn:active {{
+            transform: translateY(0);
+        }}
+        
+        @media (max-width: 768px) {{
+            .header {{
+                flex-direction: column;
+                gap: 15px;
+            }}
+            
+            .logo-section {{
+                justify-content: center;
+            }}
+            
+            .profile-section {{
+                order: -1;
+            }}
+            
+            .games-grid {{
+                grid-template-columns: repeat(2, 1fr);
+            }}
+        }}
     </style>
 </head>
 <body>
-    <div class="card">
-        <h1>🎰 CASINO WEBAPP</h1>
-        <div class="balance">""" + str(balance) + """ chips</div>
-        <p>Player ID: """ + str(user_id) + """</p>
-    </div>
-    
-    <div class="card">
-        <h3>🎮 Casino Games</h3>
-        <div class="games-grid">
-            <div class="game" onclick="playGame('Slots')">
-                <div class="game-icon">🎰</div>
-                <div>Slots</div>
-            </div>
-            <div class="game" onclick="playGame('Blackjack')">
-                <div class="game-icon">🃏</div>
-                <div>Blackjack</div>
-            </div>
-            <div class="game" onclick="playGame('Roulette')">
-                <div class="game-icon">🎯</div>
-                <div>Roulette</div>
-            </div>
-            <div class="game" onclick="playGame('Dice')">
-                <div class="game-icon">🎲</div>
-                <div>Dice</div>
+    <div class="header">
+        <div class="logo-section">
+            <div class="logo">🎰</div>
+            <div class="brand-text">CASINO</div>
+        </div>
+        
+        <div class="balance-section">
+            <div class="balance-label">Your Balance</div>
+            <div class="balance-amount">{balance} chips</div>
+        </div>
+        
+        <div class="profile-section">
+            <div class="profile-pic" id="profilePic">👤</div>
+            <div class="user-info">
+                <div class="username" id="username">Player</div>
+                <div class="user-id">ID: {user_id}</div>
             </div>
         </div>
     </div>
     
-    <div class="card">
-        <p>✨ Professional casino games coming soon!</p>
-        <p>🎮 This is a preview of the full casino experience</p>
-        <button class="btn" onclick="goBack()">� Back to Bot</button>
+    <div class="main-content">
+        <div class="games-section">
+            <h2 class="section-title">🎮 Casino Games</h2>
+            <div class="games-grid">
+                <div class="game" onclick="playGame('Slots')">
+                    <div class="game-icon">🎰</div>
+                    <div class="game-name">Slots</div>
+                </div>
+                <div class="game" onclick="playGame('Blackjack')">
+                    <div class="game-icon">🃏</div>
+                    <div class="game-name">Blackjack</div>
+                </div>
+                <div class="game" onclick="playGame('Roulette')">
+                    <div class="game-icon">🎯</div>
+                    <div class="game-name">Roulette</div>
+                </div>
+                <div class="game" onclick="playGame('Dice')">
+                    <div class="game-icon">🎲</div>
+                    <div class="game-name">Dice</div>
+                </div>
+                <div class="game" onclick="playGame('Poker')">
+                    <div class="game-icon">♠️</div>
+                    <div class="game-name">Poker</div>
+                </div>
+                <div class="game" onclick="playGame('Crash')">
+                    <div class="game-icon">🚀</div>
+                    <div class="game-name">Crash</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="coming-soon">
+            <h3>✨ Professional Casino Experience</h3>
+            <p>🎮 Full casino games are being developed</p>
+            <p>🔥 Real-time multiplayer coming soon</p>
+            <p>💎 VIP features and tournaments</p>
+            <button class="btn" onclick="goBack()">🔙 Back to Bot</button>
+        </div>
     </div>
     
     <script>
         // Initialize Telegram WebApp
-        if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.ready();
-            window.Telegram.WebApp.expand();
+        let webApp = null;
+        let user = null;
+        
+        if (window.Telegram && window.Telegram.WebApp) {{
+            webApp = window.Telegram.WebApp;
+            webApp.ready();
+            webApp.expand();
             
-            // Set theme
-            const webApp = window.Telegram.WebApp;
+            // Get user data from Telegram
+            user = webApp.initDataUnsafe.user;
+            
+            if (user) {{
+                // Update username
+                document.getElementById('username').textContent = user.first_name || 'Player';
+                
+                // Set profile picture or initials
+                const profilePic = document.getElementById('profilePic');
+                if (user.photo_url) {{
+                    profilePic.innerHTML = '<img src="' + user.photo_url + '" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">';
+                }} else if (user.first_name) {{
+                    profilePic.textContent = user.first_name.charAt(0).toUpperCase();
+                }}
+            }}
+            
+            // Set theme colors
             webApp.BackButton.show();
             webApp.BackButton.onClick(() => webApp.close());
-        }
+            
+            // Apply Telegram theme
+            if (webApp.colorScheme === 'dark') {{
+                document.body.style.background = '#000000';
+            }}
+        }}
         
-        function playGame(gameType) {
-            alert('🎮 ' + gameType + ' game will be available soon!\\n\\nFull casino games are being developed.\\n\\nStay tuned for updates!');
-        }
+        function playGame(gameType) {{
+            // Show a more professional game coming soon message
+            const message = '🎮 ' + gameType + ' is coming soon!\\n\\n' +
+                          '🚀 We are building an amazing casino experience\\n' +
+                          '💫 Stay tuned for updates!\\n\\n' +
+                          '🎁 Meanwhile, check out our bonuses and promotions!';
+            
+            if (webApp && webApp.showAlert) {{
+                webApp.showAlert(message);
+            }} else {{
+                alert(message);
+            }}
+        }}
         
-        function goBack() {
-            if (window.Telegram && window.Telegram.WebApp) {
-                window.Telegram.WebApp.close();
-            } else {
+        function goBack() {{
+            if (webApp) {{
+                webApp.close();
+            }} else {{
                 window.history.back();
-            }
-        }
+            }}
+        }}
+        
+        // Add some interactive effects
+        document.addEventListener('DOMContentLoaded', function() {{
+            // Animate balance on load
+            const balanceElement = document.querySelector('.balance-amount');
+            if (balanceElement) {{
+                balanceElement.style.animation = 'pulse 2s infinite';
+            }}
+        }});
+        
+        // Add pulse animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes pulse {{
+                0%, 100% {{ transform: scale(1); }}
+                50% {{ transform: scale(1.05); }}
+            }}
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 </html>
 """
+    
     return web.Response(text=html, content_type='text/html')
 async def setup_webapp_menu_button(application):
     """Set up the WebApp menu button for the bot"""
@@ -1013,6 +1291,7 @@ Ready to claim your bonuses?
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
+# --- Deposit Method Handlers ---
 async def deposit_method_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle deposit method callbacks"""
     query = update.callback_query
@@ -1048,6 +1327,7 @@ Thank you for your patience!
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
+# --- Withdraw Method Handlers ---
 async def withdraw_method_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle withdraw method callbacks"""
     query = update.callback_query
