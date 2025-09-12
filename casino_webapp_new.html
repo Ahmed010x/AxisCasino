@@ -135,6 +135,38 @@
             margin: 0 auto;
         }
         
+        .banner-placeholder {
+            height: 40px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255,255,255,0.04);
+            border-radius: 10px;
+            color: #4ecdc4;
+            font-weight: bold;
+            font-size: 1em;
+        }
+        
+        .search-bar-container {
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: center;
+        }
+        
+        .search-bar {
+            width: 90%;
+            max-width: 320px;
+            padding: 8px 14px;
+            border-radius: 18px;
+            border: none;
+            background: #181818;
+            color: #fff;
+            font-size: 1em;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            outline: none;
+        }
+        
         .games-section {
             margin-top: 30px;
         }
@@ -245,6 +277,59 @@
             transform: translateY(0);
         }
         
+        /* Add carousel styles */
+        .carousel {
+            scrollbar-width: thin;
+            scrollbar-color: #4ecdc4 #181818;
+        }
+        .carousel::-webkit-scrollbar {
+            height: 6px;
+        }
+        .carousel::-webkit-scrollbar-thumb {
+            background: #4ecdc4;
+            border-radius: 4px;
+        }
+        .carousel-card {
+            min-width: 90px;
+            max-width: 110px;
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(145deg, #181818, #232323);
+            border-radius: 12px;
+            border: 1px solid #333;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            padding: 10px 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .carousel-card .game-icon {
+            font-size: 2em;
+            margin-bottom: 6px;
+        }
+        .carousel-card .game-name {
+            font-size: 0.95em;
+            color: #fff;
+            font-weight: 500;
+        }
+        .carousel-card:hover {
+            border-color: #4ecdc4;
+            box-shadow: 0 4px 16px rgba(78,205,196,0.12);
+            transform: translateY(-2px) scale(1.04);
+        }
+        @media (max-width: 600px) {
+            .carousel-card {
+                min-width: 70px;
+                max-width: 90px;
+                padding: 7px 2px;
+            }
+            .carousel-card .game-icon {
+                font-size: 1.3em;
+            }
+        }
+        
         @media (max-width: 900px) {
             .header {
                 flex-direction: column;
@@ -312,33 +397,52 @@
     </div>
     
     <div class="main-content">
-        <div class="games-section">
-            <h2 class="section-title">🎮 Casino Games</h2>
-            <div class="games-grid">
-                <div class="game" onclick="playGame('Slots')">
-                    <div class="game-icon">🎰</div>
-                    <div class="game-name">Slots</div>
-                </div>
-                <div class="game" onclick="playGame('Blackjack')">
-                    <div class="game-icon">🃏</div>
-                    <div class="game-name">Blackjack</div>
-                </div>
-                <div class="game" onclick="playGame('Roulette')">
-                    <div class="game-icon">🎯</div>
-                    <div class="game-name">Roulette</div>
-                </div>
-                <div class="game" onclick="playGame('Dice')">
-                    <div class="game-icon">🎲</div>
-                    <div class="game-name">Dice</div>
-                </div>
-                <div class="game" onclick="playGame('Poker')">
-                    <div class="game-icon">♠️</div>
-                    <div class="game-name">Poker</div>
-                </div>
-                <div class="game" onclick="playGame('Crash')">
-                    <div class="game-icon">🚀</div>
-                    <div class="game-name">Crash</div>
-                </div>
+        <div class="banner-placeholder">
+            <span style="opacity:0.7;">[Banner Space]</span>
+        </div>
+        <div class="search-bar-container">
+            <input type="text" class="search-bar" placeholder="Search games..." />
+        </div>
+        <h3 class="top-games-heading" style="color:#fff; font-size:1.05em; font-weight:bold; margin:0 0 10px 4px; letter-spacing:0.5px;">🔥 Top Games</h3>
+        <div class="carousel" id="top-games-carousel" style="overflow-x:auto; display:flex; gap:12px; padding-bottom:8px; margin-bottom:18px;">
+            <div class="carousel-card game" onclick="playGame('Slots')">
+                <div class="game-icon">🎰</div>
+                <div class="game-name">Slots</div>
+            </div>
+            <div class="carousel-card game" onclick="playGame('Blackjack')">
+                <div class="game-icon">🃏</div>
+                <div class="game-name">Blackjack</div>
+            </div>
+            <div class="carousel-card game" onclick="playGame('Roulette')">
+                <div class="game-icon">🎯</div>
+                <div class="game-name">Roulette</div>
+            </div>
+            <div class="carousel-card game" onclick="playGame('Dice')">
+                <div class="game-icon">🎲</div>
+                <div class="game-name">Dice</div>
+            </div>
+            <div class="carousel-card game" onclick="playGame('Poker')">
+                <div class="game-icon">♠️</div>
+                <div class="game-name">Poker</div>
+            </div>
+        </div>
+        <h3 class="axis-originals-heading" style="color:#4ecdc4; font-size:1em; font-weight:bold; margin:0 0 10px 4px; letter-spacing:0.5px;">🛡️ Axis Originals</h3>
+        <div class="carousel" id="axis-originals-carousel" style="overflow-x:auto; display:flex; gap:12px; padding-bottom:8px; margin-bottom:18px;">
+            <div class="carousel-card game" onclick="playGame('Plinko')">
+                <div class="game-icon">[Plinko Img]</div>
+                <div class="game-name">Plinko</div>
+            </div>
+            <div class="carousel-card game" onclick="playGame('Roll')">
+                <div class="game-icon">[Roll Img]</div>
+                <div class="game-name">Roll</div>
+            </div>
+            <div class="carousel-card game" onclick="playGame('Limbo')">
+                <div class="game-icon">[Limbo Img]</div>
+                <div class="game-name">Limbo</div>
+            </div>
+            <div class="carousel-card game" onclick="playGame('Crash')">
+                <div class="game-icon">[Crash Img]</div>
+                <div class="game-name">Crash</div>
             </div>
         </div>
         
