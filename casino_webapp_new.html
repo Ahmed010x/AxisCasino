@@ -21,86 +21,64 @@
         
         .header {
             background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-            padding: 12px 8px 12px 8px;
+            padding: 0 8px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             border-bottom: 1px solid #333;
             box-shadow: 0 2px 20px rgba(0,0,0,0.5);
-            max-width: 400px;
+            max-width: 500px;
             margin: 0 auto;
+            height: 70px;
         }
-        
         .logo-section {
             display: flex;
             align-items: center;
             gap: 10px;
+            height: 100%;
         }
-        
-        .logo {
-            font-size: 1.7em;
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1);
-            background-size: 200% 200%;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            animation: gradientShift 3s ease infinite;
-            font-weight: bold;
+        .logo-section button#menuButton {
+            height: 40px;
+            width: 40px;
+            padding: 0;
         }
-        
-        @keyframes gradientShift {
-            0%, 100% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-        }
-        
-        .brand-text {
-            font-size: 1.1em;
-            font-weight: bold;
-            color: #fff;
-            text-shadow: 0 0 10px rgba(255,255,255,0.3);
-        }
-        
         .right-section {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 18px;
+            height: 100%;
         }
-        
         .balance-section {
             display: flex;
             flex-direction: column;
             align-items: flex-end;
             background: rgba(255,255,255,0.1);
-            padding: 6px 10px;
+            padding: 6px 14px;
             border-radius: 10px;
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255,255,255,0.2);
             margin-right: 0;
         }
-        
         .balance-label {
             font-size: 0.8em;
             color: #ccc;
             margin-bottom: 5px;
         }
-        
         .balance-amount {
             font-size: 1.1em;
             font-weight: bold;
             color: #4ecdc4;
             text-shadow: 0 0 10px rgba(78,205,196,0.5);
         }
-        
         .profile-section {
             display: flex;
             align-items: center;
             gap: 10px;
             margin-left: 0;
         }
-        
         .profile-pic {
-            width: 32px;
-            height: 32px;
+            width: 38px;
+            height: 38px;
             border-radius: 50%;
             border: 3px solid #4ecdc4;
             box-shadow: 0 0 15px rgba(78,205,196,0.3);
@@ -108,59 +86,51 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1em;
+            font-size: 1.2em;
             font-weight: bold;
         }
-        
         .user-info {
             display: flex;
             flex-direction: column;
             align-items: flex-start;
         }
-        
         .username {
-            font-size: 0.9em;
+            font-size: 1em;
             font-weight: bold;
             color: #fff;
         }
-        
         .user-id {
-            font-size: 0.7em;
+            font-size: 0.8em;
             color: #888;
         }
-        
         .main-content {
             padding: 16px 4px;
-            max-width: 400px;
+            max-width: 500px;
             margin: 0 auto;
         }
-        
         .banner-placeholder {
-            height: 80px;
+            height: 160px;
             margin-bottom: 16px;
             background: rgba(255,255,255,0.04);
-            border-radius: 10px;
+            border-radius: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
             overflow: hidden;
             padding: 0;
         }
-        
         .banner-placeholder img {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            border-radius: 10px;
+            border-radius: 16px;
             display: block;
         }
-        
         .search-bar-container {
             margin-bottom: 16px;
             display: flex;
             justify-content: center;
         }
-        
         .search-bar {
             width: 90%;
             max-width: 320px;
@@ -173,11 +143,9 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
             outline: none;
         }
-        
         .games-section {
             margin-top: 30px;
         }
-        
         .section-title {
             font-size: 1.2em;
             font-weight: bold;
@@ -188,14 +156,12 @@
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
-        
         .games-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 10px;
             margin: 20px 0;
         }
-        
         .game { 
             background: linear-gradient(145deg, #1a1a1a, #2d2d2d);
             border-radius: 12px; 
@@ -207,7 +173,6 @@
             position: relative;
             overflow: hidden;
         }
-        
         .game:before {
             content: '';
             position: absolute;
@@ -218,29 +183,24 @@
             background: linear-gradient(90deg, transparent, rgba(78,205,196,0.1), transparent);
             transition: left 0.5s;
         }
-        
         .game:hover:before {
             left: 100%;
         }
-        
         .game:hover { 
             transform: translateY(-5px) scale(1.02);
             box-shadow: 0 10px 30px rgba(78,205,196,0.2);
             border-color: #4ecdc4;
         }
-        
         .game-icon {
             font-size: 1.5em;
             margin-bottom: 8px;
             filter: drop-shadow(0 0 10px rgba(255,255,255,0.3));
         }
-        
         .game-name {
             font-size: 0.95em;
             font-weight: bold;
             color: #fff;
         }
-        
         .coming-soon {
             background: linear-gradient(145deg, #1a1a1a, #2d2d2d);
             border-radius: 12px;
@@ -249,18 +209,15 @@
             margin-top: 16px;
             border: 1px solid #333;
         }
-        
         .coming-soon h3 {
             font-size: 1em;
             color: #4ecdc4;
             margin-bottom: 15px;
         }
-        
         .coming-soon p {
             color: #ccc;
             margin-bottom: 10px;
         }
-        
         .btn {
             background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
             border: none;
@@ -274,16 +231,13 @@
             font-size: 0.95em;
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         }
-        
         .btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 7px 20px rgba(0,0,0,0.4);
         }
-        
         .btn:active {
             transform: translateY(0);
         }
-        
         /* Add carousel styles */
         .carousel {
             scrollbar-width: thin;
@@ -354,6 +308,25 @@
         .carousel-card.img-fill:hover img {
             transform: scale(1.04);
         }
+        .game-player-count {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            margin-top: 8px;
+            font-size: 0.92em;
+            color: #aaffaa;
+            font-weight: 500;
+        }
+        .game-player-dot {
+            width: 10px;
+            height: 10px;
+            background: linear-gradient(135deg, #4ecdc4, #45b7d1);
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 3px;
+            box-shadow: 0 0 6px #4ecdc4aa;
+        }
         @media (max-width: 600px) {
             .carousel-card {
                 min-width: 70px;
@@ -389,6 +362,13 @@
             }
             .main-content {
                 padding: 8px 2px;
+            }
+            .banner-placeholder {
+                height: 110px;
+                border-radius: 10px;
+            }
+            .banner-placeholder img {
+                border-radius: 10px;
             }
             .games-grid {
                 grid-template-columns: 1fr 1fr;
@@ -449,22 +429,27 @@
             <div class="carousel-card game" onclick="playGame('Slots')">
                 <div class="game-icon">🎰</div>
                 <div class="game-name">Slots</div>
+                <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Slots">0</span> playing</div>
             </div>
             <div class="carousel-card game" onclick="playGame('Blackjack')">
                 <div class="game-icon">🃏</div>
                 <div class="game-name">Blackjack</div>
+                <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Blackjack">0</span> playing</div>
             </div>
             <div class="carousel-card game" onclick="playGame('Roulette')">
                 <div class="game-icon">🎯</div>
                 <div class="game-name">Roulette</div>
+                <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Roulette">0</span> playing</div>
             </div>
             <div class="carousel-card game" onclick="playGame('Dice')">
                 <div class="game-icon">🎲</div>
                 <div class="game-name">Dice</div>
+                <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Dice">0</span> playing</div>
             </div>
             <div class="carousel-card game" onclick="playGame('Poker')">
                 <div class="game-icon">♠️</div>
                 <div class="game-name">Poker</div>
+                <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Poker">0</span> playing</div>
             </div>
         </div>
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
@@ -474,24 +459,39 @@
         <div class="carousel" id="axis-originals-carousel" style="overflow-x:auto; display:flex; gap:12px; padding-bottom:8px; margin-bottom:18px;">
             <div class="carousel-card img-fill game" onclick="playGame('Plinko')">
                 <img src="https://mediumrare.imgix.net/5cbb2498c956527e6584c6af216489b85bbb7a909c7d3c4e131a3be9bd1cc6bf?w=300&h=400&fit=min&auto=format" alt="Plinko">
+                <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Plinko">0</span> playing</div>
             </div>
             <div class="carousel-card img-fill game" onclick="playGame('Mines')">
                 <img src="https://mediumrare.imgix.net/15a51a2ae2895872ae2b600fa6fe8d7f8d32c9814766b66ddea2b288d04ba89c?w=360&h=472&fit=min&auto=format" alt="Mines">
+                <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Mines">0</span> playing</div>
             </div>
             <div class="carousel-card img-fill game" onclick="playGame('Hilo')">
                 <img src="https://mediumrare.imgix.net/7324297ac3a60dd5705db514330c5c363aca538432fda98be261bef8df232a77?w=360&h=472&fit=min&auto=format" alt="Hilo">
+                <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Hilo">0</span> playing</div>
             </div>
             <div class="carousel-card img-fill game" onclick="playGame('Limbo')">
                 <img src="https://mediumrare.imgix.net/11caec5df20098884ae9071848e1951b8b34e5ec84a7241f2e7c5afd4b323dfd?w=360&h=472&fit=min&auto=format" alt="Limbo">
+                <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Limbo">0</span> playing</div>
             </div>
             <div class="carousel-card img-fill game" onclick="playGame('Roulette')">
                 <img src="https://mediumrare.imgix.net/86cd89b12ec34439c0d1a6e32b06c971efc86091e09ba466182abe173c3d3f7d?w=360&h=472&fit=min&auto=format" alt="Roulette">
+                <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Roulette">0</span> playing</div>
             </div>
             <div class="carousel-card img-fill game" onclick="playGame('Crash')">
                 <img src="https://mediumrare.imgix.net/c830595cbd07b2561ac76a365c2f01869dec9a8fe5e7be30634d78c51b2cc91e?w=360&h=472&fit=min&auto=format" alt="Crash">
+                <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Crash">0</span> playing</div>
             </div>
             <div class="carousel-card img-fill game" onclick="playGame('Dice')">
                 <img src="https://mediumrare.imgix.net/30688668d7d2d48d472edd0f1e2bca0758e7ec51cbab8c04d8b7f157848640e0?w=360&h=472&fit=min&auto=format" alt="Dice">
+                <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Dice">0</span> playing</div>
+            </div>
+            <div class="carousel-card img-fill game" onclick="playGame('Blackjack')">
+                <img src="https://mediumrare.imgix.net/5fcbd552a53b9be85428ecd7fa0ef663f9d763bd8a504dd0de222bc873b79887?w=360&h=472&fit=min&auto=format" alt="Blackjack">
+                <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Blackjack">0</span> playing</div>
+            </div>
+            <div class="carousel-card img-fill game" onclick="playGame('Coin Flip')">
+                <img src="https://mediumrare.imgix.net/1c0de2ee0ce713086ff7735697ad2b5385bc974f206b857c724a5ec84467a73b?w=300&h=400&fit=min&auto=format" alt="Coin Flip">
+                <div class="game-player-count"><span class="game-player-dot"></span><span id="players-CoinFlip">0</span> playing</div>
             </div>
         </div>
         
@@ -610,6 +610,22 @@
             sidebarMenu.style.left = '-260px';
             sidebarOverlay.style.display = 'none';
         }
+        
+        // Simulate live player counts (replace with real API/WebSocket in production)
+        const gameList = [
+            'Slots','Blackjack','Roulette','Dice','Poker',
+            'Plinko','Mines','Hilo','Limbo','Crash','CoinFlip'
+        ];
+        function updatePlayerCounts() {
+            gameList.forEach(game => {
+                const el = document.getElementById('players-' + game);
+                if (el) {
+                    el.textContent = Math.floor(Math.random()*200+10); // Simulate 10-210 players
+                }
+            });
+        }
+        setInterval(updatePlayerCounts, 4000);
+        updatePlayerCounts();
     </script>
     
     <!-- Crisp Chat Support Integration -->
