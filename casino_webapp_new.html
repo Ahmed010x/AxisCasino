@@ -34,30 +34,35 @@
         .logo-section {
             display: flex;
             align-items: center;
-            gap: 10px;
             height: 100%;
         }
         .logo-section button#menuButton {
             height: 40px;
             width: 40px;
             padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         .right-section {
             display: flex;
+            flex-direction: row;
             align-items: center;
-            gap: 18px;
+            gap: 16px;
             height: 100%;
         }
         .balance-section {
             display: flex;
             flex-direction: column;
             align-items: flex-end;
+            justify-content: center;
             background: rgba(255,255,255,0.1);
             padding: 6px 14px;
             border-radius: 10px;
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255,255,255,0.2);
             margin-right: 0;
+            height: 48px;
         }
         .balance-label {
             font-size: 0.8em;
@@ -75,6 +80,7 @@
             align-items: center;
             gap: 10px;
             margin-left: 0;
+            height: 48px;
         }
         .profile-pic {
             width: 38px;
@@ -93,15 +99,19 @@
             display: flex;
             flex-direction: column;
             align-items: flex-start;
+            justify-content: center;
+            height: 38px;
         }
         .username {
             font-size: 1em;
             font-weight: bold;
             color: #fff;
+            line-height: 1.1;
         }
         .user-id {
             font-size: 0.8em;
             color: #888;
+            line-height: 1.1;
         }
         .main-content {
             padding: 16px 4px;
@@ -387,6 +397,126 @@
                 margin-top: 8px;
             }
         }
+        .live-chat-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100vw;
+            max-width: 500px;
+            margin: 0 auto;
+            background: #181818;
+            border-top: 1px solid #333;
+            z-index: 1200;
+            box-shadow: 0 -2px 16px rgba(0,0,0,0.18);
+            display: flex;
+            flex-direction: column;
+            height: 220px;
+        }
+        .live-chat-header {
+            background: #232323;
+            color: #4ecdc4;
+            font-weight: bold;
+            padding: 7px 12px;
+            border-bottom: 1px solid #333;
+            font-size: 1em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .live-chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 12px;
+            font-size: 0.97em;
+            color: #fff;
+            background: #181818;
+        }
+        .live-chat-input-row {
+            display: flex;
+            align-items: center;
+            padding: 8px 10px;
+            background: #232323;
+            border-top: 1px solid #333;
+        }
+        .live-chat-input {
+            flex: 1;
+            padding: 7px 12px;
+            border-radius: 16px;
+            border: none;
+            background: #222;
+            color: #fff;
+            font-size: 1em;
+            margin-right: 8px;
+        }
+        .live-chat-send-btn {
+            background: linear-gradient(45deg, #4ecdc4, #45b7d1);
+            border: none;
+            color: #fff;
+            font-weight: bold;
+            border-radius: 12px;
+            padding: 7px 16px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background 0.2s;
+        }
+        .live-chat-send-btn:hover {
+            background: linear-gradient(45deg, #45b7d1, #4ecdc4);
+        }
+        /* Recent Wins Section */
+        .wins-section {
+            margin-bottom: 24px;
+        }
+        .wins-section h3 {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 12px;
+            text-align: center;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .win-item {
+            background: rgba(255,255,255,0.1);
+            padding: 10px 14px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border: 1px solid rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+        }
+        .win-item .game-icon {
+            font-size: 1.5em;
+            margin-right: 10px;
+        }
+        .win-item .win-details {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .win-item .win-amount {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #4ecdc4;
+        }
+        .win-item .winner-name {
+            font-size: 0.9em;
+            color: #fff;
+        }
+        .win-item .time-ago {
+            font-size: 0.8em;
+            color: #ccc;
+        }
+        @media (max-width: 600px) {
+            .win-item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .win-item .game-icon {
+                margin-bottom: 8px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -454,45 +584,51 @@
         </div>
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
             <h3 class="axis-originals-heading" style="color:#4ecdc4; font-size:1em; font-weight:bold; margin:0; letter-spacing:0.5px;">🛡️ Axis Originals</h3>
-            <button class="btn" style="padding: 6px 14px; font-size: 0.95em; margin: 0; background: linear-gradient(45deg, #4ecdc4, #45b7d1); color: #fff; border-radius: 12px; border: none; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.10);" onclick="viewAllGames()">View All Games</button>
+            <button class="btn" id="viewAllGamesBtn" style="padding: 6px 14px; font-size: 0.95em; margin: 0; background: linear-gradient(45deg, #4ecdc4, #45b7d1); color: #fff; border-radius: 12px; border: none; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.10);">View All Games</button>
         </div>
         <div class="carousel" id="axis-originals-carousel" style="overflow-x:auto; display:flex; gap:12px; padding-bottom:8px; margin-bottom:18px;">
-            <div class="carousel-card img-fill game" onclick="playGame('Plinko')">
+            <button class="carousel-card img-fill game" onclick="goToGame('Plinko')" style="border:none; background:none; padding:0; cursor:pointer;">
                 <img src="https://mediumrare.imgix.net/5cbb2498c956527e6584c6af216489b85bbb7a909c7d3c4e131a3be9bd1cc6bf?w=300&h=400&fit=min&auto=format" alt="Plinko">
                 <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Plinko">0</span> playing</div>
-            </div>
-            <div class="carousel-card img-fill game" onclick="playGame('Mines')">
+            </button>
+            <button class="carousel-card img-fill game" onclick="goToGame('Mines')" style="border:none; background:none; padding:0; cursor:pointer;">
                 <img src="https://mediumrare.imgix.net/15a51a2ae2895872ae2b600fa6fe8d7f8d32c9814766b66ddea2b288d04ba89c?w=360&h=472&fit=min&auto=format" alt="Mines">
                 <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Mines">0</span> playing</div>
-            </div>
-            <div class="carousel-card img-fill game" onclick="playGame('Hilo')">
+            </button>
+            <button class="carousel-card img-fill game" onclick="goToGame('Hilo')" style="border:none; background:none; padding:0; cursor:pointer;">
                 <img src="https://mediumrare.imgix.net/7324297ac3a60dd5705db514330c5c363aca538432fda98be261bef8df232a77?w=360&h=472&fit=min&auto=format" alt="Hilo">
                 <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Hilo">0</span> playing</div>
-            </div>
-            <div class="carousel-card img-fill game" onclick="playGame('Limbo')">
+            </button>
+            <button class="carousel-card img-fill game" onclick="goToGame('Limbo')" style="border:none; background:none; padding:0; cursor:pointer;">
                 <img src="https://mediumrare.imgix.net/11caec5df20098884ae9071848e1951b8b34e5ec84a7241f2e7c5afd4b323dfd?w=360&h=472&fit=min&auto=format" alt="Limbo">
                 <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Limbo">0</span> playing</div>
-            </div>
-            <div class="carousel-card img-fill game" onclick="playGame('Roulette')">
+            </button>
+            <button class="carousel-card img-fill game" onclick="goToGame('Roulette')" style="border:none; background:none; padding:0; cursor:pointer;">
                 <img src="https://mediumrare.imgix.net/86cd89b12ec34439c0d1a6e32b06c971efc86091e09ba466182abe173c3d3f7d?w=360&h=472&fit=min&auto=format" alt="Roulette">
                 <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Roulette">0</span> playing</div>
-            </div>
-            <div class="carousel-card img-fill game" onclick="playGame('Crash')">
+            </button>
+            <button class="carousel-card img-fill game" onclick="goToGame('Crash')" style="border:none; background:none; padding:0; cursor:pointer;">
                 <img src="https://mediumrare.imgix.net/c830595cbd07b2561ac76a365c2f01869dec9a8fe5e7be30634d78c51b2cc91e?w=360&h=472&fit=min&auto=format" alt="Crash">
                 <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Crash">0</span> playing</div>
-            </div>
-            <div class="carousel-card img-fill game" onclick="playGame('Dice')">
+            </button>
+            <button class="carousel-card img-fill game" onclick="goToGame('Dice')" style="border:none; background:none; padding:0; cursor:pointer;">
                 <img src="https://mediumrare.imgix.net/30688668d7d2d48d472edd0f1e2bca0758e7ec51cbab8c04d8b7f157848640e0?w=360&h=472&fit=min&auto=format" alt="Dice">
                 <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Dice">0</span> playing</div>
-            </div>
-            <div class="carousel-card img-fill game" onclick="playGame('Blackjack')">
+            </button>
+            <button class="carousel-card img-fill game" onclick="goToGame('Blackjack')" style="border:none; background:none; padding:0; cursor:pointer;">
                 <img src="https://mediumrare.imgix.net/5fcbd552a53b9be85428ecd7fa0ef663f9d763bd8a504dd0de222bc873b79887?w=360&h=472&fit=min&auto=format" alt="Blackjack">
                 <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Blackjack">0</span> playing</div>
-            </div>
-            <div class="carousel-card img-fill game" onclick="playGame('Coin Flip')">
+            </button>
+            <button class="carousel-card img-fill game" onclick="goToGame('Coin Flip')" style="border:none; background:none; padding:0; cursor:pointer;">
                 <img src="https://mediumrare.imgix.net/1c0de2ee0ce713086ff7735697ad2b5385bc974f206b857c724a5ec84467a73b?w=300&h=400&fit=min&auto=format" alt="Coin Flip">
                 <div class="game-player-count"><span class="game-player-dot"></span><span id="players-CoinFlip">0</span> playing</div>
-            </div>
+            </button>
+        </div>
+        
+        <!-- Recent Wins Section -->
+        <div id="recentWinsSection" style="background:linear-gradient(135deg,#181818,#232323);border-radius:12px;padding:14px 10px 10px 10px;margin-bottom:18px;border:1px solid #333;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+            <h3 style="color:#4ecdc4;font-size:1em;font-weight:bold;margin:0 0 10px 0;letter-spacing:0.5px;">🏆 Recent Wins</h3>
+            <div id="recentWinsList" style="display:flex;flex-direction:column;gap:8px;"></div>
         </div>
         
         <div class="coming-soon">
@@ -514,6 +650,24 @@
         <a href="#" style="color:#fff; text-decoration:none; font-size:1em; margin-bottom:8px;">Support</a>
     </div>
     <div id="sidebarOverlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.35); z-index:999;" onclick="closeSidebar()"></div>
+    
+    <div class="live-chat-container" id="liveChat">
+        <div class="live-chat-header">💬 Live Chat</div>
+        <div class="live-chat-messages" id="chatMessages"></div>
+        <div class="live-chat-input-row">
+            <input type="text" class="live-chat-input" id="chatInput" placeholder="Type your message..." maxlength="200" />
+            <button class="live-chat-send-btn" id="sendChatBtn">Send</button>
+        </div>
+    </div>
+    
+    <!-- Axis Originals Modal -->
+    <div id="allGamesModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.85); z-index:2000; align-items:center; justify-content:center;">
+        <div style="background:#181818; border-radius:18px; padding:28px 18px 18px 18px; max-width:420px; margin:40px auto; box-shadow:0 8px 32px rgba(0,0,0,0.45); position:relative;">
+            <button onclick="closeAllGamesModal()" style="position:absolute; top:10px; right:14px; background:none; border:none; color:#4ecdc4; font-size:2em; cursor:pointer;">&times;</button>
+            <h3 style="color:#4ecdc4; text-align:center; margin-bottom:18px;">All Axis Originals</h3>
+            <div id="allGamesGrid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;"></div>
+        </div>
+    </div>
     
     <script>
         // Initialize Telegram WebApp
@@ -577,6 +731,11 @@
             window.location.href = '/all-games'; // Change this to your actual all games page route
         }
         
+        function goToGame(game) {
+            // You can change this route to match your backend/game routing
+            window.location.href = `/game/${encodeURIComponent(game)}`;
+        }
+        
         // Add some interactive effects
         document.addEventListener('DOMContentLoaded', function() {
             // Animate balance on load
@@ -611,6 +770,30 @@
             sidebarOverlay.style.display = 'none';
         }
         
+        // --- Live Chat Logic (Demo, not real-time backend) ---
+        const chatMessages = document.getElementById('chatMessages');
+        const chatInput = document.getElementById('chatInput');
+        const sendChatBtn = document.getElementById('sendChatBtn');
+        let chatHistory = [];
+        function appendChatMessage(user, text) {
+            const msgDiv = document.createElement('div');
+            msgDiv.innerHTML = `<span style="color:#4ecdc4;font-weight:bold;">${user}:</span> ${text}`;
+            chatMessages.appendChild(msgDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        sendChatBtn.onclick = function() {
+            const text = chatInput.value.trim();
+            if (text.length > 0) {
+                appendChatMessage('You', text);
+                chatInput.value = '';
+                // Simulate broadcast to others (for demo)
+                setTimeout(() => appendChatMessage('Player'+Math.floor(Math.random()*1000), text), 1200);
+            }
+        };
+        chatInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') sendChatBtn.click();
+        });
+        
         // Simulate live player counts (replace with real API/WebSocket in production)
         const gameList = [
             'Slots','Blackjack','Roulette','Dice','Poker',
@@ -626,16 +809,131 @@
         }
         setInterval(updatePlayerCounts, 4000);
         updatePlayerCounts();
-    </script>
-    
-    <!-- Crisp Chat Support Integration -->
-    <script type="text/javascript">
-    window.$crisp=[];window.CRISP_WEBSITE_ID="YOUR_CRISP_WEBSITE_ID";
-    (function(){
-        var d=document,s=d.createElement("script");
-        s.src="https://client.crisp.chat/l.js";s.async=1;
-        d.getElementsByTagName("head")[0].appendChild(s);
-    })();
+        
+        // --- Recent Wins Logic ---
+        let simulatedResults = [
+            {user: 'Alice', game: 'Blackjack', amount: 120, time: '2m ago', win: true},
+            {user: 'Charlie', game: 'Plinko', amount: 200, time: '5m ago', win: true},
+            {user: 'Diana', game: 'Crash', amount: 80, time: '7m ago', win: true},
+            {user: 'Frank', game: 'Mines', amount: 60, time: '10m ago', win: true},
+            {user: 'Grace', game: 'Coin Flip', amount: 150, time: '12m ago', win: true},
+        ];
+        function createWinElement(win) {
+            const div = document.createElement('div');
+            div.className = 'win-item';
+            div.style.animation = 'fadeInSlide 0.5s';
+            div.innerHTML = `
+                <div class="win-details">
+                    <span class="winner-name"><span style="color:#4ecdc4;">${win.user}</span> won <span class="win-amount">+${win.amount} chips</span> in <span style="color:#ff6b6b;">${win.game}</span></span>
+                    <span class="time-ago">${win.time}</span>
+                </div>
+            `;
+            return div;
+        }
+        function renderInitialWins() {
+            const winsList = document.getElementById('recentWinsList');
+            winsList.innerHTML = '';
+            simulatedResults.slice(0, 5).forEach(win => {
+                winsList.appendChild(createWinElement(win));
+            });
+        }
+        function updateWinTimes() {
+            // Update time ago for all wins
+            simulatedResults.forEach((w, i) => {
+                if (i === 0) w.time = 'just now';
+                else if (i === 1) w.time = '1m ago';
+                else if (i === 2) w.time = '2m ago';
+                else if (i === 3) w.time = '3m ago';
+                else if (i === 4) w.time = '4m ago';
+                else w.time = (i) + 'm ago';
+            });
+            // Update DOM times
+            const winsList = document.getElementById('recentWinsList');
+            Array.from(winsList.children).forEach((el, i) => {
+                const timeEl = el.querySelector('.time-ago');
+                if (timeEl && simulatedResults[i]) timeEl.textContent = simulatedResults[i].time;
+            });
+        }
+        function insertNewWin(win) {
+            const winsList = document.getElementById('recentWinsList');
+            const newWinEl = createWinElement(win);
+            winsList.insertBefore(newWinEl, winsList.firstChild);
+            // Remove last if more than 5
+            if (winsList.children.length > 5) {
+                winsList.removeChild(winsList.lastChild);
+            }
+        }
+        // Simulate new wins coming in every 7 seconds
+        function simulateNewWin() {
+            const users = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry', 'Ivy', 'Jack'];
+            const games = ['Blackjack', 'Roulette', 'Plinko', 'Crash', 'Mines', 'Coin Flip', 'Dice', 'Hilo', 'Limbo'];
+            const user = users[Math.floor(Math.random()*users.length)];
+            const game = games[Math.floor(Math.random()*games.length)];
+            const amount = Math.floor(Math.random()*200+50); // 50-250 chips
+            const time = 'just now';
+            const win = {user, game, amount, time, win: true};
+            simulatedResults.unshift(win); // Add to front
+            simulatedResults = simulatedResults.filter(r => r.win && r.amount > 0);
+            insertNewWin(win);
+            updateWinTimes();
+        }
+        document.addEventListener('DOMContentLoaded', function() {
+            renderInitialWins();
+            setInterval(() => {
+                simulateNewWin();
+            }, 7000);
+            setInterval(updateWinTimes, 60000); // Update times every minute
+        });
+        // Fade-in slide animation for new wins
+        const winAnimStyle = document.createElement('style');
+        winAnimStyle.textContent = `
+            @keyframes fadeInSlide {
+                from { opacity: 0; transform: translateY(20px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+        `;
+        document.head.appendChild(winAnimStyle);
+        
+        // Crisp Chat Support Integration
+        window.$crisp=[];window.CRISP_WEBSITE_ID="YOUR_CRISP_WEBSITE_ID";
+        (function(){
+            var d=document,s=d.createElement("script");
+            s.src="https://client.crisp.chat/l.js";s.async=1;
+            d.getElementsByTagName("head")[0].appendChild(s);
+        })();
+        
+        // Axis Originals games data
+        const axisOriginalsGames = [
+            { name: 'Plinko', img: 'https://mediumrare.imgix.net/5cbb2498c956527e6584c6af216489b85bbb7a909c7d3c4e131a3be9bd1cc6bf?w=300&h=400&fit=min&auto=format' },
+            { name: 'Mines', img: 'https://mediumrare.imgix.net/15a51a2ae2895872ae2b600fa6fe8d7f8d32c9814766b66ddea2b288d04ba89c?w=360&h=472&fit=min&auto=format' },
+            { name: 'Hilo', img: 'https://mediumrare.imgix.net/7324297ac3a60dd5705db514330c5c363aca538432fda98be261bef8df232a77?w=360&h=472&fit=min&auto=format' },
+            { name: 'Limbo', img: 'https://mediumrare.imgix.net/11caec5df20098884ae9071848e1951b8b34e5ec84a7241f2e7c5afd4b323dfd?w=360&h=472&fit=min&auto=format' },
+            { name: 'Roulette', img: 'https://mediumrare.imgix.net/86cd89b12ec34439c0d1a6e32b06c971efc86091e09ba466182abe173c3d3f7d?w=360&h=472&fit=min&auto=format' },
+            { name: 'Crash', img: 'https://mediumrare.imgix.net/c830595cbd07b2561ac76a365c2f01869dec9a8fe5e7be30634d78c51b2cc91e?w=360&h=472&fit=min&auto=format' },
+            { name: 'Dice', img: 'https://mediumrare.imgix.net/30688668d7d2d48d472edd0f1e2bca0758e7ec51cbab8c04d8b7f157848640e0?w=360&h=472&fit=min&auto=format' },
+            { name: 'Blackjack', img: 'https://mediumrare.imgix.net/5fcbd552a53b9be85428ecd7fa0ef663f9d763bd8a504dd0de222bc873b79887?w=360&h=472&fit=min&auto=format' },
+            { name: 'Coin Flip', img: 'https://mediumrare.imgix.net/1c0de2ee0ce713086ff7735697ad2b5385bc974f206b857c724a5ec84467a73b?w=300&h=400&fit=min&auto=format' }
+        ];
+        // Show modal with all games
+        document.getElementById('viewAllGamesBtn').onclick = function() {
+            const grid = document.getElementById('allGamesGrid');
+            grid.innerHTML = '';
+            axisOriginalsGames.forEach(game => {
+                const btn = document.createElement('button');
+                btn.className = 'carousel-card img-fill game';
+                btn.style.border = 'none';
+                btn.style.background = 'none';
+                btn.style.padding = '0';
+                btn.style.cursor = 'pointer';
+                btn.onclick = function() { goToGame(game.name); };
+                btn.innerHTML = `<img src="${game.img}" alt="${game.name}"><div class='game-player-count'><span class='game-player-dot'></span>Play</div>`;
+                grid.appendChild(btn);
+            });
+            document.getElementById('allGamesModal').style.display = 'flex';
+        };
+        function closeAllGamesModal() {
+            document.getElementById('allGamesModal').style.display = 'none';
+        }
     </script>
 </body>
 </html>
