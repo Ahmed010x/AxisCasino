@@ -2,11 +2,22 @@
 <html>
 <head>
     <title>🎯 Plinko - Casino Game</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
         
         body {
             font-family: 'Inter', sans-serif;
@@ -19,8 +30,230 @@
         .game-container {
             max-width: 500px;
             margin: 0 auto;
-            padding: 16px;
+            padding: 12px;
             min-height: 100vh;
+        }
+        
+        /* Mobile optimizations */
+        @media (max-width: 480px) {
+            .game-container {
+                padding: 8px;
+            }
+            
+            /* Improve touch targets */
+            .mode-btn, .difficulty-btn {
+                padding: 14px 8px;
+                font-size: 0.95em;
+                min-height: 44px;
+            }
+            
+            .play-btn {
+                padding: 18px;
+                font-size: 1.2em;
+                min-height: 54px;
+            }
+            
+            .back-btn {
+                padding: 12px 16px;
+                font-size: 1em;
+                min-height: 44px;
+            }
+            
+            .bet-btn {
+                padding: 12px;
+                font-size: 0.95em;
+                min-height: 44px;
+            }
+            
+            /* Adjust game board size */
+            .game-board {
+                height: 350px;
+            }
+            
+            /* Improve multiplier slots visibility */
+            .multiplier-slots {
+                height: 45px;
+            }
+            
+            .multiplier-slot {
+                font-size: 0.8em;
+                font-weight: 700;
+            }
+            
+            /* Better spacing for controls */
+            .controls {
+                gap: 10px;
+            }
+            
+            .control-group {
+                margin-bottom: 12px;
+            }
+            
+            /* Improve bet input */
+            .bet-input {
+                padding: 14px 16px;
+                font-size: 1.1em;
+                min-height: 48px;
+                -webkit-appearance: none;
+                -moz-appearance: textfield;
+                appearance: none;
+            }
+            
+            .bet-input::-webkit-outer-spin-button,
+            .bet-input::-webkit-inner-spin-button {
+                -webkit-appearance: none;
+                appearance: none;
+                margin: 0;
+            }
+            
+            /* Responsive text */
+            .header h1 {
+                font-size: 1.8em;
+            }
+            
+            .balance {
+                font-size: 1em;
+            }
+            
+            .demo-mode {
+                font-size: 0.85em;
+                padding: 6px 12px;
+            }
+            
+            /* Adjust peg sizes for mobile */
+            .peg {
+                width: 8px;
+                height: 8px;
+            }
+            
+            /* Better ball visibility */
+            .ball {
+                width: 12px;
+                height: 12px;
+            }
+            
+            /* Auto controls mobile optimization */
+            .auto-controls {
+                padding: 14px;
+                margin-top: 12px;
+            }
+            
+            .auto-setting {
+                margin-bottom: 12px;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            
+            .auto-setting label {
+                font-size: 0.95em;
+                min-width: 120px;
+            }
+            
+            .auto-setting input[type="number"] {
+                padding: 10px 12px;
+                font-size: 1em;
+                min-height: 44px;
+                flex: 1;
+                min-width: 80px;
+            }
+            
+            /* Stats section mobile optimization */
+            .stats {
+                grid-template-columns: 1fr;
+                gap: 8px;
+                margin-top: 15px;
+            }
+            
+            .stat-card {
+                padding: 12px 10px;
+                font-size: 0.9em;
+            }
+            
+            .stat-value {
+                font-size: 1.3em;
+            }
+            
+            .stat-label {
+                font-size: 0.8em;
+            }
+            
+            .auto-stats {
+                font-size: 0.8em;
+                margin-top: 8px;
+            }
+            
+            .difficulty-info {
+                font-size: 0.8em;
+                margin-top: 6px;
+            }
+            
+            /* Touch improvements */
+            button, input, .mode-btn, .difficulty-btn {
+                -webkit-tap-highlight-color: rgba(78, 205, 196, 0.3);
+                touch-action: manipulation;
+            }
+            
+            .game-board {
+                touch-action: none;
+                -webkit-touch-callout: none;
+            }
+            
+            /* Prevent text selection on game elements */
+            .multiplier-slot, .peg, .ball {
+                -webkit-user-select: none;
+                -moz-user-select: none;
+                -ms-user-select: none;
+                user-select: none;
+                pointer-events: none;
+            }
+        }
+        
+        /* Extra small screens (iPhone SE, etc.) */
+        @media (max-width: 375px) {
+            .game-container {
+                padding: 6px;
+            }
+            
+            .game-board {
+                height: 320px;
+                margin: 15px 0;
+            }
+            
+            .controls {
+                padding: 15px;
+            }
+            
+            .header h1 {
+                font-size: 1.6em;
+            }
+            
+            .balance-amount {
+                font-size: 1em;
+            }
+            
+            .mode-btn, .difficulty-btn {
+                padding: 12px 6px;
+                font-size: 0.85em;
+            }
+            
+            .bet-btn {
+                padding: 10px 6px;
+                font-size: 0.85em;
+            }
+            
+            .multiplier-slot {
+                font-size: 0.7em;
+            }
+            
+            .peg {
+                width: 7px;
+                height: 7px;
+            }
+            
+            .ball {
+                width: 10px;
+                height: 10px;
+            }
         }
         
         .header {
@@ -576,11 +809,11 @@
                 <div class="auto-controls" id="autoControls">
                     <div class="auto-setting">
                         <span class="auto-label">Balls to Drop:</span>
-                        <input type="number" class="auto-input" id="autoBalls" value="10" min="1" max="100">
+                        <input type="number" class="auto-input" id="autoBalls" value="10" min="1" max="100" inputmode="numeric" pattern="[0-9]*">
                     </div>
                     <div class="auto-setting">
                         <span class="auto-label">Speed (ms):</span>
-                        <input type="number" class="auto-input" id="autoSpeed" value="1000" min="200" max="5000" step="100">
+                        <input type="number" class="auto-input" id="autoSpeed" value="1000" min="200" max="5000" step="100" inputmode="numeric" pattern="[0-9]*">
                     </div>
                     <div class="auto-stats" id="autoStats">
                         Configure auto mode: Set balls to drop and speed
@@ -599,7 +832,7 @@
             
             <div class="bet-section">
                 <div class="bet-label">Bet Amount</div>
-                <input type="number" class="bet-input" id="betAmount" value="10" min="1" max="1000">
+                <input type="number" class="bet-input" id="betAmount" value="10" min="1" max="1000" inputmode="numeric" pattern="[0-9]*">
                 <div class="bet-buttons">
                     <button class="bet-btn" onclick="setBet(10)">10</button>
                     <button class="bet-btn" onclick="setBet(50)">50</button>
