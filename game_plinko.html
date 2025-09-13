@@ -767,6 +767,12 @@
             50% { transform: scale(1.1); color: #45b7d1; }
             100% { transform: scale(1); }
         }
+        
+        @keyframes bounceEffect {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(2); opacity: 0.8; }
+            100% { transform: scale(0.5); opacity: 0; }
+        }
     </style>
 </head>
 <body>
@@ -863,6 +869,7 @@
     </div>
     
     <script>
+        // Global variables
         let gamesPlayed = 0;
         let totalWon = 0;
         let totalWins = 0;
@@ -876,6 +883,12 @@
         let isAutoRunning = false;
         let isDemoMode = false;
         let ballTrails = [];
+        
+        // User data variables
+        let currentBalance = 1000;
+        let userId = 'demo_user';
+        let userName = 'Demo Player';
+        let returnUrl = 'casino_webapp_new.html';
         
         // Difficulty settings with precise peg layouts
         const difficultySettings = {
@@ -1081,6 +1094,308 @@
         
         function setBet(amount) {
             document.getElementById('betAmount').value = amount;
+        }
+        
+        // Main drop ball function for manual mode
+        async function dropBall() {
+            if (isPlaying) return;
+            
+            const betAmount = parseInt(document.getElementById('betAmount').value);
+            
+            // Validate bet amount
+            if (betAmount > currentBalance || betAmount <= 0) {
+                showResult('Invalid bet amount!', false);
+                return;
+            }
+            
+            isPlaying = true;
+            
+            // Disable play button
+            const playBtn = document.getElementById('playBtn');
+            playBtn.disabled = true;
+            playBtn.textContent = 'Dropping...';
+            
+            // Deduct bet (unless in demo mode)
+            if (!isDemoMode) {
+                updateBalance(currentBalance - betAmount);
+            }
+            
+            // Create ball
+            const ball = document.createElement('div');
+            ball.className = 'ball';
+            const board = document.getElementById('plinkoBoard');
+            board.appendChild(ball);
+            
+            // Starting position - center top
+            const boardWidth = board.offsetWidth;
+            let ballX = boardWidth / 2;
+            let ballY = 20;
+            
+            ball.style.left = ballX + 'px';
+            ball.style.top = ballY + 'px';
+            
+            // Animate ball falling with physics
+            const finalX = await animateBallFall(ball, ballX, ballY, boardWidth);
+            
+            // Determine final slot and calculate winnings
+            const slotWidth = boardWidth / multipliers.length;
+            const slotIndex = Math.floor(finalX / slotWidth);
+            const finalSlot = Math.max(0, Math.min(multipliers.length - 1, slotIndex));
+            const multiplier = multipliers[finalSlot];
+            
+            let winAmount, profit;
+            
+            if (isDemoMode) {
+                // In demo mode, rig the result to a high multiplier
+                const highMultiplierSlots = multipliers.map((mult, idx) => ({mult, idx}))
+                    .filter(item => item.mult >= 5)
+                    .sort((a, b) => b.mult - a.mult);
+                const riggedSlot = highMultiplierSlots[0] || {mult: multiplier, idx: finalSlot};
+                winAmount = Math.floor(betAmount * riggedSlot.mult);
+                profit = winAmount - betAmount;
+                
+                // Visual feedback for rigged slot
+                const slots = document.querySelectorAll('.multiplier-slot');
+                slots[riggedSlot.idx].classList.add('winning');
+                
+                showResult(`🎯 Demo Win! You won ${winAmount} chips with ${riggedSlot.mult}x multiplier!`, true);
+            } else {
+                winAmount = Math.floor(betAmount * multiplier);
+                profit = winAmount - betAmount;
+                
+                // Update balance and stats
+                updateBalance(currentBalance + winAmount);
+                gamesPlayed++;
+                if (winAmount > betAmount) {
+                    totalWon += (winAmount - betAmount);
+                    totalWins++;
+                }
+                updateStats();
+                
+                // Visual feedback for winning slot
+                const slots = document.querySelectorAll('.multiplier-slot');
+                slots[finalSlot].classList.add('winning');
+                
+                if (profit > 0) {
+                    showResult(`🎉 You won ${winAmount} chips! (+${profit} profit)`, true);
+                } else {
+                    showResult(`😔 You lost ${betAmount} chips. Better luck next time!`, false);
+                }
+            }
+            
+            // Clean up after animation
+            setTimeout(() => {
+                const slots = document.querySelectorAll('.multiplier-slot');
+                slots.forEach(slot => slot.classList.remove('winning'));
+                if (board.contains(ball)) {
+                    board.removeChild(ball);
+                }
+                
+                // Re-enable play button
+                playBtn.disabled = false;
+                playBtn.textContent = isDemoMode ? 'Demo Drop' : 'Drop Ball';
+                isPlaying = false;
+            }, 2000);
+        }
+        
+        // Ball physics animation for manual mode
+        async function animateBallFall(ball, startX, startY, boardWidth) {
+            let x = startX;
+            let y = startY;
+            let velocityX = 0;
+            let velocityY = 0.3; // Slower initial velocity for better viewing
+            const gravity = 0.1; // Reduced gravity for slower fall
+            const pegRadius = 8;
+            const ballRadius = 7;
+            const friction = 0.98;
+            
+            // Anti-stuck mechanisms
+            let frameCount = 0;
+            let lastY = y;
+            let stuckCounter = 0;
+            let lastGoodY = y;
+            const maxFrames = 600;
+            const stuckThreshold = 10;
+            const minProgressPerFrame = 0.15;
+            
+            const boardHeight = ball.parentElement.offsetHeight || 400;
+            const targetY = boardHeight - 50;
+            
+            while (y < targetY && frameCount < maxFrames) {
+                frameCount++;
+                
+                // Add slight random nudge for variety
+                velocityX += (Math.random() - 0.5) * 0.15;
+                velocityX = Math.max(-2, Math.min(2, velocityX));
+                
+                // Enhanced stuck detection
+                const yProgress = y - lastY;
+                if (yProgress < minProgressPerFrame) {
+                    stuckCounter++;
+                } else {
+                    stuckCounter = 0;
+                    lastGoodY = y;
+                }
+                lastY = y;
+                
+                if (stuckCounter > stuckThreshold) {
+                    velocityY = Math.max(velocityY, 1.0);
+                    velocityX *= 0.5;
+                    y += 1.5;
+                    stuckCounter = 0;
+                }
+                
+                velocityY += gravity;
+                if (velocityY < 0.3) velocityY = 0.3;
+                
+                x += velocityX;
+                y += velocityY;
+                
+                // Peg collision detection
+                for (let i = 0; i < window.pegPositions.length; i++) {
+                    const peg = window.pegPositions[i];
+                    const distance = Math.sqrt(Math.pow(x - peg.x, 2) + Math.pow(y - peg.y, 2));
+                    
+                    if (distance < (pegRadius + ballRadius) && y >= peg.y - 10 && y <= peg.y + 10) {
+                        const angle = Math.atan2(y - peg.y, x - peg.x);
+                        const randomAngle = angle + (Math.random() - 0.5) * 0.4;
+                        const currentSpeed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
+                        const bounceReduction = 0.75 + Math.random() * 0.1;
+                        
+                        let newVelocityX = Math.cos(randomAngle) * currentSpeed * bounceReduction;
+                        let newVelocityY = Math.abs(Math.sin(randomAngle) * currentSpeed * bounceReduction) + 0.5 + Math.random() * 0.2;
+                        
+                        newVelocityX = Math.max(-2, Math.min(2, newVelocityX));
+                        newVelocityY = Math.max(0.4, Math.min(2, newVelocityY));
+                        
+                        velocityX = newVelocityX;
+                        velocityY = newVelocityY;
+                        
+                        // Move ball out of peg
+                        const separationDistance = pegRadius + ballRadius + 1;
+                        x = peg.x + Math.cos(randomAngle) * separationDistance;
+                        y = peg.y + Math.sin(randomAngle) * separationDistance;
+                        
+                        // Visual feedback
+                        hitPeg(document.querySelectorAll('.peg')[i]);
+                        createBounceEffect(x, y);
+                        break;
+                    }
+                }
+                
+                // Slot separator collisions
+                if (y > boardHeight * 0.65) {
+                    const slotWidth = boardWidth / multipliers.length;
+                    for (let i = 1; i < multipliers.length; i++) {
+                        const separatorX = i * slotWidth;
+                        const separatorWidth = 3;
+                        
+                        if (x + ballRadius > separatorX - separatorWidth/2 && x - ballRadius < separatorX + separatorWidth/2) {
+                            if (velocityX > 0) {
+                                x = separatorX - separatorWidth/2 - ballRadius;
+                                velocityX = -Math.abs(velocityX) * 0.6;
+                            } else {
+                                x = separatorX + separatorWidth/2 + ballRadius;
+                                velocityX = Math.abs(velocityX) * 0.6;
+                            }
+                            break;
+                        }
+                    }
+                }
+                
+                // Boundary checks
+                if (x < ballRadius) {
+                    x = ballRadius;
+                    velocityX = Math.abs(velocityX) * 0.5;
+                } else if (x > boardWidth - ballRadius) {
+                    x = boardWidth - ballRadius;
+                    velocityX = -Math.abs(velocityX) * 0.5;
+                }
+                
+                velocityX *= friction;
+                ball.style.left = x + 'px';
+                ball.style.top = y + 'px';
+                
+                await new Promise(resolve => setTimeout(resolve, 16)); // 60fps
+            }
+            
+            // Ensure ball reaches bottom
+            if (frameCount >= maxFrames) {
+                y = targetY;
+            }
+            
+            // Final positioning in center of slot
+            const slotWidth = boardWidth / multipliers.length;
+            const slotIndex = Math.floor(x / slotWidth);
+            const finalSlotIndex = Math.max(0, Math.min(multipliers.length - 1, slotIndex));
+            const finalX = (finalSlotIndex * slotWidth) + (slotWidth / 2);
+            
+            ball.style.left = finalX + 'px';
+            ball.style.top = (targetY + 5) + 'px';
+            
+            return finalX;
+        }
+        
+        // Visual effect functions
+        function hitPeg(pegElement) {
+            if (pegElement) {
+                pegElement.classList.add('hit');
+                setTimeout(() => {
+                    pegElement.classList.remove('hit');
+                }, 400);
+            }
+        }
+        
+        function createBounceEffect(x, y) {
+            // Add visual bounce effect at position
+            const effect = document.createElement('div');
+            effect.style.position = 'absolute';
+            effect.style.left = x + 'px';
+            effect.style.top = y + 'px';
+            effect.style.width = '8px';
+            effect.style.height = '8px';
+            effect.style.background = 'rgba(78, 205, 196, 0.8)';
+            effect.style.borderRadius = '50%';
+            effect.style.pointerEvents = 'none';
+            effect.style.zIndex = '5';
+            effect.style.animation = 'bounceEffect 0.3s ease-out forwards';
+            
+            const board = document.getElementById('plinkoBoard');
+            board.appendChild(effect);
+            
+            setTimeout(() => {
+                if (board.contains(effect)) {
+                    board.removeChild(effect);
+                }
+            }, 300);
+        }
+        
+        // Update statistics display
+        function updateStats() {
+            document.getElementById('gamesPlayed').textContent = gamesPlayed;
+            document.getElementById('totalWon').textContent = totalWon;
+            const winRate = gamesPlayed > 0 ? Math.round((totalWins / gamesPlayed) * 100) : 0;
+            document.getElementById('winRate').textContent = winRate + '%';
+            
+            // Add animation to updated stats
+            const statValues = document.querySelectorAll('.stat-value');
+            statValues.forEach(stat => {
+                stat.classList.add('animate');
+                setTimeout(() => stat.classList.remove('animate'), 500);
+            });
+        }
+        
+        // Auto mode progress tracking
+        function updateAutoProgress() {
+            const totalBalls = parseInt(document.getElementById('autoBalls').value);
+            const completed = totalBalls - autoBallsRemaining;
+            const percentage = Math.round((completed / totalBalls) * 100);
+            
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            
+            if (progressFill) progressFill.style.width = percentage + '%';
+            if (progressText) progressText.textContent = percentage + '%';
         }
         
         function setMode(mode) {
