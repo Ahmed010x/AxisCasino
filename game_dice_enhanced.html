@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🎲 Dice | Casino WebApp</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body { 
+            background: #000000; 
+            color: #fff; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .header { 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; 
+            padding: 18px 16px; 
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            border-bottom: 1px solid #333;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.5);
+        }
+        
+        .back-btn { 
+            background: none; 
+            border: none; 
+            color: #4ecdc4; 
+            font-size: 1.8em; 
+            cursor: pointer; 
+            padding: 8px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+        
+        .back-btn:hover {
+            background: rgba(78,205,196,0.1);
+        }
+        
+        .game-title { 
+            font-size: 1.4em; 
+            font-weight: bold; 
+            color: #4ecdc4;
+            text-shadow: 0 0 10px rgba(78,205,196,0.3);
+        }
+        
+        .balance-display {
+            background: rgba(255,255,255,0.1);
+            padding: 8px 16px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            text-align: center;
+        }
+        
+        .balance-label {
+            font-size: 0.8em;
+            color: #ccc;
+            margin-bottom: 2px;
+        }
+        
+        .balance-amount {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #4ecdc4;
+            text-shadow: 0 0 10px rgba(78,205,196,0.5);
+        }
+        
+        .main-content { 
+            padding: 20px 16px; 
+            max-width: 500px; 
+            margin: 0 auto; 
+        }
+        
+        .game-icon { 
+            font-size: 4em; 
+            margin-bottom: 20px; 
+            text-align: center;
+            filter: drop-shadow(0 0 15px rgba(255,255,255,0.3));
+        }
+        
+        .dice-area {
+            background: linear-gradient(145deg, #1a1a1a, #2d2d2d);
+            border-radius: 20px;
+            padding: 30px 20px;
+            margin: 20px 0;
+            border: 1px solid #333;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+        
+        .dice-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .dice {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(145deg, #ffffff, #e0e0e0);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #000;
+            border: 2px solid #333;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+            transition: all 0.5s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .dice:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(78,205,196,0.3), transparent);
+            transition: left 0.5s;
+        }
+        
+        .dice.rolling:before {
+            left: 100%;
+        }
+        
+        .dice.rolling {
+            animation: diceRoll 0.5s ease-in-out infinite;
+        }
+        
+        @keyframes diceRoll {
+            0%, 100% { transform: rotateX(0) rotateY(0); }
+            25% { transform: rotateX(90deg) rotateY(0); }
+            50% { transform: rotateX(90deg) rotateY(90deg); }
+            75% { transform: rotateX(0) rotateY(90deg); }
+        }
+        
+        .dice-result {
+            font-size: 1.3em;
+            font-weight: bold;
+            margin: 15px 0;
+            color: #4ecdc4;
+            text-shadow: 0 0 10px rgba(78,205,196,0.3);
+        }
+        
+        .prediction-section {
+            background: linear-gradient(145deg, #1a1a1a, #2d2d2d);
+            padding: 25px;
+            border-radius: 20px;
+            border: 1px solid #333;
+            margin: 20px 0;
+        }
+        
+        .prediction-title {
+            color: #4ecdc4;
+            font-weight: bold;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+            text-align: center;
+        }
+        
+        .prediction-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        
+        .prediction-btn {
+            background: rgba(78,205,196,0.1);
+            border: 2px solid #4ecdc4;
+            color: #4ecdc4;
+            padding: 12px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+        
+        .prediction-btn:hover {
+            background: rgba(78,205,196,0.2);
+            transform: translateY(-2px);
+        }
+        
+        .prediction-btn.selected {
+            background: #4ecdc4;
+            color: #000;
+            box-shadow: 0 0 20px rgba(78,205,196,0.5);
+        }
+        
+        .prediction-btn:disabled {
+            background: #333;
+            border-color: #666;
+            color: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .multiplier-display {
+            text-align: center;
+            margin: 10px 0;
+            font-size: 0.9em;
+            color: #ccc;
+        }
+        
+        .controls-section {
+            background: linear-gradient(145deg, #1a1a1a, #2d2d2d);
+            padding: 25px;
+            border-radius: 20px;
+            border: 1px solid #333;
+            margin: 20px 0;
+        }
+        
+        .bet-section { 
+            margin: 20px 0; 
+        }
+        
+        .bet-section label { 
+            color: #ccc; 
+            margin-bottom: 8px; 
+            display: block;
+            font-weight: 500;
+        }
+        
+        .bet-input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        
+        .bet-section input { 
+            flex: 1;
+            padding: 12px 16px; 
+            border-radius: 12px; 
+            border: 1px solid #333; 
+            background: #0a0a0a; 
+            color: white; 
+            text-align: center; 
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+        
+        .bet-section input:focus {
+            outline: none;
+            border-color: #4ecdc4;
+            box-shadow: 0 0 10px rgba(78,205,196,0.2);
+        }
+        
+        .bet-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .bet-btn {
+            background: rgba(78,205,196,0.1);
+            border: 1px solid #4ecdc4;
+            color: #4ecdc4;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.2s;
+            flex: 1;
+            min-width: 50px;
+        }
+        
+        .bet-btn:hover {
+            background: rgba(78,205,196,0.2);
+        }
+        
+        .play-btn { 
+            background: linear-gradient(135deg, #4ecdc4, #44a08d); 
+            color: white; 
+            border: none; 
+            padding: 16px 40px; 
+            border-radius: 25px; 
+            font-size: 18px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            margin: 20px auto;
+            display: block;
+            box-shadow: 0 6px 20px rgba(78,205,196,0.4);
+            transition: all 0.3s ease;
+            min-width: 200px;
+        }
+        
+        .play-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(78,205,196,0.5);
+        }
+        
+        .play-btn:active {
+            transform: translateY(0);
+        }
+        
+        .play-btn:disabled {
+            background: #333;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .result { 
+            margin-top: 24px; 
+            font-size: 1.2em; 
+            font-weight: bold; 
+            min-height: 40px; 
+            text-align: center;
+            padding: 16px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid #333;
+        }
+        
+        .game-info {
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            border: 1px solid #333;
+        }
+        
+        .info-title {
+            color: #4ecdc4;
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+        
+        .info-text {
+            color: #ccc;
+            line-height: 1.5;
+            font-size: 0.9em;
+        }
+        
+        .payout-table {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .payout-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+        }
+        
+        @media (max-width: 480px) {
+            .dice-container {
+                gap: 15px;
+            }
+            
+            .dice {
+                width: 70px;
+                height: 70px;
+                font-size: 2.2em;
+            }
+            
+            .prediction-options {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+            
+            .bet-buttons {
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <button class="back-btn" onclick="goBack()">←</button>
+        <div class="game-title">🎲 Dice Game</div>
+        <div class="balance-display">
+            <div class="balance-label">Balance</div>
+            <div class="balance-amount" id="balanceAmount">1000</div>
+        </div>
+    </div>
+    
+    <div class="main-content">
+        <div class="game-icon">🎲</div>
+        
+        <div class="dice-area">
+            <div class="dice-container">
+                <div class="dice" id="dice1">1</div>
+                <div class="dice" id="dice2">1</div>
+            </div>
+            <div class="dice-result" id="diceResult">Total: 2</div>
+        </div>
+        
+        <div class="prediction-section">
+            <div class="prediction-title">🎯 Choose Your Prediction</div>
+            <div class="prediction-options">
+                <button class="prediction-btn" id="predUnder7" onclick="selectPrediction('under7')">
+                    Under 7<br><span style="font-size: 0.8em;">(2-6)</span>
+                </button>
+                <button class="prediction-btn" id="predOver7" onclick="selectPrediction('over7')">
+                    Over 7<br><span style="font-size: 0.8em;">(8-12)</span>
+                </button>
+                <button class="prediction-btn" id="predExact7" onclick="selectPrediction('exact7')">
+                    Exactly 7<br><span style="font-size: 0.8em;">Lucky 7</span>
+                </button>
+                <button class="prediction-btn" id="predDoubles" onclick="selectPrediction('doubles')">
+                    Doubles<br><span style="font-size: 0.8em;">Same numbers</span>
+                </button>
+            </div>
+            <div class="multiplier-display" id="multiplierDisplay">Select a prediction to see payout</div>
+        </div>
+        
+        <div class="controls-section">
+            <div class="bet-section">
+                <label for="betAmount">Bet Amount (chips):</label>
+                <div class="bet-input-group">
+                    <input type="number" id="betAmount" min="1" max="1000" value="10" step="1">
+                </div>
+                <div class="bet-buttons">
+                    <button class="bet-btn" onclick="setBet(10)">10</button>
+                    <button class="bet-btn" onclick="setBet(25)">25</button>
+                    <button class="bet-btn" onclick="setBet(50)">50</button>
+                    <button class="bet-btn" onclick="setBet(100)">100</button>
+                    <button class="bet-btn" onclick="setBet(250)">250</button>
+                    <button class="bet-btn" onclick="maxBet()">MAX</button>
+                </div>
+            </div>
+            
+            <button class="play-btn" id="playButton" onclick="rollDice()">
+                🎲 ROLL DICE
+            </button>
+        </div>
+        
+        <div id="result" class="result">Choose your prediction and roll the dice!</div>
+        
+        <div class="game-info">
+            <div class="info-title">🎯 How to Play</div>
+            <div class="info-text">
+                Choose your prediction, place your bet, and roll the dice. Different predictions have different payouts!
+            </div>
+            
+            <div class="info-title" style="margin-top: 15px;">💰 Payout Table</div>
+            <div class="payout-table">
+                <div class="payout-row">
+                    <span>Under 7 (2-6)</span>
+                    <span>2x</span>
+                </div>
+                <div class="payout-row">
+                    <span>Over 7 (8-12)</span>
+                    <span>2x</span>
+                </div>
+                <div class="payout-row">
+                    <span>Exactly 7</span>
+                    <span>5x</span>
+                </div>
+                <div class="payout-row">
+                    <span>Doubles</span>
+                    <span>6x</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Initialize Telegram WebApp
+        let webApp = null;
+        let userBalance = 1000;
+        let userId = 'guest';
+        let selectedPrediction = null;
+        
+        const multipliers = {
+            'under7': 2,
+            'over7': 2,
+            'exact7': 5,
+            'doubles': 6
+        };
+        
+        if (window.Telegram && window.Telegram.WebApp) {
+            webApp = window.Telegram.WebApp;
+            webApp.ready();
+            webApp.expand();
+            
+            // Set back button
+            webApp.BackButton.show();
+            webApp.BackButton.onClick(() => goBack());
+        }
+        
+        // Get user data from URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        userId = urlParams.get('user_id') || 'guest';
+        userBalance = parseInt(urlParams.get('balance')) || 1000;
+        
+        // Update balance display
+        document.getElementById('balanceAmount').textContent = userBalance.toLocaleString();
+        
+        function goBack() {
+            // Navigate back to main casino with updated balance
+            const mainUrl = `casino_webapp_new.html?user_id=${userId}&balance=${userBalance}`;
+            window.location.href = mainUrl;
+        }
+        
+        function setBet(amount) {
+            const maxBet = Math.min(amount, userBalance);
+            document.getElementById('betAmount').value = maxBet;
+        }
+        
+        function maxBet() {
+            const maxAmount = Math.min(userBalance, 1000);
+            document.getElementById('betAmount').value = maxAmount;
+        }
+        
+        function selectPrediction(prediction) {
+            // Clear previous selection
+            document.querySelectorAll('.prediction-btn').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            
+            // Select new prediction
+            selectedPrediction = prediction;
+            document.getElementById('pred' + prediction.charAt(0).toUpperCase() + prediction.slice(1)).classList.add('selected');
+            
+            // Update multiplier display
+            const multiplier = multipliers[prediction];
+            document.getElementById('multiplierDisplay').textContent = `Payout: ${multiplier}x your bet`;
+        }
+        
+        function animateDice() {
+            const dice1 = document.getElementById('dice1');
+            const dice2 = document.getElementById('dice2');
+            
+            dice1.classList.add('rolling');
+            dice2.classList.add('rolling');
+            
+            const numbers = ['1', '2', '3', '4', '5', '6'];
+            let rollCount = 0;
+            const maxRolls = 15;
+            
+            const interval = setInterval(() => {
+                dice1.textContent = numbers[Math.floor(Math.random() * 6)];
+                dice2.textContent = numbers[Math.floor(Math.random() * 6)];
+                
+                rollCount++;
+                if (rollCount >= maxRolls) {
+                    clearInterval(interval);
+                    dice1.classList.remove('rolling');
+                    dice2.classList.remove('rolling');
+                }
+            }, 100);
+        }
+        
+        async function rollDice() {
+            const bet = parseInt(document.getElementById('betAmount').value);
+            const resultDiv = document.getElementById('result');
+            const playButton = document.getElementById('playButton');
+            
+            // Validation
+            if (!selectedPrediction) {
+                resultDiv.innerHTML = '<span style="color:#ff6b6b;">❌ Please select a prediction first!</span>';
+                return;
+            }
+            
+            if (!bet || bet <= 0) {
+                resultDiv.innerHTML = '<span style="color:#ff6b6b;">❌ Enter a valid bet amount!</span>';
+                return;
+            }
+            
+            if (bet > userBalance) {
+                resultDiv.innerHTML = '<span style="color:#ff6b6b;">❌ Insufficient balance!</span>';
+                return;
+            }
+            
+            // Disable controls during roll
+            playButton.disabled = true;
+            playButton.textContent = '🎲 ROLLING...';
+            document.querySelectorAll('.prediction-btn').forEach(btn => btn.disabled = true);
+            
+            // Update balance immediately
+            userBalance -= bet;
+            document.getElementById('balanceAmount').textContent = userBalance.toLocaleString();
+            
+            resultDiv.innerHTML = '<span style="color:#4ecdc4;">🎲 Rolling the dice...</span>';
+            
+            // Animate dice
+            animateDice();
+            
+            // Generate random dice results
+            setTimeout(() => {
+                const die1 = Math.floor(Math.random() * 6) + 1;
+                const die2 = Math.floor(Math.random() * 6) + 1;
+                const total = die1 + die2;
+                
+                // Update dice display
+                document.getElementById('dice1').textContent = die1;
+                document.getElementById('dice2').textContent = die2;
+                document.getElementById('diceResult').textContent = `Total: ${total}`;
+                
+                // Check if prediction was correct
+                let isWin = false;
+                
+                switch (selectedPrediction) {
+                    case 'under7':
+                        isWin = total < 7;
+                        break;
+                    case 'over7':
+                        isWin = total > 7;
+                        break;
+                    case 'exact7':
+                        isWin = total === 7;
+                        break;
+                    case 'doubles':
+                        isWin = die1 === die2;
+                        break;
+                }
+                
+                let resultText = '';
+                
+                if (isWin) {
+                    const multiplier = multipliers[selectedPrediction];
+                    const winAmount = bet * multiplier;
+                    userBalance += winAmount;
+                    
+                    resultText = `
+                        <div style="color:#4ecdc4; font-size: 1.3em;">🎉 YOU WIN! 🎉</div>
+                        <div style="color:#4ecdc4;">Rolled: ${die1} + ${die2} = ${total}</div>
+                        <div style="color:#4ecdc4;">Won: +${(winAmount - bet).toLocaleString()} chips (${multiplier}x)</div>
+                        <div style="color:#4ecdc4;">New Balance: ${userBalance.toLocaleString()} chips</div>
+                    `;
+                    
+                    // Celebration effect
+                    document.body.style.animation = 'pulse 0.5s ease-in-out';
+                    setTimeout(() => {
+                        document.body.style.animation = '';
+                    }, 500);
+                } else {
+                    resultText = `
+                        <div style="color:#ff6b6b;">😞 You Lost!</div>
+                        <div style="color:#ccc;">Rolled: ${die1} + ${die2} = ${total}</div>
+                        <div style="color:#ccc;">Lost: -${bet.toLocaleString()} chips</div>
+                        <div style="color:#4ecdc4;">Balance: ${userBalance.toLocaleString()} chips</div>
+                    `;
+                }
+                
+                resultDiv.innerHTML = resultText;
+                
+                // Update balance display
+                document.getElementById('balanceAmount').textContent = userBalance.toLocaleString();
+                
+                // Re-enable controls
+                playButton.disabled = false;
+                playButton.textContent = '🎲 ROLL DICE';
+                document.querySelectorAll('.prediction-btn').forEach(btn => btn.disabled = false);
+                
+                // Update URL with new balance
+                const newUrl = `${window.location.pathname}?user_id=${userId}&balance=${userBalance}`;
+                window.history.replaceState({}, '', newUrl);
+                
+                // Adjust bet if balance is low
+                const currentBet = parseInt(document.getElementById('betAmount').value);
+                if (currentBet > userBalance) {
+                    document.getElementById('betAmount').value = Math.min(userBalance, 10);
+                }
+            }, 1500);
+        }
+        
+        // Add pulse animation for celebration
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes pulse {
+                0%, 100% { 
+                    transform: scale(1); 
+                    filter: brightness(1);
+                }
+                50% { 
+                    transform: scale(1.02); 
+                    filter: brightness(1.2);
+                }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // Update max bet when balance changes
+        function updateMaxBet() {
+            const betInput = document.getElementById('betAmount');
+            if (parseInt(betInput.value) > userBalance) {
+                betInput.value = Math.min(userBalance, 10);
+            }
+            betInput.max = userBalance;
+        }
+        
+        // Initialize max bet
+        updateMaxBet();
+    </script>
+</body>
+</html>

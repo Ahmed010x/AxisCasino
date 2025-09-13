@@ -538,6 +538,11 @@ async def start_web_server():
     app.router.add_get('/health', health_check)
     app.router.add_get('/', casino_webapp)
     app.router.add_get('/casino', casino_webapp)
+    
+    # Add routes for individual game pages
+    app.router.add_get('/{game_file:game_[a-z_]+\.html}', serve_game_page)
+    
+    # Static files
     app.router.add_static('/', path=os.path.join(os.path.dirname(__file__), 'static'), name='static')
     
     runner = web.AppRunner(app)
@@ -548,6 +553,130 @@ async def start_web_server():
     
     logger.info(f"✅ Health check server started on port {PORT}")
     return runner
+
+async def serve_game_page(request):
+    """Serve individual game pages"""
+    # Extract game name from the request path
+    game_file = request.match_info.get('game_file', '')
+    user_id = request.query.get('user_id', 'guest')
+    balance = request.query.get('balance', '1000')
+    
+    # Security check - only allow valid game files
+    valid_games = [
+        'game_slots.html', 'game_slots_enhanced.html',
+        'game_blackjack.html', 'game_blackjack_enhanced.html',
+        'game_roulette.html', 'game_roulette_enhanced.html',
+        'game_dice.html', 'game_dice_enhanced.html',
+        'game_poker.html', 'game_crash.html', 'game_mines.html', 
+        'game_plinko.html', 'game_limbo.html', 'game_hilo.html', 
+        'game_coinflip.html'
+    ]
+    
+    if game_file not in valid_games:
+        return web.Response(status=404, text="Game not found")
+    
+    # Try to read the game file
+    game_path = os.path.join(os.path.dirname(__file__), game_file)
+    try:
+        with open(game_path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        
+        # Replace placeholders with actual values if needed
+        html_content = html_content.replace('{USER_ID}', str(user_id))
+        html_content = html_content.replace('{BALANCE}', str(balance))
+        
+        return web.Response(text=html_content, content_type='text/html')
+    except FileNotFoundError:
+        # Return a fallback page if game file doesn't exist
+        return web.Response(
+            text=f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Game Not Found</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {{ 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            text-align: center; 
+            padding: 50px 20px; 
+            background: #000; 
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }}
+        .container {{
+            max-width: 400px;
+            background: linear-gradient(145deg, #1a1a1a, #2d2d2d);
+            padding: 40px 30px;
+            border-radius: 20px;
+            border: 1px solid #333;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }}
+        h1 {{
+            color: #4ecdc4;
+            margin-bottom: 20px;
+            font-size: 2em;
+        }}
+        p {{
+            color: #ccc;
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }}
+        .back-btn {{
+            background: linear-gradient(135deg, #4ecdc4, #44a08d);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(78,205,196,0.4);
+            transition: all 0.3s ease;
+        }}
+        .back-btn:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(78,205,196,0.5);
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 Game Coming Soon!</h1>
+        <p>This game is currently under development. We're building an amazing experience for you!</p>
+        <button class="back-btn" onclick="goBack()">
+            ← Back to Casino
+        </button>
+    </div>
+    
+    <script>
+        // Initialize Telegram WebApp
+        if (window.Telegram && window.Telegram.WebApp) {{
+            const webApp = window.Telegram.WebApp;
+            webApp.ready();
+            webApp.expand();
+            webApp.BackButton.show();
+            webApp.BackButton.onClick(() => goBack());
+        }}
+        
+        function goBack() {{
+            const urlParams = new URLSearchParams(window.location.search);
+            const userId = urlParams.get('user_id') || 'guest';
+            const balance = urlParams.get('balance') || '1000';
+            const mainUrl = `casino_webapp_new.html?user_id=${{userId}}&balance=${{balance}}`;
+            window.location.href = mainUrl;
+        }}
+    </script>
+</body>
+</html>
+            """,
+            content_type='text/html'
+        )
 
 async def casino_webapp(request):
     """Serve a modern black-themed casino WebApp interface"""
@@ -562,7 +691,7 @@ async def casino_webapp(request):
         
         # Replace placeholders with actual values
         html = html_template.replace('{BALANCE}', str(balance))
-        html = html.replace('{USER_ID}', str(user_id))
+        html = html_template.replace('{USER_ID}', str(user_id))
     except FileNotFoundError:
         # Fallback to inline HTML if template file is not found
         html = f"""

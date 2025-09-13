@@ -675,11 +675,11 @@
             updateBalance();
             updateStats();
             
-            // Get balance from URL params
+            // Get balance from URL params - support both parameter formats
             const urlParams = new URLSearchParams(window.location.search);
             const urlBalance = urlParams.get('balance');
             if (urlBalance) {
-                balance = parseInt(urlBalance);
+                currentBalance = parseInt(urlBalance);
                 updateBalance();
             }
             // --- DEMO MODE AUTO-DETECT ---
@@ -1057,7 +1057,7 @@
             let x = startX;
             let y = startY;
             let velocityX = 0;
-            let velocityY = 0.5;
+            let velocityY = 0.5; // Even slower initial velocity
             const gravity = 0.13; // Reduced gravity for much slower fall
             const pegRadius = 8;
             const ballRadius = 6;
@@ -1191,117 +1191,91 @@
             }, 5000);
         }
         
-        // Mini App Navigation and Integration
-        function goBack() {
-            // Check if we're in Telegram WebApp
-            if (window.Telegram && window.Telegram.WebApp) {
-                // Try to close the mini app first
-                if (window.Telegram.WebApp.close) {
-                    window.Telegram.WebApp.close();
-                    return;
-                }
-                
-                // If close doesn't work, navigate back to main casino
-                const urlParams = new URLSearchParams(window.location.search);
-                const userId = urlParams.get('userId') || 'guest';
-                const userName = urlParams.get('userName') || 'Player';
-                const balance = currentBalance;
-                
-                const returnUrl = `casino_webapp_new.html?userId=${userId}&userName=${encodeURIComponent(userName)}&balance=${balance}`;
-                window.location.href = returnUrl;
-            } else {
-                // Fallback for non-mini app environments
-                if (document.referrer) {
-                    window.history.back();
-                } else {
-                    window.location.href = 'casino_webapp_new.html?balance=' + currentBalance;
-                }
-            }
-        }
-        
         // Initialize user data from URL parameters
         function initializeUserData() {
             const urlParams = new URLSearchParams(window.location.search);
             
-            userId = urlParams.get('userId') || 'guest';
-            userName = urlParams.get('userName') || 'Player';
-            
+            // Get user data from URL - support both parameter formats for compatibility
+            const urlUserId = urlParams.get('userId') || urlParams.get('user_id');
+            const urlUserName = urlParams.get('userName') || urlParams.get('user_name');
             const urlBalance = urlParams.get('balance');
-            if (urlBalance && !isNaN(parseInt(urlBalance))) {
-                currentBalance = parseInt(urlBalance);
-            }
+            const urlReturnUrl = urlParams.get('returnUrl') || urlParams.get('return_url');
             
-            const returnUrlParam = urlParams.get('returnUrl');
-            if (returnUrlParam) {
-                returnUrl = returnUrlParam;
-            }
+            if (urlUserId) userId = urlUserId;
+            if (urlUserName) userName = urlUserName;
+            if (urlBalance) currentBalance = parseInt(urlBalance);
+            if (urlReturnUrl) returnUrl = urlReturnUrl;
             
-            updateBalanceDisplay();
-            
-            console.log(`Initialized for user: ${userName} (${userId}) with balance: ${currentBalance}`);
+            updateBalance();
         }
         
         function updateBalanceDisplay() {
             document.getElementById('balance').textContent = currentBalance;
         }
         
-        function updateBalance(newBalance) {
-            if (typeof newBalance === 'number' && newBalance >= 0) {
+        function updateBalance(newBalance = null) {
+            if (newBalance !== null) {
                 currentBalance = newBalance;
-                updateBalanceDisplay();
-                
-                // Store in localStorage for persistence
-                localStorage.setItem('casinoBalance', currentBalance.toString());
-                
-                // Update Telegram WebApp if available
-                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.sendData) {
-                    try {
-                        window.Telegram.WebApp.sendData(JSON.stringify({
-                            type: 'balance_update',
-                            userId: userId,
-                            balance: currentBalance
-                        }));
-                    } catch (e) {
-                        console.log('Could not send data to Telegram:', e);
-                    }
+            }
+            updateBalanceDisplay();
+            
+            // Store balance in localStorage for persistence
+            localStorage.setItem('casinoBalance', currentBalance.toString());
+        }
+        
+        // Telegram Mini App integration
+        function goBack() {
+            try {
+                // Try to use Telegram WebApp back button first
+                if (window.Telegram && window.Telegram.WebApp) {
+                    window.Telegram.WebApp.close();
+                    return;
                 }
+                
+                // Fallback: navigate to return URL with updated balance
+                const params = new URLSearchParams();
+                params.set('userId', userId);
+                params.set('userName', userName);
+                params.set('balance', currentBalance.toString());
+                
+                const backUrl = `${returnUrl}?${params.toString()}`;
+                window.location.href = backUrl;
+            } catch (error) {
+                console.error('Error navigating back:', error);
+                // Final fallback
+                window.history.back();
             }
         }
         
         // Initialize Telegram WebApp
         function initTelegramWebApp() {
             if (window.Telegram && window.Telegram.WebApp) {
-                const webapp = window.Telegram.WebApp;
+                const tg = window.Telegram.WebApp;
                 
-                // Set up WebApp
-                webapp.ready();
-                webapp.expand();
+                // Configure WebApp
+                tg.expand();
+                tg.ready();
                 
-                // Set theme
-                if (webapp.themeParams) {
-                    document.documentElement.style.setProperty('--tg-theme-bg-color', webapp.themeParams.bg_color || '#0f0f23');
-                    document.documentElement.style.setProperty('--tg-theme-text-color', webapp.themeParams.text_color || '#ffffff');
-                }
+                // Set main button if needed
+                tg.MainButton.text = "Back to Casino";
+                tg.MainButton.onClick(() => goBack());
                 
-                // Set up back button
-                if (webapp.BackButton) {
-                    webapp.BackButton.show();
-                    webapp.BackButton.onClick(goBack);
-                }
+                // Handle back button
+                tg.BackButton.show();
+                tg.BackButton.onClick(() => goBack());
                 
-                // Set up main button (optional)
-                if (webapp.MainButton) {
-                    webapp.MainButton.text = "Return to Casino";
-                    webapp.MainButton.onClick(goBack);
+                // Get user data from Telegram
+                if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+                    const user = tg.initDataUnsafe.user;
+                    userId = user.id.toString();
+                    userName = user.first_name || 'Player';
                 }
                 
                 console.log('Telegram WebApp initialized');
-            } else {
-                console.log('Not running in Telegram WebApp environment');
             }
         }
         
-        // Initialize everything when page loads
+        // Call initialization functions on page load
         document.addEventListener('DOMContentLoaded', function() {
             initTelegramWebApp();
             initializeUserData();

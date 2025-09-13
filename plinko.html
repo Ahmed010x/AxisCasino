@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plinko Game | Casino WebApp</title>
+    <style>
+        body {
+            background: #000;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .header {
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            padding: 0 12px;
+            height: 64px;
+            border-bottom: 1px solid #333;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.5);
+        }
+        .back-btn {
+            background: none;
+            border: none;
+            color: #4ecdc4;
+            font-size: 2em;
+            cursor: pointer;
+            padding: 0 10px 0 0;
+        }
+        .title {
+            font-size: 1.3em;
+            font-weight: bold;
+            letter-spacing: 1px;
+            color: #fff;
+        }
+        .plinko-container {
+            margin: 24px auto 0 auto;
+            background: #181818;
+            border-radius: 18px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+            padding: 24px 10px 18px 10px;
+            max-width: 420px;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .plinko-board {
+            width: 320px;
+            height: 400px;
+            background: #222;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px #000a;
+            position: relative;
+            margin-bottom: 18px;
+        }
+        .drop-btn {
+            background: linear-gradient(45deg, #4ecdc4, #45b7d1);
+            border: none;
+            color: #fff;
+            font-weight: bold;
+            border-radius: 12px;
+            padding: 12px 32px;
+            font-size: 1.1em;
+            cursor: pointer;
+            margin-top: 10px;
+            box-shadow: 0 2px 8px #000a;
+            transition: background 0.2s;
+        }
+        .drop-btn:hover {
+            background: linear-gradient(45deg, #45b7d1, #4ecdc4);
+        }
+        .result {
+            margin-top: 18px;
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #4ecdc4;
+            min-height: 32px;
+        }
+        @media (max-width: 400px) {
+            .plinko-board { width: 98vw; height: 60vw; min-width: 220px; min-height: 300px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <button class="back-btn" onclick="goBack()">&#8592;</button>
+        <div class="title">Plinko</div>
+        <div style="width:40px;"></div>
+    </div>
+    <div class="plinko-container">
+        <div class="plinko-board" id="plinkoBoard"></div>
+        <button class="drop-btn" id="dropBtn">Drop Ball</button>
+        <div class="result" id="result"></div>
+    </div>
+    <script>
+        // Plinko board config
+        const rows = 10;
+        const cols = 9;
+        const pegRadius = 7;
+        const ballRadius = 10;
+        const boardW = 320;
+        const boardH = 400;
+        const slotRewards = [0, 2, 5, 10, 20, 10, 5, 2, 0];
+        const board = document.getElementById('plinkoBoard');
+        board.innerHTML = '';
+        board.style.position = 'relative';
+        // Draw pegs
+        for(let r=0; r<rows; r++) {
+            for(let c=0; c<cols; c++) {
+                if ((r%2===0 && c%2===0) || (r%2===1 && c%2===1)) {
+                    const peg = document.createElement('div');
+                    peg.style.position = 'absolute';
+                    peg.style.width = pegRadius*2+'px';
+                    peg.style.height = pegRadius*2+'px';
+                    peg.style.left = (c*(boardW/(cols-1)) - pegRadius) + 'px';
+                    peg.style.top = (r*(boardH/(rows+1)) - pegRadius) + 'px';
+                    peg.style.background = 'linear-gradient(135deg,#4ecdc4,#45b7d1)';
+                    peg.style.borderRadius = '50%';
+                    peg.style.boxShadow = '0 1px 6px #4ecdc488';
+                    board.appendChild(peg);
+                }
+            }
+        }
+        // Draw slots
+        for(let c=0; c<cols; c++) {
+            const slot = document.createElement('div');
+            slot.style.position = 'absolute';
+            slot.style.width = (boardW/(cols-1))-2+'px';
+            slot.style.height = '32px';
+            slot.style.left = (c*(boardW/(cols-1)))+'px';
+            slot.style.top = (boardH-24)+'px';
+            slot.style.transform = 'translateX(-50%)';
+            slot.style.background = 'rgba(78,205,196,0.08)';
+            slot.style.borderRadius = '8px';
+            slot.style.textAlign = 'center';
+            slot.style.color = '#4ecdc4';
+            slot.style.fontWeight = 'bold';
+            slot.style.fontSize = '1em';
+            slot.innerHTML = slotRewards[c] + 'x';
+            board.appendChild(slot);
+        }
+        // Ball drop logic
+        const dropBtn = document.getElementById('dropBtn');
+        const resultDiv = document.getElementById('result');
+        let animating = false;
+        dropBtn.onclick = function() {
+            if (animating) return;
+            animating = true;
+            resultDiv.textContent = '';
+            // Remove old ball
+            const oldBall = document.getElementById('plinkoBall');
+            if (oldBall) oldBall.remove();
+            // Start in the center
+            let col = Math.floor(cols/2);
+            let x = col*(boardW/(cols-1));
+            let y = 0;
+            const ball = document.createElement('div');
+            ball.id = 'plinkoBall';
+            ball.style.position = 'absolute';
+            ball.style.width = ballRadius*2+'px';
+            ball.style.height = ballRadius*2+'px';
+            ball.style.left = (x-ballRadius)+'px';
+            ball.style.top = (y-ballRadius)+'px';
+            ball.style.background = 'radial-gradient(circle,#fff 60%,#4ecdc4 100%)';
+            ball.style.borderRadius = '50%';
+            ball.style.boxShadow = '0 2px 12px #4ecdc4aa';
+            ball.style.zIndex = 10;
+            board.appendChild(ball);
+            let step = 0;
+            function animate() {
+                if (step < rows) {
+                    y += boardH/(rows+1);
+                    // Randomly go left, right, or stay
+                    const dir = Math.random();
+                    if (dir < 0.45 && col > 0) col--;
+                    else if (dir > 0.55 && col < cols-1) col++;
+                    x = col*(boardW/(cols-1));
+                    ball.style.left = (x-ballRadius)+'px';
+                    ball.style.top = (y-ballRadius)+'px';
+                    step++;
+                    setTimeout(animate, 90);
+                } else {
+                    // Landed
+                    animating = false;
+                    ball.style.top = (boardH-30)+'px';
+                    resultDiv.innerHTML = `You won <span style='color:#fff;'>${slotRewards[col]}x</span>!`;
+                }
+            }
+            animate();
+        };
+        function goBack() {
+            window.history.back();
+        }
+    </script>
+</body>
+</html>

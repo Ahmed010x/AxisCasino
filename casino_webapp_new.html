@@ -4,6 +4,7 @@
     <title>🎰 Casino WebApp</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -12,24 +13,24 @@
         }
         
         body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #000000;
-            color: white; 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f1419;
+            color: #b1bad3; 
             min-height: 100vh;
             overflow-x: hidden;
         }
         
         .header {
-            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-            padding: 0 8px;
+            background: #1a1f29;
+            padding: 12px 16px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            border-bottom: 1px solid #333;
-            box-shadow: 0 2px 20px rgba(0,0,0,0.5);
+            border-bottom: 1px solid #2c3441;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
             max-width: 500px;
             margin: 0 auto;
-            height: 70px;
+            height: 64px;
         }
         .logo-section {
             display: flex;
@@ -56,24 +57,22 @@
             flex-direction: column;
             align-items: flex-end;
             justify-content: center;
-            background: rgba(255,255,255,0.1);
-            padding: 6px 14px;
-            border-radius: 10px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.2);
+            background: #00d4aa;
+            padding: 8px 16px;
+            border-radius: 8px;
             margin-right: 0;
-            height: 48px;
+            height: 40px;
         }
         .balance-label {
-            font-size: 0.8em;
-            color: #ccc;
-            margin-bottom: 5px;
+            font-size: 0.7em;
+            color: #1a1f29;
+            margin-bottom: 2px;
+            font-weight: 600;
         }
         .balance-amount {
-            font-size: 1.1em;
-            font-weight: bold;
-            color: #4ecdc4;
-            text-shadow: 0 0 10px rgba(78,205,196,0.5);
+            font-size: 1em;
+            font-weight: 700;
+            color: #1a1f29;
         }
         .profile-section {
             display: flex;
@@ -83,17 +82,17 @@
             height: 48px;
         }
         .profile-pic {
-            width: 38px;
-            height: 38px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
-            border: 3px solid #4ecdc4;
-            box-shadow: 0 0 15px rgba(78,205,196,0.3);
-            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: 2px solid #00d4aa;
+            background: linear-gradient(45deg, #00d4aa, #2edd91);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.2em;
-            font-weight: bold;
+            font-size: 1em;
+            font-weight: 600;
+            color: #1a1f29;
         }
         .user-info {
             display: flex;
@@ -103,239 +102,478 @@
             height: 38px;
         }
         .username {
-            font-size: 1em;
-            font-weight: bold;
-            color: #fff;
+            font-size: 0.9em;
+            font-weight: 600;
+            color: #ffffff;
             line-height: 1.1;
         }
         .user-id {
-            font-size: 0.8em;
-            color: #888;
+            font-size: 0.7em;
+            color: #7782aa;
             line-height: 1.1;
         }
         .main-content {
-            padding: 16px 4px;
+            padding: 20px 16px;
             max-width: 500px;
             margin: 0 auto;
         }
         .banner-placeholder {
-            height: 160px;
-            margin-bottom: 16px;
-            background: rgba(255,255,255,0.04);
-            border-radius: 16px;
+            height: 120px;
+            margin-bottom: 24px;
+            background: linear-gradient(135deg, #1a1f29 0%, #2c3441 100%);
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
             overflow: hidden;
             padding: 0;
+            border: 1px solid #2c3441;
         }
         .banner-placeholder img {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            border-radius: 16px;
+            border-radius: 12px;
             display: block;
         }
         .search-bar-container {
-            margin-bottom: 16px;
+            margin-bottom: 24px;
             display: flex;
             justify-content: center;
         }
         .search-bar {
-            width: 90%;
-            max-width: 320px;
-            padding: 8px 14px;
-            border-radius: 18px;
-            border: none;
-            background: #181818;
-            color: #fff;
-            font-size: 1em;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            width: 100%;
+            max-width: 100%;
+            padding: 14px 18px;
+            border-radius: 16px;
+            border: 2px solid rgba(0,212,170,0.2);
+            background: linear-gradient(145deg, #1a1f29 0%, #252e3a 100%);
+            color: #ffffff;
+            font-size: 0.95em;
             outline: none;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            box-shadow: 
+                0 4px 12px rgba(0,0,0,0.15), 
+                inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        .search-bar:focus {
+            border-color: #00d4aa;
+            box-shadow: 
+                0 0 20px rgba(0,212,170,0.3), 
+                0 4px 12px rgba(0,0,0,0.2);
+            transform: translateY(-2px);
+        }
+        .search-bar::placeholder {
+            color: #7782aa;
+            font-weight: 500;
         }
         .games-section {
             margin-top: 30px;
         }
         .section-title {
-            font-size: 1.2em;
-            font-weight: bold;
+            font-size: 1.3em;
+            font-weight: 700;
             margin-bottom: 20px;
             text-align: center;
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            background: linear-gradient(135deg, #00d4aa, #4ecdc4, #ff6b6b);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+            text-shadow: 0 4px 8px rgba(0,212,170,0.3);
+            letter-spacing: 0.5px;
+            position: relative;
+        }
+        .section-title:after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(135deg, #00d4aa, #ff6b6b);
+            border-radius: 2px;
+            box-shadow: 0 2px 8px rgba(0,212,170,0.4);
         }
         .games-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
+            gap: 12px;
             margin: 20px 0;
         }
         .game { 
-            background: linear-gradient(145deg, #1a1a1a, #2d2d2d);
-            border-radius: 12px; 
-            padding: 12px; 
+            background: linear-gradient(145deg, #1a1f29 0%, #252e3a 30%, #1e2833 100%);
+            border-radius: 20px; 
+            padding: 20px 16px; 
             cursor: pointer;
-            transition: all 0.3s ease;
-            border: 1px solid #333;
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            border: 1px solid rgba(0,212,170,0.15);
             text-align: center;
             position: relative;
             overflow: hidden;
+            backdrop-filter: blur(20px);
+            box-shadow: 
+                0 8px 24px rgba(0,0,0,0.25), 
+                0 2px 8px rgba(0,0,0,0.1),
+                inset 0 1px 0 rgba(255,255,255,0.08);
+            min-height: 110px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
         .game:before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: conic-gradient(from 0deg, transparent, rgba(0,212,170,0.3), transparent, rgba(255,107,107,0.2), transparent);
+            opacity: 0;
+            transition: all 0.6s ease;
+            animation: rotateGlow 8s linear infinite;
+        }
+        @keyframes rotateGlow {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .game:after {
+            content: '';
+            position: absolute;
+            inset: 2px;
+            background: linear-gradient(145deg, #1a1f29 0%, #252e3a 50%, #1e2833 100%);
+            border-radius: 18px;
+            z-index: 1;
+        }
+        .game > * {
+            position: relative;
+            z-index: 2;
+        }
+        .game:hover:before {
+            opacity: 1;
+        }
+        .game:hover { 
+            transform: translateY(-12px) scale(1.05);
+            box-shadow: 
+                0 24px 48px rgba(0,212,170,0.2), 
+                0 12px 24px rgba(0,0,0,0.3),
+                0 0 40px rgba(0,212,170,0.15);
+            border-color: rgba(0,212,170,0.4);
+        }
+        .game:active {
+            transform: translateY(-8px) scale(1.02);
+            transition: all 0.15s ease;
+        }
+        .game-icon {
+            font-size: 2.2em;
+            margin-bottom: 10px;
+            filter: drop-shadow(0 0 15px rgba(255,255,255,0.4));
+            transition: all 0.3s ease;
+        }
+        .game:hover .game-icon {
+            transform: scale(1.1);
+            filter: drop-shadow(0 0 20px rgba(0,212,170,0.6));
+        }
+        .game-name {
+            font-size: 1em;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            letter-spacing: 0.5px;
+        }
+        .coming-soon {
+            background: linear-gradient(145deg, #1a1f29 0%, #252e3a 50%, #1e2833 100%);
+            border-radius: 20px;
+            padding: 28px 24px;
+            text-align: center;
+            margin-top: 32px;
+            border: 1px solid rgba(0,212,170,0.2);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 
+                0 8px 24px rgba(0,0,0,0.25), 
+                inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        .coming-soon:before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: conic-gradient(from 0deg, transparent, rgba(0,212,170,0.1), transparent, rgba(255,107,107,0.1), transparent);
+            animation: rotateGlow 12s linear infinite;
+            opacity: 0.7;
+        }
+        .coming-soon > * {
+            position: relative;
+            z-index: 2;
+        }
+        .coming-soon h3 {
+            font-size: 1.3em;
+            color: #ffffff;
+            margin-bottom: 20px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #00d4aa, #4ecdc4, #ff6b6b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .coming-soon p {
+            color: #b1bad3;
+            margin-bottom: 16px;
+            font-size: 0.95em;
+            line-height: 1.5;
+        }
+        .btn {
+            background: linear-gradient(135deg, #00d4aa 0%, #2edd91 50%, #00d4aa 100%);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 12px;
+            color: #1a1f29;
+            font-weight: 700;
+            margin: 10px 4px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            font-size: 0.85em;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 
+                0 4px 12px rgba(0,212,170,0.3), 
+                0 2px 6px rgba(0,0,0,0.15);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .btn:before {
             content: '';
             position: absolute;
             top: 0;
             left: -100%;
             width: 100%;
             height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(78,205,196,0.1), transparent);
-            transition: left 0.5s;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: left 0.6s ease;
         }
-        .game:hover:before {
+        .btn:hover:before {
             left: 100%;
         }
-        .game:hover { 
-            transform: translateY(-5px) scale(1.02);
-            box-shadow: 0 10px 30px rgba(78,205,196,0.2);
-            border-color: #4ecdc4;
-        }
-        .game-icon {
-            font-size: 1.5em;
-            margin-bottom: 8px;
-            filter: drop-shadow(0 0 10px rgba(255,255,255,0.3));
-        }
-        .game-name {
-            font-size: 0.95em;
-            font-weight: bold;
-            color: #fff;
-        }
-        .coming-soon {
-            background: linear-gradient(145deg, #1a1a1a, #2d2d2d);
-            border-radius: 12px;
-            padding: 14px;
-            text-align: center;
-            margin-top: 16px;
-            border: 1px solid #333;
-        }
-        .coming-soon h3 {
-            font-size: 1em;
-            color: #4ecdc4;
-            margin-bottom: 15px;
-        }
-        .coming-soon p {
-            color: #ccc;
-            margin-bottom: 10px;
-        }
-        .btn {
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
-            border: none;
-            padding: 10px 18px;
-            border-radius: 16px;
-            color: white;
-            font-weight: bold;
-            margin: 10px 4px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 0.95em;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-        }
         .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 7px 20px rgba(0,0,0,0.4);
+            background: linear-gradient(135deg, #2edd91 0%, #00d4aa 50%, #2edd91 100%);
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 
+                0 8px 20px rgba(0,212,170,0.4), 
+                0 4px 12px rgba(0,0,0,0.2);
         }
         .btn:active {
-            transform: translateY(0);
+            transform: translateY(-1px) scale(1.02);
+            transition: all 0.1s ease;
         }
         /* Add carousel styles */
         .carousel {
             scrollbar-width: thin;
-            scrollbar-color: #4ecdc4 #181818;
+            scrollbar-color: #00d4aa #1a1f29;
         }
         .carousel::-webkit-scrollbar {
-            height: 6px;
+            height: 4px;
         }
         .carousel::-webkit-scrollbar-thumb {
-            background: #4ecdc4;
-            border-radius: 4px;
+            background: #00d4aa;
+            border-radius: 2px;
         }
         .carousel-card {
-            min-width: 90px;
-            max-width: 110px;
+            min-width: 100px;
+            max-width: 120px;
             flex: 0 0 auto;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(145deg, #181818, #232323);
-            border-radius: 12px;
-            border: 1px solid #333;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            padding: 10px 6px;
+            background: linear-gradient(145deg, #1a1f29 0%, #252e3a 30%, #1e2833 100%);
+            border-radius: 16px;
+            border: 1px solid rgba(0,212,170,0.2);
+            padding: 16px 10px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(15px);
+            box-shadow: 
+                0 6px 20px rgba(0,0,0,0.2), 
+                inset 0 1px 0 rgba(255,255,255,0.06);
+            min-height: 100px;
         }
-        .carousel-card .game-icon {
-            font-size: 2em;
-            margin-bottom: 6px;
+        .carousel-card:before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, transparent, rgba(0,212,170,0.4), transparent, rgba(255,107,107,0.3), transparent);
+            border-radius: 18px;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            z-index: -1;
         }
-        .carousel-card .game-name {
-            font-size: 0.95em;
-            color: #fff;
-            font-weight: 500;
+        .carousel-card:hover:before {
+            opacity: 1;
         }
         .carousel-card:hover {
-            border-color: #4ecdc4;
-            box-shadow: 0 4px 16px rgba(78,205,196,0.12);
-            transform: translateY(-2px) scale(1.04);
+            transform: translateY(-8px) scale(1.08);
+            box-shadow: 
+                0 16px 32px rgba(0,212,170,0.25), 
+                0 8px 16px rgba(0,0,0,0.3);
+            border-color: rgba(0,212,170,0.5);
+        }
+        .carousel-card:active {
+            transform: translateY(-4px) scale(1.04);
+            transition: all 0.15s ease;
+        }
+        .carousel-card .game-icon {
+            font-size: 1.8em;
+            margin-bottom: 8px;
+            filter: drop-shadow(0 0 12px rgba(255,255,255,0.4));
+            transition: all 0.3s ease;
+        }
+        .carousel-card:hover .game-icon {
+            transform: scale(1.15);
+            filter: drop-shadow(0 0 16px rgba(0,212,170,0.6));
+        }
+        .carousel-card .game-name {
+            font-size: 0.9em;
+            font-weight: 600;
+            color: #fff;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+            letter-spacing: 0.3px;
+        }
+        .game-player-count {
+            margin-top: 6px;
+            font-size: 0.75em;
+            color: #7782aa;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .game-player-dot {
+            width: 6px;
+            height: 6px;
+            background: #00d4aa;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 8px rgba(0,212,170,0.6);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.2); }
         }
         .carousel-card.img-fill {
             padding: 0;
             background: none;
-            border: none;
-            box-shadow: none;
-            min-width: 110px;
-            max-width: 125px;
-            width: 120px;
-            height: 120px;
-            display: flex;
-            align-items: stretch;
-            justify-content: stretch;
+            border: 2px solid rgba(0,212,170,0.2);
+            border-radius: 18px;
             overflow: hidden;
+            position: relative;
+            min-width: 110px;
+            max-width: 130px;
+            height: 140px;
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            box-shadow: 
+                0 8px 24px rgba(0,0,0,0.3), 
+                0 2px 8px rgba(0,0,0,0.15);
+        }
+        .carousel-card.img-fill:before {
+            content: '';
+            position: absolute;
+            top: -3px;
+            left: -3px;
+            right: -3px;
+            bottom: -3px;
+            background: linear-gradient(45deg, 
+                rgba(0,212,170,0.6), 
+                rgba(255,107,107,0.4), 
+                rgba(78,205,196,0.5), 
+                rgba(255,107,107,0.4), 
+                rgba(0,212,170,0.6));
+            border-radius: 20px;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            z-index: -1;
+            background-size: 300% 300%;
+            animation: gradientShift 6s ease infinite;
+        }
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .carousel-card.img-fill:hover:before {
+            opacity: 1;
+        }
+        .carousel-card.img-fill:hover {
+            transform: translateY(-12px) scale(1.08);
+            box-shadow: 
+                0 20px 40px rgba(0,212,170,0.3), 
+                0 10px 20px rgba(0,0,0,0.4);
         }
         .carousel-card.img-fill img {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-            display: block;
-            padding: 0;
-            background: #181818;
-            transition: transform 0.2s;
+            transition: all 0.4s ease;
+            border-radius: 16px;
         }
         .carousel-card.img-fill:hover img {
-            transform: scale(1.04);
+            transform: scale(1.1);
+            filter: brightness(1.2) saturate(1.3);
+        }
+        .carousel-card.img-fill .game-player-count {
+            position: absolute;
+            bottom: 8px;
+            left: 8px;
+            right: 8px;
+            background: rgba(26, 31, 41, 0.95);
+            border-radius: 8px;
+            padding: 4px 8px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0,212,170,0.3);
+            font-size: 0.7em;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+        }
+        .carousel-card.img-fill img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: all 0.4s ease;
+            border-radius: 16px;
+        }
+        .carousel-card.img-fill:hover img {
+            transform: scale(1.1);
+            filter: brightness(1.2) saturate(1.3);
         }
         .game-player-count {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 5px;
-            margin-top: 8px;
-            font-size: 0.92em;
-            color: #aaffaa;
-            font-weight: 500;
+            gap: 4px;
+            margin-top: 6px;
+            font-size: 0.7em;
+            color: #00d4aa;
+            font-weight: 600;
         }
         .game-player-dot {
-            width: 10px;
-            height: 10px;
-            background: linear-gradient(135deg, #4ecdc4, #45b7d1);
+            width: 6px;
+            height: 6px;
+            background: #00d4aa;
             border-radius: 50%;
             display: inline-block;
-            margin-right: 3px;
-            box-shadow: 0 0 6px #4ecdc4aa;
+            margin-right: 2px;
         }
         @media (max-width: 600px) {
             .carousel-card {
@@ -467,46 +705,75 @@
             margin-bottom: 24px;
         }
         .wins-section h3 {
-            font-size: 1.2em;
-            font-weight: bold;
-            margin-bottom: 12px;
-            text-align: center;
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            font-size: 1.1em;
+            font-weight: 600;
+            margin-bottom: 16px;
+            text-align: left;
+            color: #ffffff;
         }
         .win-item {
-            background: rgba(255,255,255,0.1);
-            padding: 10px 14px;
-            border-radius: 10px;
+            background: linear-gradient(145deg, #1a1f29 0%, #252e3a 50%, #1e2833 100%);
+            padding: 16px 18px;
+            border-radius: 16px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            border: 1px solid rgba(255,255,255,0.2);
-            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0,212,170,0.2);
+            margin-bottom: 10px;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 
+                0 4px 12px rgba(0,0,0,0.2), 
+                inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        .win-item:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0,212,170,0.1), transparent);
+            transition: left 0.6s ease;
+        }
+        .win-item:hover:before {
+            left: 100%;
+        }
+        .win-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 
+                0 8px 20px rgba(0,212,170,0.15), 
+                0 4px 12px rgba(0,0,0,0.25);
+            border-color: rgba(0,212,170,0.4);
         }
         .win-item .game-icon {
-            font-size: 1.5em;
-            margin-right: 10px;
+            font-size: 1.4em;
+            margin-right: 14px;
+            filter: drop-shadow(0 0 8px rgba(255,255,255,0.3));
         }
         .win-item .win-details {
             flex: 1;
             display: flex;
             flex-direction: column;
+            position: relative;
+            z-index: 2;
         }
         .win-item .win-amount {
             font-size: 1.1em;
-            font-weight: bold;
-            color: #4ecdc4;
+            font-weight: 700;
+            color: #00d4aa;
+            text-shadow: 0 0 10px rgba(0,212,170,0.4);
         }
         .win-item .winner-name {
             font-size: 0.9em;
-            color: #fff;
+            color: #ffffff;
+            font-weight: 500;
         }
         .win-item .time-ago {
-            font-size: 0.8em;
-            color: #ccc;
+            font-size: 0.75em;
+            color: #7782aa;
+            margin-top: 2px;
         }
         @media (max-width: 600px) {
             .win-item {
@@ -517,6 +784,23 @@
                 margin-bottom: 8px;
             }
         }
+        /* Demo Toggle Styles */
+        .demo-toggle input:checked + .demo-slider {
+            background-color: #00d4aa;
+        }
+        
+        .demo-toggle input:checked + .demo-slider .demo-slider-dot {
+            transform: translateX(20px);
+            background-color: #1a1f29;
+        }
+        
+        .demo-toggle-container {
+            transition: all 0.3s ease;
+        }
+        
+        .demo-toggle-container:hover {
+            transform: scale(1.05);
+        }
     </style>
 </head>
 <body>
@@ -524,14 +808,25 @@
         <div class="logo-section">
             <button id="menuButton" style="background:none; border:none; outline:none; cursor:pointer; padding:0 8px 0 0; display:flex; align-items:center; justify-content:center; height:32px;">
                 <span style="display:block; width:26px; height:22px; position:relative;">
-                    <span style="position:absolute; left:0; top:0; width:100%; height:4px; background:#4ecdc4; border-radius:2px;"></span>
-                    <span style="position:absolute; left:0; top:9px; width:100%; height:4px; background:#4ecdc4; border-radius:2px;"></span>
-                    <span style="position:absolute; left:0; top:18px; width:100%; height:4px; background:#4ecdc4; border-radius:2px;"></span>
+                    <span style="position:absolute; left:0; top:0; width:100%; height:3px; background:#00d4aa; border-radius:2px;"></span>
+                    <span style="position:absolute; left:0; top:8px; width:100%; height:3px; background:#00d4aa; border-radius:2px;"></span>
+                    <span style="position:absolute; left:0; top:16px; width:100%; height:3px; background:#00d4aa; border-radius:2px;"></span>
                 </span>
             </button>
         </div>
         
         <div class="right-section">
+            <!-- Demo Mode Toggle -->
+            <div class="demo-toggle-container" style="display: flex; align-items: center; gap: 8px; margin-right: 12px;">
+                <span style="font-size: 0.8em; color: #7782aa; font-weight: 500;">Demo</span>
+                <label class="demo-toggle" style="position: relative; display: inline-block; width: 44px; height: 24px;">
+                    <input type="checkbox" id="demoToggle" style="opacity: 0; width: 0; height: 0;">
+                    <span class="demo-slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #2c3441; transition: .4s; border-radius: 24px; border: 1px solid #00d4aa;">
+                        <span class="demo-slider-dot" style="position: absolute; height: 18px; width: 18px; left: 2px; bottom: 2px; background-color: #7782aa; transition: .4s; border-radius: 50%;"></span>
+                    </span>
+                </label>
+            </div>
+            
             <div class="balance-section">
                 <div class="balance-label">Your Balance</div>
                 <div class="balance-amount">{BALANCE} chips</div>
@@ -554,8 +849,8 @@
         <div class="search-bar-container">
             <input type="text" class="search-bar" placeholder="Search games..." />
         </div>
-        <h3 class="top-games-heading" style="color:#fff; font-size:1.05em; font-weight:bold; margin:0 0 10px 4px; letter-spacing:0.5px;">🔥 Top Games</h3>
-        <div class="carousel" id="top-games-carousel" style="overflow-x:auto; display:flex; gap:12px; padding-bottom:8px; margin-bottom:18px;">
+        <h3 class="top-games-heading" style="color:#ffffff; font-size:1.1em; font-weight:600; margin:0 0 16px 0; letter-spacing:0px;">🔥 Popular</h3>
+        <div class="carousel" id="top-games-carousel" style="overflow-x:auto; display:flex; gap:12px; padding-bottom:12px; margin-bottom:32px;">
             <div class="carousel-card game" onclick="playGame('Slots')">
                 <div class="game-icon">🎰</div>
                 <div class="game-name">Slots</div>
@@ -582,11 +877,11 @@
                 <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Poker">0</span> playing</div>
             </div>
         </div>
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-            <h3 class="axis-originals-heading" style="color:#4ecdc4; font-size:1em; font-weight:bold; margin:0; letter-spacing:0.5px;">🛡️ Axis Originals</h3>
-            <button class="btn" id="viewAllGamesBtn" style="padding: 6px 14px; font-size: 0.95em; margin: 0; background: linear-gradient(45deg, #4ecdc4, #45b7d1); color: #fff; border-radius: 12px; border: none; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.10);">View All Games</button>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+            <h3 class="axis-originals-heading" style="color:#ffffff; font-size:1.1em; font-weight:600; margin:0; letter-spacing:0px;">🎮 Originals</h3>
+            <button class="btn" id="viewAllGamesBtn" style="padding: 6px 12px; font-size: 0.8em; margin: 0; background: #00d4aa; color: #1a1f29; border-radius: 6px; border: none; font-weight: 600;">View All</button>
         </div>
-        <div class="carousel" id="axis-originals-carousel" style="overflow-x:auto; display:flex; gap:12px; padding-bottom:8px; margin-bottom:18px;">
+        <div class="carousel" id="axis-originals-carousel" style="overflow-x:auto; display:flex; gap:12px; padding-bottom:12px; margin-bottom:32px;">
             <button class="carousel-card img-fill game" onclick="goToGame('Plinko')" style="border:none; background:none; padding:0; cursor:pointer;">
                 <img src="https://mediumrare.imgix.net/5cbb2498c956527e6584c6af216489b85bbb7a909c7d3c4e131a3be9bd1cc6bf?w=300&h=400&fit=min&auto=format" alt="Plinko">
                 <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Plinko">0</span> playing</div>
@@ -626,8 +921,8 @@
         </div>
         
         <!-- Recent Wins Section -->
-        <div id="recentWinsSection" style="background:linear-gradient(135deg,#181818,#232323);border-radius:12px;padding:14px 10px 10px 10px;margin-bottom:18px;border:1px solid #333;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-            <h3 style="color:#4ecdc4;font-size:1em;font-weight:bold;margin:0 0 10px 0;letter-spacing:0.5px;">🏆 Recent Wins</h3>
+        <div id="recentWinsSection" style="background:#1a1f29;border-radius:12px;padding:20px 16px 16px 16px;margin-bottom:24px;border:1px solid #2c3441;">
+            <h3 style="color:#ffffff;font-size:1.1em;font-weight:600;margin:0 0 16px 0;letter-spacing:0px;">🏆 Recent Wins</h3>
             <div id="recentWinsList" style="display:flex;flex-direction:column;gap:8px;"></div>
         </div>
         
@@ -640,32 +935,24 @@
         </div>
     </div>
     
-    <div id="sidebarMenu" style="position:fixed; top:0; left:-260px; width:240px; height:100vh; background:#181818; box-shadow:2px 0 16px rgba(0,0,0,0.25); z-index:1000; transition:left 0.3s cubic-bezier(.4,0,.2,1); padding:32px 18px 18px 18px; display:flex; flex-direction:column; gap:18px;">
-        <button onclick="closeSidebar()" style="align-self:flex-end; background:none; border:none; color:#4ecdc4; font-size:1.5em; cursor:pointer; margin-bottom:10px;">&times;</button>
-        <div style="font-size:1.2em; font-weight:bold; color:#fff; margin-bottom:10px;">Menu</div>
-        <a href="#" style="color:#fff; text-decoration:none; font-size:1em; margin-bottom:8px;">Profile</a>
-        <a href="#" style="color:#fff; text-decoration:none; font-size:1em; margin-bottom:8px;">Bonuses</a>
-        <a href="#" style="color:#fff; text-decoration:none; font-size:1em; margin-bottom:8px;">VIP & Tournaments</a>
-        <a href="#" style="color:#fff; text-decoration:none; font-size:1em; margin-bottom:8px;">Settings</a>
-        <a href="#" style="color:#fff; text-decoration:none; font-size:1em; margin-bottom:8px;">Support</a>
+    <div id="sidebarMenu" style="position:fixed; top:0; left:-260px; width:240px; height:100vh; background:#1a1f29; box-shadow:2px 0 16px rgba(0,0,0,0.25); z-index:1000; transition:left 0.3s cubic-bezier(.4,0,.2,1); padding:32px 18px 18px 18px; display:flex; flex-direction:column; gap:18px;">
+        <button onclick="closeSidebar()" style="align-self:flex-end; background:none; border:none; color:#00d4aa; font-size:1.5em; cursor:pointer; margin-bottom:10px;">&times;</button>
+        <div style="font-size:1.2em; font-weight:600; color:#ffffff; margin-bottom:10px;">Menu</div>
+        <a href="#" id="sidebarLiveChat" style="color:#00d4aa; text-decoration:none; font-size:1em; margin-bottom:8px; font-weight:600;">Live Chat</a>
+        <a href="#" style="color:#b1bad3; text-decoration:none; font-size:1em; margin-bottom:8px;">Profile</a>
+        <a href="#" style="color:#b1bad3; text-decoration:none; font-size:1em; margin-bottom:8px;">Bonuses</a>
+        <a href="#" style="color:#b1bad3; text-decoration:none; font-size:1em; margin-bottom:8px;">VIP & Tournaments</a>
+        <a href="#" style="color:#b1bad3; text-decoration:none; font-size:1em; margin-bottom:8px;">Settings</a>
+        <a href="#" style="color:#b1bad3; text-decoration:none; font-size:1em; margin-bottom:8px;">Support</a>
     </div>
     <div id="sidebarOverlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.35); z-index:999;" onclick="closeSidebar()"></div>
     
-    <div class="live-chat-container" id="liveChat">
-        <div class="live-chat-header">💬 Live Chat</div>
-        <div class="live-chat-messages" id="chatMessages"></div>
-        <div class="live-chat-input-row">
-            <input type="text" class="live-chat-input" id="chatInput" placeholder="Type your message..." maxlength="200" />
-            <button class="live-chat-send-btn" id="sendChatBtn">Send</button>
-        </div>
-    </div>
-    
     <!-- Axis Originals Modal -->
-    <div id="allGamesModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.85); z-index:2000; align-items:center; justify-content:center;">
-        <div style="background:#181818; border-radius:18px; padding:28px 18px 18px 18px; max-width:420px; margin:40px auto; box-shadow:0 8px 32px rgba(0,0,0,0.45); position:relative;">
-            <button onclick="closeAllGamesModal()" style="position:absolute; top:10px; right:14px; background:none; border:none; color:#4ecdc4; font-size:2em; cursor:pointer;">&times;</button>
-            <h3 style="color:#4ecdc4; text-align:center; margin-bottom:18px;">All Axis Originals</h3>
-            <div id="allGamesGrid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;"></div>
+    <div id="allGamesModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(15,20,25,0.9); z-index:2000; align-items:center; justify-content:center;">
+        <div style="background:#1a1f29; border-radius:12px; padding:24px 20px 20px 20px; max-width:420px; margin:40px auto; border:1px solid #2c3441; position:relative;">
+            <button onclick="closeAllGamesModal()" style="position:absolute; top:12px; right:16px; background:none; border:none; color:#00d4aa; font-size:1.8em; cursor:pointer;">&times;</button>
+            <h3 style="color:#ffffff; text-align:center; margin-bottom:20px; font-weight:600;">All Games</h3>
+            <div id="allGamesGrid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px;"></div>
         </div>
     </div>
     
@@ -701,21 +988,128 @@
             
             // Apply Telegram theme
             if (webApp.colorScheme === 'dark') {
-                document.body.style.background = '#000000';
+                document.body.style.background = '#0f1419';
             }
         }
         
-        function playGame(gameType) {
-            // Show a more professional game coming soon message
-            const message = '🎮 ' + gameType + ' is coming soon!\n\n' +
-                          '🚀 We are building an amazing casino experience\n' +
-                          '💫 Stay tuned for updates!\n\n' +
-                          '🎁 Meanwhile, check out our bonuses and promotions!';
+        // Demo mode toggle functionality
+        function initDemoToggle() {
+            const demoToggle = document.getElementById('demoToggle');
+            if (demoToggle) {
+                // Load demo mode state from localStorage
+                const demoMode = localStorage.getItem('demoMode') === 'true';
+                demoToggle.checked = demoMode;
+                
+                // Handle toggle change
+                demoToggle.addEventListener('change', function() {
+                    const isDemo = this.checked;
+                    localStorage.setItem('demoMode', isDemo.toString());
+                    
+                    // Optional: Show notification
+                    if (webApp && webApp.showAlert) {
+                        webApp.showAlert(isDemo ? 
+                            '🎮 Demo mode enabled! All games will run in demo mode with rigged outcomes.' :
+                            '💰 Demo mode disabled! Games will use real balance and fair outcomes.'
+                        );
+                    }
+                    
+                    console.log('Demo mode:', isDemo ? 'ON' : 'OFF');
+                });
+            }
+        }
+        
+        // Initialize user data and balance on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeUserData();
+            initDemoToggle();
+        });
+        
+        // Helper functions for user data and balance management
+        function getUserId() {
+            // Try to get from Telegram WebApp first
+            if (user && user.id) {
+                return user.id.toString();
+            }
+            // Fallback to URL params or localStorage
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('user_id') || localStorage.getItem('userId') || 'guest_' + Date.now();
+        }
+        
+        function getUserName() {
+            // Try to get from Telegram WebApp first
+            if (user && user.first_name) {
+                return user.first_name;
+            }
+            // Fallback to URL params or localStorage
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('user_name') || localStorage.getItem('userName') || 'Player';
+        }
+        
+        function getCurrentBalance() {
+            // Check URL params first (for return from games)
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlBalance = urlParams.get('balance');
             
-            if (webApp && webApp.showAlert) {
-                webApp.showAlert(message);
+            if (urlBalance) {
+                // Update localStorage with the returned balance
+                localStorage.setItem('userBalance', urlBalance);
+                return urlBalance;
+            }
+            
+            // Otherwise get from localStorage
+            return localStorage.getItem('userBalance') || '1000';
+        }
+        
+        function updateBalanceDisplay() {
+            const currentBalance = getCurrentBalance();
+            const balanceElement = document.querySelector('.balance-amount');
+            if (balanceElement) {
+                balanceElement.textContent = currentBalance + ' chips';
+            }
+        }
+        
+        // Initialize user data and balance when page loads
+        function initializeUserData() {
+            // Set user ID and name
+            const userId = getUserId();
+            const userName = getUserName();
+            
+            localStorage.setItem('userId', userId);
+            localStorage.setItem('userName', userName);
+            
+            // Update display
+            document.getElementById('username').textContent = userName;
+            const userIdElement = document.querySelector('.user-id');
+            if (userIdElement) {
+                userIdElement.textContent = 'ID: ' + userId.substring(0, 8);
+            }
+            
+            // Update balance display
+            updateBalanceDisplay();
+        }
+        
+        function playGame(gameType) {
+            // Navigate to individual game pages
+            const gameRoutes = {
+                'Slots': 'game_slots.html',
+                'Blackjack': 'game_blackjack.html',
+                'Roulette': 'game_roulette.html',
+                'Dice': 'game_dice.html',
+                'Poker': 'game_poker.html',
+                'Crash': 'game_crash.html',
+                'Mines': 'game_mines.html',
+                'Plinko': 'game_plinko.html',
+                'Limbo': 'game_limbo.html',
+                'Hi-Lo': 'game_hilo.html',
+                'Coin Flip': 'game_coinflip.html'
+            };
+            
+            const route = gameRoutes[gameType];
+            if (route) {
+                // Use the same logic as goToGame for consistency
+                goToGame(gameType);
             } else {
-                alert(message);
+                console.warn('Game route not found for:', gameType);
             }
         }
         
@@ -732,8 +1126,69 @@
         }
         
         function goToGame(game) {
-            // You can change this route to match your backend/game routing
-            window.location.href = `/game/${encodeURIComponent(game)}`;
+            // Navigate to specific game with proper user data
+            const gameRoutes = {
+                'Plinko': 'game_plinko.html',
+                'Mines': 'game_mines.html',
+                'Hilo': 'game_hilo.html',
+                'Limbo': 'game_limbo.html',
+                'Roulette': 'game_roulette.html',
+                'Crash': 'game_crash.html',
+                'Dice': 'game_dice.html',
+                'Blackjack': 'game_blackjack.html',
+                'Coin Flip': 'game_coinflip.html',
+                'Slots': 'game_slots.html',
+                'Poker': 'game_poker.html'
+            };
+            
+            const route = gameRoutes[game];
+            if (route) {
+                // Get current user data and balance
+                const currentBalance = getCurrentBalance();
+                const userId = getUserId();
+                const userName = getUserName();
+                
+                // Check if demo mode is enabled
+                const demoMode = localStorage.getItem('demoMode') === 'true' ? '1' : '0';
+                
+                // Save current state before navigation
+                localStorage.setItem('userBalance', currentBalance);
+                localStorage.setItem('userId', userId);
+                localStorage.setItem('userName', userName);
+                
+                // Build URL with all parameters including demo mode
+                const params = new URLSearchParams({
+                    userId: userId,
+                    userName: userName,
+                    balance: currentBalance,
+                    returnUrl: 'casino_webapp_new.html',
+                    demo: demoMode
+                });
+                
+                const gameUrl = `${route}?${params.toString()}`;
+                
+                // Use Telegram WebApp navigation if available
+                if (webApp && webApp.openTelegramLink) {
+                    try {
+                        webApp.openTelegramLink(gameUrl);
+                    } catch (e) {
+                        window.location.href = gameUrl;
+                    }
+                } else {
+                    window.location.href = gameUrl;
+                }
+            } else {
+                // Fallback for unknown games
+                const message = '🎮 ' + game + ' is coming soon!\n\n' +
+                              '🚀 We are building an amazing casino experience\n' +
+                              '💫 Stay tuned for updates!';
+                
+                if (webApp && webApp.showAlert) {
+                    webApp.showAlert(message);
+                } else {
+                    alert(message);
+                }
+            }
         }
         
         // Add some interactive effects
@@ -759,6 +1214,7 @@
         const menuButton = document.getElementById('menuButton');
         const sidebarMenu = document.getElementById('sidebarMenu');
         const sidebarOverlay = document.getElementById('sidebarOverlay');
+        const sidebarLiveChat = document.getElementById('sidebarLiveChat');
         if (menuButton && sidebarMenu && sidebarOverlay) {
             menuButton.addEventListener('click', function() {
                 sidebarMenu.style.left = '0';
@@ -768,6 +1224,20 @@
         function closeSidebar() {
             sidebarMenu.style.left = '-260px';
             sidebarOverlay.style.display = 'none';
+        }
+        if (sidebarLiveChat) {
+            sidebarLiveChat.addEventListener('click', function(e) {
+                e.preventDefault();
+                closeSidebar();
+                // Scroll to or focus the live chat container
+                const liveChat = document.getElementById('liveChat');
+                if (liveChat) {
+                    liveChat.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Optionally, add a highlight effect
+                    liveChat.style.boxShadow = '0 0 0 3px #4ecdc4, 0 -2px 16px rgba(0,0,0,0.18)';
+                    setTimeout(() => { liveChat.style.boxShadow = ''; }, 1200);
+                }
+            });
         }
         
         // --- Live Chat Logic (Demo, not real-time backend) ---
