@@ -1057,7 +1057,7 @@
             let x = startX;
             let y = startY;
             let velocityX = 0;
-            let velocityY = 0.5; // Even slower initial velocity
+            let velocityY = 0.5;
             const gravity = 0.13; // Reduced gravity for much slower fall
             const pegRadius = 8;
             const ballRadius = 6;
@@ -1179,392 +1179,134 @@
             return finalX;
         }
         
-        function updateStats() {
-            // Update with animation
-            const elements = {
-                gamesPlayed: document.getElementById('gamesPlayed'),
-                totalWon: document.getElementById('totalWon'),
-                winRate: document.getElementById('winRate')
-            };
-            
-            // Add animation class
-            Object.values(elements).forEach(el => {
-                if (el) {
-                    el.classList.add('animate');
-                    setTimeout(() => el.classList.remove('animate'), 500);
-                }
-            });
-            
-            elements.gamesPlayed.textContent = gamesPlayed;
-            elements.totalWon.textContent = totalWon;
-            
-            // Calculate and display win rate
-            const winRate = gamesPlayed > 0 ? Math.round((totalWins / gamesPlayed) * 100) : 0;
-            elements.winRate.textContent = winRate + '%';
-        }
-        
-        function updateAutoProgress() {
-            if (!isAutoRunning) return;
-            
-            const totalBalls = parseInt(document.getElementById('autoBalls').value);
-            const completed = totalBalls - autoBallsRemaining;
-            const progress = Math.round((completed / totalBalls) * 100);
-            
-            document.getElementById('progressFill').style.width = progress + '%';
-            document.getElementById('progressText').textContent = progress + '%';
-        }
-        
-        function createBallTrail(x, y) {
-            // Trail effect removed
-        }
-        
-        function hitPeg(pegElement) {
-            if (pegElement) {
-                pegElement.classList.add('hit');
-                setTimeout(() => pegElement.classList.remove('hit'), 400);
-                
-                // Simulate sound effect
-                if (window.navigator && window.navigator.vibrate) {
-                    window.navigator.vibrate(10);
-                }
-            }
-        }
-        
-        function createBounceEffect(x, y) {
-            // Create small bounce particles for visual feedback
-            for (let i = 0; i < 5; i++) {
-                const particle = document.createElement('div');
-                particle.style.position = 'absolute';
-                particle.style.width = '3px';
-                particle.style.height = '3px';
-                particle.style.background = '#4ecdc4';
-                particle.style.borderRadius = '50%';
-                particle.style.left = (x - 1.5) + 'px';
-                particle.style.top = (y - 1.5) + 'px';
-                particle.style.pointerEvents = 'none';
-                particle.style.zIndex = '100';
-                particle.style.boxShadow = '0 0 8px rgba(78, 205, 196, 0.8)';
-                
-                const board = document.getElementById('plinkoBoard');
-                board.appendChild(particle);
-                
-                // Animate particles outward in different directions
-                const angle = (Math.PI * 2 * i) / 5 + Math.random() * 0.3;
-                const speed = 12 + Math.random() * 8;
-                const finalX = x + Math.cos(angle) * speed;
-                const finalY = y + Math.sin(angle) * speed;
-                
-                particle.style.transition = 'all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-                particle.style.opacity = '1';
-                
-                setTimeout(() => {
-                    particle.style.left = finalX + 'px';
-                    particle.style.top = finalY + 'px';
-                    particle.style.opacity = '0';
-                    particle.style.transform = 'scale(0)';
-                }, 10);
-                
-                // Remove particle after animation
-                setTimeout(() => {
-                    if (board.contains(particle)) {
-                        board.removeChild(particle);
-                    }
-                }, 380);
-            }
-            
-            // Add subtle haptic feedback if available
-            if (window.navigator && window.navigator.vibrate) {
-                window.navigator.vibrate(15);
-            }
-            
-            // Create a brief flash effect at impact point
-            const flash = document.createElement('div');
-            flash.style.position = 'absolute';
-            flash.style.width = '20px';
-            flash.style.height = '20px';
-            flash.style.background = 'radial-gradient(circle, rgba(78, 205, 196, 0.8), transparent)';
-            flash.style.borderRadius = '50%';
-            flash.style.left = (x - 10) + 'px';
-            flash.style.top = (y - 10) + 'px';
-            flash.style.pointerEvents = 'none';
-            flash.style.zIndex = '99';
-            flash.style.opacity = '1';
-            flash.style.transform = 'scale(0)';
-            flash.style.transition = 'all 0.15s ease-out';
-            
-            const board = document.getElementById('plinkoBoard');
-            board.appendChild(flash);
-            
-            setTimeout(() => {
-                flash.style.transform = 'scale(1)';
-                flash.style.opacity = '0';
-            }, 10);
-            
-            setTimeout(() => {
-                if (board.contains(flash)) {
-                    board.removeChild(flash);
-                }
-            }, 180);
-        }
-
-        async function dropBall() {
-            if (isPlaying || isAutoRunning) return;
-            const betAmount = parseInt(document.getElementById('betAmount').value);
-            if (!isDemoMode && (betAmount > currentBalance || betAmount <= 0)) {
-                showResult('Invalid bet amount!', false);
-                return;
-            }
-            isPlaying = true;
-            document.getElementById('playBtn').disabled = true;
-            document.getElementById('result').style.display = 'none';
-            // Deduct bet (not in demo mode)
-            if (!isDemoMode) updateBalance(currentBalance - betAmount);
-            // Create ball
-            const ball = document.createElement('div');
-            ball.className = 'ball';
-            const board = document.getElementById('plinkoBoard');
-            board.appendChild(ball);
-            // Starting position - center top
-            const boardWidth = board.offsetWidth;
-            let ballX = boardWidth / 2;
-            let ballY = 20;
-            ball.style.left = ballX + 'px';
-            ball.style.top = ballY + 'px';
-            // Animate ball falling with physics
-            let finalX;
-            if (isDemoMode) {
-                finalX = await animateBallFallRigged(ball, ballX, ballY, boardWidth);
-            } else {
-                finalX = await animateBallFall(ball, ballX, ballY, boardWidth);
-            }
-            // Determine final slot based on actual ball position
-            const slotWidth = boardWidth / multipliers.length;
-            let slotIndex = Math.floor(finalX / slotWidth);
-            let finalSlot = Math.max(0, Math.min(multipliers.length - 1, slotIndex));
-            let multiplier = multipliers[finalSlot];
-            // In demo mode, always rig to a high multiplier slot
-            if (isDemoMode) {
-                // Find highest multiplier slot (not at the edge)
-                let best = 0;
-                let bestIdx = 0;
-                for (let i = 1; i < multipliers.length - 1; i++) {
-                    if (multipliers[i] > best) {
-                        best = multipliers[i];
-                        bestIdx = i;
-                    }
-                }
-                finalSlot = bestIdx;
-                multiplier = multipliers[finalSlot];
-            }
-            // Calculate winnings
-            const winAmount = Math.floor(betAmount * multiplier);
-            if (!isDemoMode) updateBalance(currentBalance + winAmount);
-            // Update stats (not in demo mode)
-            if (!isDemoMode) {
-                gamesPlayed++;
-                if (winAmount > betAmount) {
-                    totalWon += (winAmount - betAmount);
-                    totalWins++;
-                }
-                updateStats();
-            }
-            // Show result with difficulty info
-            const profit = winAmount - betAmount;
-            const difficultyText = isDemoMode ? 'Demo' : currentDifficulty.charAt(0).toUpperCase() + currentDifficulty.slice(1);
-            if (profit > 0) {
-                showResult(`🎉 ${difficultyText} Mode: You won ${winAmount} chips! (+${profit}) - ${multiplier}x`, true);
-            } else if (profit === 0) {
-                showResult(`🔄 ${difficultyText} Mode: Break even! You got ${winAmount} chips back - ${multiplier}x`, true);
-            } else {
-                showResult(`😔 ${difficultyText} Mode: You lost ${betAmount} chips - ${multiplier}x`, false);
-            }
-            // Highlight winning slot with enhanced animation
-            const slots = document.querySelectorAll('.multiplier-slot');
-            slots[finalSlot].classList.add('winning');
-            setTimeout(() => {
-                slots[finalSlot].classList.remove('winning');
-            }, 1500);
-            // Remove ball and reset
-            setTimeout(() => {
-                if (board.contains(ball)) {
-                    board.removeChild(ball);
-                }
-                isPlaying = false;
-                document.getElementById('playBtn').disabled = false;
-            }, 2000);
-        }
-        
-        // Rigged ball fall for demo mode
-        async function animateBallFallRigged(ball, startX, startY, boardWidth) {
-            // Simulate a normal fall, but force the ball to land in a high multiplier slot
-            let x = startX;
-            let y = startY;
-            let velocityX = 0;
-            let velocityY = 0.5;
-            const gravity = 0.13;
-            const pegRadius = 8;
-            const ballRadius = 6;
-            const friction = 0.97;
-            let frameCount = 0;
-            const maxFrames = 500;
-            const settings = difficultySettings[currentDifficulty];
-            const boardHeight = ball.parentElement.offsetHeight || 400;
-            const targetY = boardHeight - 50;
-            // Find the best slot (highest multiplier, not at edge)
-            let best = 0;
-            let bestIdx = 0;
-            for (let i = 1; i < multipliers.length - 1; i++) {
-                if (multipliers[i] > best) {
-                    best = multipliers[i];
-                    bestIdx = i;
-                }
-            }
-            // Calculate the x position for the best slot
-            const slotWidth = boardWidth / multipliers.length;
-            const riggedX = (bestIdx * slotWidth) + (slotWidth / 2);
-            // Animate ball falling, but nudge it toward riggedX
-            while (y < targetY && frameCount < maxFrames) {
-                frameCount++;
-                // Nudge velocityX toward riggedX
-                const dx = riggedX - x;
-                velocityX += dx * 0.01 + (Math.random() - 0.5) * 0.05;
-                velocityX = Math.max(-2.5, Math.min(2.5, velocityX));
-                velocityY += gravity;
-                if (velocityY < 0.4) velocityY = 0.4;
-                x += velocityX;
-                y += velocityY;
-                // Peg collision (simulate bounce)
-                for (let i = 0; i < window.pegPositions.length; i++) {
-                    const peg = window.pegPositions[i];
-                    const distance = Math.sqrt(Math.pow(x - peg.x, 2) + Math.pow(y - peg.y, 2));
-                    if (distance < (pegRadius + ballRadius) && y >= peg.y - 12 && y <= peg.y + 12) {
-                        const angle = Math.atan2(y - peg.y, x - peg.x);
-                        const randomAngle = angle + (Math.random() - 0.5) * 0.5;
-                        const currentSpeed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
-                        const bounceReduction = 0.7 + Math.random() * 0.15;
-                        let newVelocityX = Math.cos(randomAngle) * currentSpeed * bounceReduction;
-                        let newVelocityY = Math.abs(Math.sin(randomAngle) * currentSpeed * bounceReduction) + 0.7 + Math.random() * 0.3;
-                        newVelocityX = Math.max(-2.5, Math.min(2.5, newVelocityX));
-                        newVelocityY = Math.max(0.5, Math.min(2.5, newVelocityY));
-                        velocityX = newVelocityX;
-                        velocityY = newVelocityY;
-                        // Move ball out of peg
-                        const separationDistance = pegRadius + ballRadius + 2;
-                        x = peg.x + Math.cos(randomAngle) * separationDistance;
-                        y = peg.y + Math.sin(randomAngle) * separationDistance;
-                        hitPeg(document.querySelectorAll('.peg')[i]);
-                        createBounceEffect(x, y);
-                        break;
-                    }
-                }
-                // Slot separator collisions
-                if (y > boardHeight * 0.6) {
-                    for (let i = 1; i < multipliers.length; i++) {
-                        const separatorX = i * slotWidth;
-                        const separatorWidth = 3;
-                        if (x + ballRadius > separatorX - separatorWidth/2 && x - ballRadius < separatorX + separatorWidth/2) {
-                            if (velocityX > 0) {
-                                x = separatorX - separatorWidth/2 - ballRadius;
-                                velocityX = -Math.abs(velocityX) * 0.7;
-                            } else {
-                                x = separatorX + separatorWidth/2 + ballRadius;
-                                velocityX = Math.abs(velocityX) * 0.7;
-                            }
-                            break;
-                        }
-                    }
-                }
-                // Boundary checks
-                if (x < ballRadius) {
-                    x = ballRadius;
-                    velocityX = Math.abs(velocityX) * 0.4;
-                } else if (x > boardWidth - ballRadius) {
-                    x = boardWidth - ballRadius;
-                    velocityX = -Math.abs(velocityX) * 0.4;
-                }
-                velocityX *= friction;
-                ball.style.left = x + 'px';
-                ball.style.top = y + 'px';
-                await new Promise(resolve => setTimeout(resolve, 22));
-            }
-            // Snap to rigged slot
-            ball.style.left = riggedX + 'px';
-            ball.style.top = (targetY + 10) + 'px';
-            return riggedX;
-        }
-        
         function showResult(message, isWin) {
             const resultDiv = document.getElementById('result');
             resultDiv.textContent = message;
             resultDiv.className = 'result ' + (isWin ? 'win' : 'lose');
             resultDiv.style.display = 'block';
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                resultDiv.style.display = 'none';
+            }, 5000);
         }
         
-        // User data and balance management
-        let currentBalance = 1000;
-        let userId = 'guest';
-        let userName = 'Player';
-        let returnUrl = 'casino_webapp_new.html';
+        // Mini App Navigation and Integration
+        function goBack() {
+            // Check if we're in Telegram WebApp
+            if (window.Telegram && window.Telegram.WebApp) {
+                // Try to close the mini app first
+                if (window.Telegram.WebApp.close) {
+                    window.Telegram.WebApp.close();
+                    return;
+                }
+                
+                // If close doesn't work, navigate back to main casino
+                const urlParams = new URLSearchParams(window.location.search);
+                const userId = urlParams.get('userId') || 'guest';
+                const userName = urlParams.get('userName') || 'Player';
+                const balance = currentBalance;
+                
+                const returnUrl = `casino_webapp_new.html?userId=${userId}&userName=${encodeURIComponent(userName)}&balance=${balance}`;
+                window.location.href = returnUrl;
+            } else {
+                // Fallback for non-mini app environments
+                if (document.referrer) {
+                    window.history.back();
+                } else {
+                    window.location.href = 'casino_webapp_new.html?balance=' + currentBalance;
+                }
+            }
+        }
         
         // Initialize user data from URL parameters
         function initializeUserData() {
             const urlParams = new URLSearchParams(window.location.search);
             
-            // Get user data from URL parameters
-            userId = urlParams.get('user_id') || localStorage.getItem('userId') || 'guest_' + Date.now();
-            userName = urlParams.get('user_name') || localStorage.getItem('userName') || 'Player';
-            currentBalance = parseInt(urlParams.get('balance') || localStorage.getItem('userBalance') || '1000');
-            returnUrl = urlParams.get('return_url') || 'casino_webapp_new.html';
+            userId = urlParams.get('userId') || 'guest';
+            userName = urlParams.get('userName') || 'Player';
             
-            // Update balance display
+            const urlBalance = urlParams.get('balance');
+            if (urlBalance && !isNaN(parseInt(urlBalance))) {
+                currentBalance = parseInt(urlBalance);
+            }
+            
+            const returnUrlParam = urlParams.get('returnUrl');
+            if (returnUrlParam) {
+                returnUrl = returnUrlParam;
+            }
+            
             updateBalanceDisplay();
             
-            // Store in localStorage for persistence
-            localStorage.setItem('userId', userId);
-            localStorage.setItem('userName', userName);
-            localStorage.setItem('userBalance', currentBalance.toString());
+            console.log(`Initialized for user: ${userName} (${userId}) with balance: ${currentBalance}`);
         }
         
         function updateBalanceDisplay() {
-            const balanceElement = document.querySelector('.balance-amount');
-            if (balanceElement) {
-                balanceElement.textContent = currentBalance;
-            }
+            document.getElementById('balance').textContent = currentBalance;
         }
         
         function updateBalance(newBalance) {
-            currentBalance = newBalance;
-            updateBalanceDisplay();
-            // Update localStorage
-            localStorage.setItem('userBalance', currentBalance.toString());
+            if (typeof newBalance === 'number' && newBalance >= 0) {
+                currentBalance = newBalance;
+                updateBalanceDisplay();
+                
+                // Store in localStorage for persistence
+                localStorage.setItem('casinoBalance', currentBalance.toString());
+                
+                // Update Telegram WebApp if available
+                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.sendData) {
+                    try {
+                        window.Telegram.WebApp.sendData(JSON.stringify({
+                            type: 'balance_update',
+                            userId: userId,
+                            balance: currentBalance
+                        }));
+                    } catch (e) {
+                        console.log('Could not send data to Telegram:', e);
+                    }
+                }
+            }
         }
-        
-        function goBack() {
-            // Return to main app with updated balance
-            const backUrl = `${returnUrl}?user_id=${encodeURIComponent(userId)}&balance=${encodeURIComponent(currentBalance)}&user_name=${encodeURIComponent(userName)}`;
-            window.location.href = backUrl;
-        }
-        
-        // Initialize when page loads
-        document.addEventListener('DOMContentLoaded', function() {
-            // Initialize user data first
-            initializeUserData();
-            // Small delay to ensure board dimensions are available
-            setTimeout(() => {
-                initGame();
-                // Initialize mode to manual by default
-                setMode('manual');
-            }, 100);
-        });
         
         // Initialize Telegram WebApp
-        if (window.Telegram && window.Telegram.WebApp) {
-            const webApp = window.Telegram.WebApp;
-            webApp.ready();
-            webApp.expand();
-            webApp.BackButton.show();
-            webApp.BackButton.onClick(() => goBack());
+        function initTelegramWebApp() {
+            if (window.Telegram && window.Telegram.WebApp) {
+                const webapp = window.Telegram.WebApp;
+                
+                // Set up WebApp
+                webapp.ready();
+                webapp.expand();
+                
+                // Set theme
+                if (webapp.themeParams) {
+                    document.documentElement.style.setProperty('--tg-theme-bg-color', webapp.themeParams.bg_color || '#0f0f23');
+                    document.documentElement.style.setProperty('--tg-theme-text-color', webapp.themeParams.text_color || '#ffffff');
+                }
+                
+                // Set up back button
+                if (webapp.BackButton) {
+                    webapp.BackButton.show();
+                    webapp.BackButton.onClick(goBack);
+                }
+                
+                // Set up main button (optional)
+                if (webapp.MainButton) {
+                    webapp.MainButton.text = "Return to Casino";
+                    webapp.MainButton.onClick(goBack);
+                }
+                
+                console.log('Telegram WebApp initialized');
+            } else {
+                console.log('Not running in Telegram WebApp environment');
+            }
         }
+        
+        // Initialize everything when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initTelegramWebApp();
+            initializeUserData();
+            initGame();
+        });
     </script>
 </body>
 </html>
