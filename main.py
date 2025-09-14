@@ -550,7 +550,7 @@ async def start_web_server():
     app.router.add_post('/api/update_balance', api_update_balance)
     
     # Add routes for individual game pages
-    app.router.add_get('/{game_file:game_[a-z_]+\.html}', serve_game_page)
+    app.router.add_get(r'/{game_file:game_[a-z_]+\.html}', serve_game_page)
     
     # Static files
     app.router.add_static('/', path=os.path.join(os.path.dirname(__file__), 'static'), name='static')
@@ -1707,6 +1707,8 @@ async def bonus_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
 # --- Admin Commands ---
 async def set_dice_rigging_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin command to control dice rigging level"""
+    global DICE_HOUSE_EDGE
+    
     user_id = update.effective_user.id
     
     # Check if user is admin
@@ -1735,7 +1737,6 @@ async def set_dice_rigging_command(update: Update, context: ContextTypes.DEFAULT
             await update.message.reply_text("❌ House edge must be between 10% and 90%")
             return
         
-        global DICE_HOUSE_EDGE
         DICE_HOUSE_EDGE = new_edge
         
         await update.message.reply_text(
