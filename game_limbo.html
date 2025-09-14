@@ -12,9 +12,9 @@
         }
 
         body {
-            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            font-family: 'Inter', sans-serif;
+            background: #000000;
             color: #ffffff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
             overflow-x: hidden;
         }
@@ -348,7 +348,7 @@
     <div class="header">
         <button class="back-btn" onclick="goBack()">←</button>
         <div class="game-title">🌈 Limbo</div>
-        <div class="balance-display">💰 <span id="balanceDisplay">1000</span></div>
+        <div class="balance-display"><span id="balanceDisplay">1000</span></div>
     </div>
 
     <div class="container">
@@ -555,7 +555,7 @@
             // Show rolling animation
             const resultDisplay = document.getElementById('resultDisplay');
             resultDisplay.style.display = 'block';
-            resultDisplay.textContent = '🎲';
+            resultDisplay.textContent = '';
             resultDisplay.className = 'result-multiplier';
             
             // Simulate rolling effect

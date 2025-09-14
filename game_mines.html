@@ -12,9 +12,9 @@
         }
 
         body {
-            background: linear-gradient(135deg, #0f1419 0%, #1a1f29 50%, #16213e 100%);
-            color: #b1bad3;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: 'Inter', sans-serif;
+            background: #000000;
+            color: #ffffff;
             min-height: 100vh;
             overflow-x: hidden;
         }
@@ -395,11 +395,11 @@
                 </span>
             </label>
         </div>
-        <div class="balance-display">💰 <span id="balanceDisplay">1000</span></div>
+        <div class="balance-display"><span id="balanceDisplay">1000</span></div>
     </div>
     <div class="container">
         <div class="game-info">
-            <div class="game-icon">💎</div>
+            <div class="game-icon"></div>
             <div class="game-description">
                 Click tiles to reveal gems and avoid mines. The more gems you find, the higher your multiplier!<br><br>
                 <b>How to Play:</b> Set your bet and number of mines, then click Start. Tap tiles to reveal gems. Cash out anytime before hitting a mine to win!<br>
@@ -655,7 +655,7 @@
                             gameState.minePositions = gameState.minePositions.filter(m => m !== index);
                             gameState.minePositions.push(newMine);
                             cell.classList.add('gem');
-                            cell.textContent = '💎';
+                            cell.textContent = '';
                             gameState.revealedGems++;
                             updateMultiplierDisplay();
                             updateStatsDisplay();
@@ -682,7 +682,7 @@
             } else {
                 // Found a gem!
                 cell.classList.add('gem');
-                cell.textContent = '💎';
+                cell.textContent = '';
                 gameState.revealedGems++;
                 updateMultiplierDisplay();
                 updateStatsDisplay();
@@ -725,12 +725,12 @@
                     if (winAmount > stats.biggestWin) stats.biggestWin = winAmount;
                 }
                 resultDisplay.className = 'result-display win';
-                payoutAmount.textContent = `+${winAmount} 💰`;
+                payoutAmount.textContent = `+${winAmount}`;
                 resultMessage.textContent = `You won ${gameState.currentMultiplier.toFixed(2)}x your bet!`;
             } else {
                 if (!isDemoMode()) stats.totalLosses++;
                 resultDisplay.className = 'result-display lose';
-                payoutAmount.textContent = `-${gameState.betAmount} 💰`;
+                payoutAmount.textContent = `-${gameState.betAmount}`;
                 resultMessage.textContent = 'You hit a mine! Better luck next time.';
             }
             resultDisplay.style.display = 'block';

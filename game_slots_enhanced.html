@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>🎰 Slots | Casino WebApp</title>
+    <title>Slots | Casino WebApp</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
@@ -309,7 +309,7 @@
 <body>
     <div class="header">
         <button class="back-btn" onclick="goBack()">←</button>
-        <div class="game-title">🎰 Slots Machine</div>
+        <div class="game-title">Slots Machine</div>
         <div class="balance-display">
             <div class="balance-label">Balance</div>
             <div class="balance-amount" id="balanceAmount">1000</div>
@@ -317,7 +317,7 @@
     </div>
     
     <div class="main-content">
-        <div class="game-icon">🎰</div>
+        <div class="game-icon"></div>
         
         <div class="slots-area" id="slotsArea">
             <div class="slot-reel" id="reel1">🍒</div>
@@ -342,7 +342,7 @@
             </div>
             
             <button class="play-btn" id="playButton" onclick="playSlots()">
-                🎰 SPIN TO WIN
+                SPIN TO WIN
             </button>
         </div>
         
@@ -480,13 +480,13 @@
             
             // Disable play button during spin
             playButton.disabled = true;
-            playButton.textContent = '🎰 SPINNING...';
+            playButton.textContent = 'SPINNING...';
             
             // Update balance immediately
             userBalance -= bet;
             document.getElementById('balanceAmount').textContent = userBalance.toLocaleString();
             
-            resultDiv.innerHTML = '<span style="color:#4ecdc4;">🎰 Spinning the reels...</span>';
+            resultDiv.innerHTML = '<span style="color:#4ecdc4;">Spinning the reels...</span>';
             
             // Generate random symbols and determine win
             const symbols = ['🍒','🍋','🔔','🍀','7️⃣','🍉','⭐'];
@@ -544,7 +544,7 @@
                 
                 // Re-enable play button
                 playButton.disabled = false;
-                playButton.textContent = '🎰 SPIN TO WIN';
+                playButton.textContent = 'SPIN TO WIN';
                 
                 // Adjust max bet if balance is low
                 const currentBet = parseInt(document.getElementById('betAmount').value);

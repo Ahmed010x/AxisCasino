@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>🎰 Casino WebApp</title>
+    <title>Casino WebApp</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -31,7 +31,7 @@
         
         body { 
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0f1419;
+            background: #000000;
             color: #b1bad3; 
             min-height: 100vh;
             overflow-x: hidden;
@@ -1154,6 +1154,182 @@
         .demo-toggle-container:hover {
             transform: scale(1.05);
         }
+        
+        /* Glassmorphism style for buttons */
+        .btn-glass {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            color: #ffffff;
+            font-weight: 700;
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+            box-shadow: 
+                0 4px 12px rgba(0,0,0,0.2), 
+                inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        .btn-glass:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(0,212,170,0.2), rgba(255,107,107,0.2));
+            border-radius: 12px;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+        .btn-glass:hover:before {
+            opacity: 1;
+        }
+        .btn-glass:hover {
+            transform: translateY(-2px);
+            box-shadow: 
+                0 8px 20px rgba(0,212,170,0.3), 
+                0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .view-all-btn {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(0, 212, 170, 0.3);
+            border-radius: 12px;
+            color: #ffffff;
+            font-weight: 600;
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+            backdrop-filter: blur(10px);
+            box-shadow: 
+                0 4px 12px rgba(0,0,0,0.3), 
+                inset 0 1px 0 rgba(255,255,255,0.1);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .view-all-btn:hover {
+            background: rgba(0, 212, 170, 0.15);
+            border-color: rgba(0, 212, 170, 0.5);
+            transform: translateY(-2px);
+            box-shadow: 
+                0 6px 20px rgba(0,212,170,0.2), 
+                0 4px 12px rgba(0,0,0,0.3);
+        }
+        
+        /* Enhanced game card styles */
+        .game-controls {
+            background: linear-gradient(145deg, #1a1f29 0%, #252e3a 30%, #1e2833 100%);
+            border-radius: 20px;
+            padding: 24px;
+            margin: 20px 0;
+            border: 1px solid rgba(0,212,170,0.15);
+            backdrop-filter: blur(15px);
+            box-shadow: 
+                0 8px 24px rgba(0,0,0,0.25), 
+                inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+        
+        .control-group {
+            margin-bottom: 20px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #b1bad3;
+            font-weight: 500;
+            font-size: 0.9em;
+        }
+        
+        .control-input {
+            width: 100%;
+            padding: 14px 18px;
+            border-radius: 12px;
+            border: 2px solid rgba(0,212,170,0.2);
+            background: linear-gradient(145deg, #1a1f29 0%, #252e3a 100%);
+            color: #ffffff;
+            font-size: 1em;
+            outline: none;
+            transition: all 0.3s ease;
+            box-shadow: 
+                0 4px 12px rgba(0,0,0,0.15), 
+                inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        
+        .control-input:focus {
+            border-color: #00d4aa;
+            box-shadow: 
+                0 0 20px rgba(0,212,170,0.3), 
+                0 4px 12px rgba(0,0,0,0.2);
+            transform: translateY(-2px);
+        }
+        
+        .game-btn {
+            background: linear-gradient(135deg, #00d4aa 0%, #2edd91 50%, #00d4aa 100%);
+            border: none;
+            padding: 14px 24px;
+            border-radius: 12px;
+            color: #1a1f29;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            font-size: 1em;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 
+                0 4px 12px rgba(0,212,170,0.3), 
+                0 2px 6px rgba(0,0,0,0.15);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            min-height: 48px;
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        .game-btn:hover {
+            background: linear-gradient(135deg, #2edd91 0%, #00d4aa 50%, #2edd91 100%);
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 
+                0 8px 20px rgba(0,212,170,0.4), 
+                0 4px 12px rgba(0,0,0,0.2);
+        }
+        
+        .game-btn:disabled {
+            background: #3c4b5c;
+            color: #7782aa;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        /* Improved mobile responsiveness */
+        @media (max-width: 480px) {
+            .view-all-btn {
+                padding: 8px 16px;
+                font-size: 0.8em;
+            }
+            
+            .game-controls {
+                padding: 18px;
+                margin: 16px 0;
+            }
+            
+            .control-input {
+                padding: 12px 16px;
+                font-size: 0.9em;
+            }
+            
+            .game-btn {
+                padding: 12px 20px;
+                font-size: 0.9em;
+                min-height: 44px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1202,39 +1378,39 @@
         <div class="search-bar-container">
             <input type="text" class="search-bar" placeholder="Search games..." />
         </div>
-        <h3 class="top-games-heading" style="color:#ffffff; font-size:1.1em; font-weight:600; margin:0 0 16px 0; letter-spacing:0px;">🔥 Popular</h3>
+        <h3 class="top-games-heading" style="color:#ffffff; font-size:1.1em; font-weight:600; margin:0 0 16px 0; letter-spacing:0px;">Popular</h3>
         <div class="carousel" id="top-games-carousel" style="overflow-x:auto; display:flex; gap:12px; padding-bottom:12px; margin-bottom:32px;">
             <div class="carousel-card game" onclick="playGame('Slots')">
-                <div class="game-icon">🎰</div>
+                <div class="game-icon"></div>
                 <div class="game-name">Slots</div>
                 <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Slots">0</span> playing</div>
             </div>
             <div class="carousel-card game" onclick="playGame('Blackjack')">
-                <div class="game-icon">🃏</div>
+                <div class="game-icon"></div>
                 <div class="game-name">Blackjack</div>
                 <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Blackjack">0</span> playing</div>
             </div>
             <div class="carousel-card game" onclick="playGame('Roulette')">
-                <div class="game-icon">🎯</div>
+                <div class="game-icon"></div>
                 <div class="game-name">Roulette</div>
                 <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Roulette">0</span> playing</div>
             </div>
             <div class="carousel-card game" onclick="playGame('Dice')">
-                <div class="game-icon">🎲</div>
+                <div class="game-icon"></div>
                 <div class="game-name">Dice</div>
                 <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Dice">0</span> playing</div>
             </div>
             <div class="carousel-card game" onclick="playGame('Poker')">
-                <div class="game-icon">♠️</div>
+                <div class="game-icon"></div>
                 <div class="game-name">Poker</div>
                 <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Poker">0</span> playing</div>
             </div>
         </div>
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
             <h3 class="axis-originals-heading" style="color:#ffffff; font-size:1.1em; font-weight:600; margin:0; letter-spacing:0px; display:flex; align-items:center; gap:8px;">
-                <img src="https://cdn-icons-png.flaticon.com/512/17/17521.png" alt="Axis Originals" style="width:1.5em; height:1.5em; vertical-align:middle; margin-right:4px;">Axis Originals
+                <img src="https://cdn-icons-png.flaticon.com/512/17/17521.png" alt="Axis Originals" style="width:1.5em; height:1.5em; vertical-align:middle; margin-right:4px; filter: brightness(0) invert(1);">Axis Originals
             </h3>
-            <button class="btn" id="viewAllGamesBtn" style="padding: 6px 12px; font-size: 0.8em; margin: 0; background: #00d4aa; color: #1a1f29; border-radius: 6px; border: none; font-weight: 600;">View All</button>
+            <button class="view-all-btn" id="viewAllGamesBtn" onclick="openAxisOriginalsPage()">View All</button>
         </div>
         <div class="carousel" id="axis-originals-carousel" style="overflow-x:auto; display:flex; gap:12px; padding-bottom:12px; margin-bottom:32px;">
             <!-- Plinko REMOVED -->
@@ -1250,7 +1426,7 @@
                 <img src="https://mediumrare.imgix.net/11caec5df20098884ae9071848e1951b8b34e5ec84a7241f2e7c5afd4b323dfd?w=360&h=472&fit=min&auto=format" alt="Limbo">
                 <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Limbo">0</span> playing</div>
             </button>
-            <button class="carousel-card img-fill game" onclick="goToGame('Roulette')" style="border:none; background:none; padding:0; cursor:pointer;">
+            <button class="carousel-card img-fill game" onclick="goToGame('Roulette')" style="border:none; background:none; padding:0; cursor:pointer;">h3>
                 <img src="https://mediumrare.imgix.net/86cd89b12ec34439c0d1a6e32b06c971efc86091e09ba466182abe173c3d3f7d?w=360&h=472&fit=min&auto=format" alt="Roulette">
                 <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Roulette">0</span> playing</div>
             </button>
@@ -1273,22 +1449,22 @@
         </div>
         
         <!-- Recent Wins Section -->
-        <div id="recentWinsSection" style="background:#1a1f29;border-radius:12px;padding:20px 16px 16px 16px;margin-bottom:24px;border:1px solid #2c3441;">
-            <h3 style="color:#ffffff;font-size:1.1em;font-weight:600;margin:0 0 16px 0;letter-spacing:0px;">🏆 Recent Wins</h3>
+        <div id="recentWinsSection" style="background:#1f1f1f;border-radius:12px;padding:20px 16px 16px 16px;margin-bottom:24px;border:1px solid #2c3441;">
+            <h3 style="color:#ffffff;font-size:1.1em;font-weight:600;margin:0 0 16px 0;letter-spacing:0px;">Recent Wins</h3>
             <div id="recentWinsList" style="display:flex;flex-direction:column;gap:8px;"></div>
         </div>
         
         <div class="coming-soon">
-            <h3>✨ Professional Casino Experience</h3>
-            <p>🎮 Full casino games are being developed</p>
-            <p>🔥 Real-time multiplayer coming soon</p>
-            <p>💎 VIP features and tournaments</p>
+            <h3>Professional Casino Experience</h3>
+            <p>Full casino games are being developed</p>
+            <p>Real-time multiplayer coming soon</p>
+            <p>VIP features and tournaments</p>
             <button class="btn" onclick="goBack()"><span style="font-size:1.2em;margin-right:6px;">←</span>Back to Bot</button>
         </div>
         
         <!-- --- Roulette Number Selection Section --- -->
         <div class="roulette-number-section" style="background:#181f29; border-radius:12px; padding:18px 12px 16px 12px; margin-bottom:28px; border:1px solid #2c3441; max-width:500px; margin-left:auto; margin-right:auto;">
-            <h3 style="color:#fff; font-size:1.05em; font-weight:600; margin-bottom:12px; text-align:center;">🎯 Select a Roulette Number</h3>
+            <h3 style="color:#fff; font-size:1.05em; font-weight:600; margin-bottom:12px; text-align:center;">Select a Roulette Number</h3>
             <div id="rouletteNumberGrid" style="display:grid; grid-template-columns:repeat(6,1fr); gap:8px; justify-items:center; margin-bottom:14px;"></div>
             <button class="btn" id="goToRouletteBtn" style="width:100%;" disabled>Go to Roulette</button>
         </div>
@@ -1358,22 +1534,32 @@
                 // Load demo mode state from localStorage
                 const demoMode = localStorage.getItem('demoMode') === 'true';
                 demoToggle.checked = demoMode;
-                
+
+                // Sync demo mode state on page load
+                setDemoModeClass(demoMode);
+
                 // Handle toggle change
                 demoToggle.addEventListener('change', function() {
                     const isDemo = this.checked;
                     localStorage.setItem('demoMode', isDemo.toString());
-                    
+                    setDemoModeClass(isDemo);
                     // Optional: Show notification
                     if (webApp && webApp.showAlert) {
                         webApp.showAlert(isDemo ? 
-                            '🎮 Demo mode enabled! All games will run in demo mode with rigged outcomes.' :
-                            '💰 Demo mode disabled! Games will use real balance and fair outcomes.'
+                            'Demo mode enabled! All games will run in demo mode with rigged outcomes.' :
+                            'Demo mode disabled! Games will use real balance and fair outcomes.'
                         );
                     }
-                    
                     console.log('Demo mode:', isDemo ? 'ON' : 'OFF');
                 });
+            }
+        }
+        // Helper to add/remove demo mode class for styling or logic
+        function setDemoModeClass(isDemo) {
+            if (isDemo) {
+                document.body.classList.add('demo-mode');
+            } else {
+                document.body.classList.remove('demo-mode');
             }
         }
         
@@ -1483,12 +1669,14 @@
                 'Plinko': 'game_plinko.html',
                 'Limbo': 'game_limbo.html',
                 'Hi-Lo': 'game_hilo.html',
-                'Coin Flip': 'game_coinflip.html'
+                'Hilo': 'game_hilo.html' // Fix: allow both spellings
             };
-            
-            const route = gameRoutes[gameType];
+            let route = gameRoutes[gameType];
+            if (!route && gameType) {
+                const normalized = gameType.replace(/[-\s]/g, '').toLowerCase();
+                if (normalized === 'hilo') route = 'game_hilo.html';
+            }
             if (route) {
-                // Use the same logic as goToGame for consistency
                 goToGame(gameType);
             } else {
                 console.warn('Game route not found for:', gameType);
@@ -1520,16 +1708,22 @@
                 'Plinko': 'game_plinko.html',
                 'Limbo': 'game_limbo.html',
                 'Hi-Lo': 'game_hilo.html',
-                'Coin Flip': 'game_coinflip.html'
+                'Hilo': 'game_hilo.html' // Fix: allow both spellings
             };
-            const route = gameRoutes[game];
+            // Normalize game name for mapping
+            let route = gameRoutes[game];
+            if (!route && game) {
+                // Try fallback normalization (remove spaces/dashes, lowercase)
+                const normalized = game.replace(/[-\s]/g, '').toLowerCase();
+                if (normalized === 'hilo') route = 'game_hilo.html';
+            }
             if (route) {
                 const userId = getUserId();
                 const userName = getUserName();
                 const balance = getCurrentBalance();
                 const demo = localStorage.getItem('demoMode') === 'true' ? '1' : '0';
                 let url = `${route}?user_id=${encodeURIComponent(userId)}&user_name=${encodeURIComponent(userName)}&balance=${encodeURIComponent(balance)}&demo=${demo}`;
-                if (game === 'Roulette' && rouletteNumber) {
+                if ((game === 'Roulette' || game === 'roulette') && rouletteNumber) {
                     url += `&number=${encodeURIComponent(rouletteNumber)}`;
                 }
                 window.location.href = url;
@@ -1577,6 +1771,7 @@
                 // Scroll to or focus the live chat container
                 const liveChat = document.getElementById('liveChat');
                 if (liveChat) {
+
                     liveChat.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     // Optionally, add a highlight effect
                     liveChat.style.boxShadow = '0 0 0 3px #4ecdc4, 0 -2px 16px rgba(0,0,0,0.18)';
@@ -1662,35 +1857,6 @@
                 else if (i === 4) w.time = '4m ago';
                 else w.time = (i) + 'm ago';
             });
-            // Update DOM times
-            const winsList = document.getElementById('recentWinsList');
-            Array.from(winsList.children).forEach((el, i) => {
-                const timeEl = el.querySelector('.time-ago');
-                if (timeEl && simulatedResults[i]) timeEl.textContent = simulatedResults[i].time;
-            });
-        }
-        function insertNewWin(win) {
-            const winsList = document.getElementById('recentWinsList');
-            const newWinEl = createWinElement(win);
-            winsList.insertBefore(newWinEl, winsList.firstChild);
-            // Remove last if more than 5
-            if (winsList.children.length > 5) {
-                winsList.removeChild(winsList.lastChild);
-            }
-        }
-        // Simulate new wins coming in every 7 seconds
-        function simulateNewWin() {
-            const users = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry', 'Ivy', 'Jack'];
-            const games = ['Blackjack', 'Roulette', 'Plinko', 'Crash', 'Mines', 'Coin Flip', 'Dice', 'Hilo', 'Limbo'];
-            const user = users[Math.floor(Math.random()*users.length)];
-            const game = games[Math.floor(Math.random()*games.length)];
-            const amount = Math.floor(Math.random()*200+50); // 50-250 chips
-            const time = 'just now';
-            const win = {user, game, amount, time, win: true};
-            simulatedResults.unshift(win); // Add to front
-            simulatedResults = simulatedResults.filter(r => r.win && r.amount > 0);
-            insertNewWin(win);
-            updateWinTimes();
         }
         document.addEventListener('DOMContentLoaded', function() {
             renderInitialWins();
@@ -1789,6 +1955,15 @@
                 };
             }
         });
+        
+        function openAxisOriginalsPage() {
+            // Get user data for URL params
+            const userId = getUserId();
+            const userName = encodeURIComponent(getUserName());
+            const balance = getCurrentBalance();
+            // Navigate to the dedicated Axis Originals page
+            window.location.href = `axis_originals.html?user_id=${userId}&user_name=${userName}&balance=${balance}`;
+        }
     </script>
 </body>
 </html>

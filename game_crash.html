@@ -10,7 +10,7 @@
         
         body {
             font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            background: #000000;
             color: #ffffff;
             min-height: 100vh;
             overflow-x: hidden;
@@ -24,38 +24,96 @@
         }
         
         .header {
+            background: rgba(26, 31, 41, 0.85);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid #2c3441;
+            padding: 1rem 1rem 1rem 0.5rem;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 16px 0;
-            border-bottom: 1px solid #2c3441;
-            margin-bottom: 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            max-width: 500px;
+            margin: 0 auto;
+            border-radius: 0 0 18px 18px;
         }
-        
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .demo-toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-right: 10px;
+        }
+
+        .demo-toggle {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .demo-toggle input { opacity: 0; width: 0; height: 0; }
+
+        .demo-slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #2c3441; transition: .4s; border-radius: 24px; border: 1px solid #00d4aa;
+        }
+
+        .demo-slider-dot {
+            position: absolute; height: 18px; width: 18px; left: 2px; bottom: 2px;
+            background-color: #7782aa; transition: .4s; border-radius: 50%;
+        }
+
+        .demo-toggle input:checked + .demo-slider { background-color: #00d4aa; }
+
+        .demo-toggle input:checked + .demo-slider .demo-slider-dot {
+            transform: translateX(20px); background-color: #1a1f29;
+        }
+
         .back-btn {
             background: none;
             border: none;
-            color: #4ecdc4;
+            color: #00d4aa;
             font-size: 1.5rem;
             cursor: pointer;
             padding: 0.5rem;
             border-radius: 8px;
             transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        
-        .balance-display {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 12px 20px;
-            border-radius: 12px;
+
+        .back-btn:hover {
+            background: rgba(0, 212, 170, 0.1);
+            transform: translateX(-2px);
+        }
+
+        .game-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #00d4aa, #4ecdc4);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
             text-align: center;
         }
         
-        .balance-amount {
-            font-size: 1.2em;
-            font-weight: 700;
-            color: #4ecdc4;
+        .balance-display {
+            color: #00d4aa;
+            font-weight: 600;
+            font-size: 0.95rem;
+            background: #1a1f29;
+            border-radius: 8px;
+            padding: 6px 14px;
+            margin-left: 10px;
         }
         
         .crash-graph {
@@ -241,21 +299,56 @@
             font-weight: 700;
             color: #4ecdc4;
         }
+        
+        /* Glassy View All Button - clearer version, black background */
+        .view-all-btn {
+            background: rgba(0, 0, 0, 0.32); /* black, semi-transparent */
+            backdrop-filter: blur(14px);
+            border: 1.5px solid rgba(255,255,255,0.18);
+            color: #4ecdc4;
+            font-weight: 600;
+            border-radius: 14px;
+            box-shadow: 0 4px 24px 0 rgba(0,0,0,0.18);
+            padding: 12px 28px;
+            font-size: 1.08em;
+            transition: background 0.2s, color 0.2s, border 0.2s;
+            cursor: pointer;
+            outline: none;
+        }
+        .view-all-btn:hover, .view-all-btn:focus {
+            background: rgba(78, 205, 196, 0.18);
+            color: #fff;
+            border: 1.5px solid #4ecdc4;
+        }
     </style>
 </head>
 <body>
     <div class="game-container">
         <div class="header">
-            <button class="back-btn" onclick="goBack()">← Back</button>
-            <h1 style="color: #ffffff; font-size: 1.4em;">🚀 Crash</h1>
-            <div class="balance-display">
-                <div class="balance-amount" id="balance">1000</div>
+            <div class="header-left">
+                <button class="back-btn" onclick="goBack()">←</button>
+                <div class="demo-toggle-container">
+                    <span style="font-size: 0.8em; color: #7782aa; font-weight: 500;">Demo</span>
+                    <label class="demo-toggle">
+                        <input type="checkbox" id="demoToggle">
+                        <span class="demo-slider">
+                            <span class="demo-slider-dot"></span>
+                        </span>
+                    </label>
+                </div>
             </div>
+            <h1 class="game-title">Crash</h1>
+            <div class="balance-display">Balance: <span id="balance">1000.00</span> chips</div>
         </div>
         
         <div class="crash-graph">
+            <canvas id="crashGraphCanvas" width="440" height="260" style="width:100%;max-width:440px;height:180px;display:block;margin:0 auto;background:transparent;position:absolute;top:20px;left:0;right:0;"></canvas>
             <div class="multiplier-display" id="multiplier">1.00x</div>
             <div class="rocket" id="rocket">🚀</div>
+            <div id="guessCrashVars" style="position:absolute;top:10px;right:18px;text-align:right;font-size:1.1em;z-index:2;">
+                <span id="guessVar" style="display:none;font-weight:600;color:#ffc107;background:rgba(255,193,7,0.12);padding:2px 8px;border-radius:8px;margin-bottom:2px;"></span><br>
+                <span id="crashVar" style="display:none;font-weight:600;color:#ff6b6b;background:rgba(255,107,107,0.12);padding:2px 8px;border-radius:8px;"></span>
+            </div>
         </div>
         
         <div class="game-status waiting" id="gameStatus">
@@ -265,9 +358,8 @@
         <div class="controls">
             <div class="bet-section">
                 <input type="number" class="bet-input" id="betAmount" placeholder="Bet amount" value="10" min="1">
-                <input type="number" class="auto-cashout" id="autoCashout" placeholder="Auto cashout at (e.g., 2.00)" step="0.01" min="1.01">
+                <input type="number" class="auto-cashout" id="guessMultiplier" placeholder="Your multiplier guess (e.g., 2.00)" step="0.01" min="1.01">
             </div>
-            
             <button class="play-btn bet" id="playBtn" onclick="placeBet()">Place Bet</button>
         </div>
         
@@ -298,9 +390,16 @@
         let currentMultiplier = 1.00;
         let betAmount = 0;
         let playerInRound = false;
-        let autoCashoutAt = null;
+        let guessMultiplier = null;
+        let crashPoint = null;
         let gameInterval = null;
         let roundStartTime = null;
+        let graphData = [];
+        let graphStartTime = null;
+        const canvas = document.getElementById('crashGraphCanvas');
+        const ctx = canvas.getContext('2d');
+        const graphW = canvas.width;
+        const graphH = canvas.height;
         
         function initGame() {
             initializeUserData();
@@ -344,116 +443,252 @@
             document.getElementById('totalWon').textContent = totalWon;
         }
         
+        function showVars(guess, crash) {
+            const guessEl = document.getElementById('guessVar');
+            const crashEl = document.getElementById('crashVar');
+            if (guess) {
+                guessEl.textContent = `Your Guess: ${guess.toFixed(2)}x`;
+                guessEl.style.display = 'inline-block';
+            } else {
+                guessEl.style.display = 'none';
+            }
+            if (crash) {
+                crashEl.textContent = `Crash: ${crash.toFixed(2)}x`;
+                crashEl.style.display = 'inline-block';
+            } else {
+                crashEl.style.display = 'none';
+            }
+        }
+        
         function placeBet() {
             if (gameState !== 'waiting') return;
-            
             const bet = parseInt(document.getElementById('betAmount').value);
-            const autoCashout = parseFloat(document.getElementById('autoCashout').value);
-            
+            const guess = parseFloat(document.getElementById('guessMultiplier').value);
             if (!bet || bet <= 0 || bet > currentBalance) {
                 showResult('Invalid bet amount!', false);
                 return;
             }
-            
+            if (!guess || guess < 1.01 || guess > 50) {
+                showResult('Enter a valid multiplier guess (1.01 - 50.00)', false);
+                return;
+            }
             updateBalance(currentBalance - bet);
             betAmount = bet;
-            autoCashoutAt = autoCashout || null;
+            guessMultiplier = guess;
             playerInRound = true;
-            
-            document.getElementById('playBtn').textContent = 'Cash Out';
-            document.getElementById('playBtn').className = 'play-btn cashout';
-            document.getElementById('playBtn').onclick = cashOut;
-            
-            setTimeout(startRound, 2000);
-        }
-        
-        function cashOut() {
-            if (!playerInRound || gameState !== 'flying') return;
-            
-            const winAmount = Math.floor(betAmount * currentMultiplier);
-            updateBalance(currentBalance + winAmount);
-            playerInRound = false;
-            
-            const profit = winAmount - betAmount;
-            showResult(`🎉 Cashed out at ${currentMultiplier.toFixed(2)}x! Won ${winAmount} chips (+${profit})`, true);
-            
-            resetForNextRound();
-        }
-        
-        function startNewRound() {
-            gameState = 'waiting';
-            currentMultiplier = 1.00;
-            playerInRound = false;
-            betAmount = 0;
-            autoCashoutAt = null;
-            
-            document.getElementById('multiplier').textContent = '1.00x';
-            document.getElementById('multiplier').className = 'multiplier-display';
-            document.getElementById('rocket').className = 'rocket';
-            document.getElementById('gameStatus').textContent = 'Place your bets!';
-            document.getElementById('gameStatus').className = 'game-status waiting';
-            document.getElementById('playBtn').textContent = 'Place Bet';
-            document.getElementById('playBtn').className = 'play-btn bet';
-            document.getElementById('playBtn').onclick = placeBet;
-            document.getElementById('playBtn').disabled = false;
+            document.getElementById('playBtn').disabled = true;
             document.getElementById('result').style.display = 'none';
+            showVars(guess, null);
+            setTimeout(startRound, 1200);
         }
-        
         function startRound() {
             gameState = 'flying';
             roundStartTime = Date.now();
-            
             document.getElementById('gameStatus').textContent = 'Round in progress...';
             document.getElementById('gameStatus').className = 'game-status flying';
             document.getElementById('multiplier').className = 'multiplier-display rising';
             document.getElementById('rocket').className = 'rocket flying';
-            
-            // Determine crash point (random between 1.01 and 50.00)
-            const crashPoint = Math.random() < 0.5 ? 
-                1 + Math.random() * 2 : // 50% chance of crashing early (1-3x)
-                1 + Math.random() * 49; // 50% chance of going higher (1-50x)
-            
+            // Generate crash point (random between 1.01 and 50.00)
+            crashPoint = Math.random() < 0.5 ? 1 + Math.random() * 2 : 1 + Math.random() * 49;
+            graphData = [{t:0, m:1}];
+            graphStartTime = Date.now();
+            let lastT = 0;
+            let winResolved = false;
+            let winShown = false;
             gameInterval = setInterval(() => {
                 const elapsed = (Date.now() - roundStartTime) / 1000;
-                currentMultiplier = 1 + (elapsed * 0.5); // Increases by 0.5x per second
-                
+                currentMultiplier = 1 + (elapsed * 0.5);
                 document.getElementById('multiplier').textContent = currentMultiplier.toFixed(2) + 'x';
-                
-                // Check auto cashout
-                if (playerInRound && autoCashoutAt && currentMultiplier >= autoCashoutAt) {
-                    cashOut();
+                // Add to graph data
+                if(elapsed-lastT>0.05){
+                    graphData.push({t:elapsed, m:currentMultiplier});
+                    lastT = elapsed;
                 }
-                
-                // Check if should crash
+                drawGraph();
+                updateRocketOnGraph();
+                // If player wins by guess being surpassed, show win but keep animating
+                if (!winResolved && playerInRound && currentMultiplier >= guessMultiplier) {
+                    winResolved = true;
+                    playerInRound = false;
+                    let payout = Math.floor(betAmount * guessMultiplier);
+                    updateBalance(currentBalance + payout);
+                    document.getElementById('multiplier').className = 'multiplier-display win';
+                    document.getElementById('gameStatus').textContent = `You win! Surpassed ${guessMultiplier.toFixed(2)}x (waiting for crash...)`;
+                    document.getElementById('gameStatus').className = 'game-status win';
+                    showVars(guessMultiplier, null);
+                    showResult(`🎉 Surpassed your guess! You win ${payout} chips!`, true);
+                    gamesPlayed++;
+                    updateStats();
+                    winShown = true;
+                    // Don't clearInterval, let it run to crash
+                }
+                // If crash happens
                 if (currentMultiplier >= crashPoint) {
-                    crashRound();
+                    clearInterval(gameInterval);
+                    crashRound(winShown);
                 }
-            }, 100);
+            }, 50);
         }
-        
-        function crashRound() {
+        function crashRound(winWasShown) {
             gameState = 'crashed';
-            clearInterval(gameInterval);
-            
+            drawGraph(crashPoint);
+            updateRocketOnGraph();
             document.getElementById('multiplier').className = 'multiplier-display crashed';
             document.getElementById('rocket').className = 'rocket';
-            document.getElementById('gameStatus').textContent = `Crashed at ${currentMultiplier.toFixed(2)}x`;
+            document.getElementById('gameStatus').textContent = `Crashed at ${crashPoint.toFixed(2)}x`;
             document.getElementById('gameStatus').className = 'game-status crashed';
-            
-            // If player was still in the round, they lose
-            if (playerInRound) {
-                showResult(`💥 Crashed at ${currentMultiplier.toFixed(2)}x! Lost ${betAmount} chips`, false);
+            if (!winWasShown && playerInRound) {
+                showVars(guessMultiplier, crashPoint);
+                showResult(`💥 You guessed ${guessMultiplier.toFixed(2)}x. Crash: ${crashPoint.toFixed(2)}x. You lose ${betAmount} chips.`, false);
                 playerInRound = false;
+                gamesPlayed++;
+                updateStats();
+            } else if (winWasShown) {
+                showVars(guessMultiplier, crashPoint);
             }
-            
-            gamesPlayed++;
-            updateStats();
-            
-            resetForNextRound();
-            
-            // Start new round after 5 seconds
-            setTimeout(startNewRound, 5000);
+            setTimeout(startNewRound, 3500);
         }
+        function resetGraph() {
+            graphData = [{t:0, m:1}];
+            graphStartTime = Date.now();
+            drawGraph();
+        }
+        function drawGraph(crashedAt) {
+            ctx.clearRect(0,0,graphW,graphH);
+            // Draw axes
+            ctx.save();
+            ctx.strokeStyle = '#4ecdc4';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(40, graphH-30);
+            ctx.lineTo(graphW-10, graphH-30);
+            ctx.moveTo(40, graphH-30);
+            ctx.lineTo(40, 20);
+            ctx.stroke();
+            ctx.restore();
+            // Draw curve
+            ctx.save();
+            ctx.strokeStyle = '#4ecdc4';
+            ctx.lineWidth = 5;
+            ctx.shadowColor = '#4ecdc4';
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            for(let i=0;i<graphData.length;i++){
+                let x = 40 + (graphW-60) * (graphData[i].t/8);
+                let y = graphH-30 - (graphH-60) * (Math.log10(graphData[i].m)/Math.log10(50));
+                if(i===0) ctx.moveTo(x,y);
+                else ctx.lineTo(x,y);
+            }
+            ctx.stroke();
+            ctx.restore();
+            // Draw guess line
+            if(guessMultiplier){
+                let y = graphH-30 - (graphH-60) * (Math.log10(guessMultiplier)/Math.log10(50));
+                ctx.save();
+                ctx.strokeStyle = '#ffc107';
+                ctx.lineWidth = 3;
+                ctx.setLineDash([8,6]);
+                ctx.beginPath();
+                ctx.moveTo(40, y);
+                ctx.lineTo(graphW-10, y);
+                ctx.stroke();
+                ctx.restore();
+            }
+            // Draw crash point
+            if(crashedAt){
+                let t = graphData[graphData.length-1].t;
+                let x = 40 + (graphW-60) * (t/8);
+                let y = graphH-30 - (graphH-60) * (Math.log10(crashedAt)/Math.log10(50));
+                ctx.save();
+                ctx.strokeStyle = '#ff6b6b';
+                ctx.lineWidth = 3;
+                ctx.setLineDash([6,6]);
+                ctx.beginPath();
+                ctx.moveTo(x,graphH-30);
+                ctx.lineTo(x,y);
+                ctx.lineTo(40,y);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+        function updateRocketOnGraph() {
+            if(graphData.length<2) return;
+            let last = graphData[graphData.length-1];
+            let x = 40 + (graphW-60) * (last.t/8);
+            let y = graphH-30 - (graphH-60) * (Math.log10(last.m)/Math.log10(50));
+            const rocket = document.getElementById('rocket');
+            rocket.style.left = (x-16)+"px";
+            rocket.style.top = (y+30)+"px";
+        }
+        // Patch startNewRound and startRound to reset and update graph
+        const origStartNewRound = startNewRound;
+        startNewRound = function() {
+            origStartNewRound();
+            resetGraph();
+            updateRocketOnGraph();
+        }
+        const origStartRound = startRound;
+        startRound = function() {
+            gameState = 'flying';
+            roundStartTime = Date.now();
+            document.getElementById('gameStatus').textContent = 'Round in progress...';
+            document.getElementById('gameStatus').className = 'game-status flying';
+            document.getElementById('multiplier').className = 'multiplier-display rising';
+            document.getElementById('rocket').className = 'rocket flying';
+            // Generate crash point (random between 1.01 and 50.00)
+            crashPoint = Math.random() < 0.5 ? 1 + Math.random() * 2 : 1 + Math.random() * 49;
+            graphData = [{t:0, m:1}];
+            graphStartTime = Date.now();
+            let lastT = 0;
+            let winResolved = false;
+            let winShown = false;
+            gameInterval = setInterval(() => {
+                const elapsed = (Date.now() - roundStartTime) / 1000;
+                currentMultiplier = 1 + (elapsed * 0.5);
+                document.getElementById('multiplier').textContent = currentMultiplier.toFixed(2) + 'x';
+                // Add to graph data
+                if(elapsed-lastT>0.05){
+                    graphData.push({t:elapsed, m:currentMultiplier});
+                    lastT = elapsed;
+                }
+                drawGraph();
+                updateRocketOnGraph();
+                // If player wins by guess being surpassed, show win but keep animating
+                if (!winResolved && playerInRound && currentMultiplier >= guessMultiplier) {
+                    winResolved = true;
+                    playerInRound = false;
+                    let payout = Math.floor(betAmount * guessMultiplier);
+                    updateBalance(currentBalance + payout);
+                    document.getElementById('multiplier').className = 'multiplier-display win';
+                    document.getElementById('gameStatus').textContent = `You win! Surpassed ${guessMultiplier.toFixed(2)}x (waiting for crash...)`;
+                    document.getElementById('gameStatus').className = 'game-status win';
+                    showVars(guessMultiplier, null);
+                    showResult(`🎉 Surpassed your guess! You win ${payout} chips!`, true);
+                    gamesPlayed++;
+                    updateStats();
+                    winShown = true;
+                    // Don't clearInterval, let it run to crash
+                }
+                // If crash happens
+                if (currentMultiplier >= crashPoint) {
+                    clearInterval(gameInterval);
+                    crashRound(winShown);
+                }
+            }, 50);
+        }
+        // Patch crashRound to show crash on graph
+        const origCrashRound = crashRound;
+        crashRound = function(crashAt) {
+            clearInterval(gameInterval);
+            drawGraph(crashAt||currentMultiplier);
+            updateRocketOnGraph();
+            origCrashRound.apply(this, arguments);
+        }
+        // On DOMContentLoaded, ensure graph is drawn
+        document.addEventListener('DOMContentLoaded', function() {
+            resetGraph();
+            updateRocketOnGraph();
+        });
         
         function resetForNextRound() {
             document.getElementById('playBtn').disabled = true;
