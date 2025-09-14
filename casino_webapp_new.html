@@ -621,13 +621,13 @@
             gap: 4px;
             margin-top: 6px;
             font-size: 0.7em;
-            color: #00d4aa;
+            color: #ffffff;
             font-weight: 600;
         }
         .game-player-dot {
             width: 6px;
             height: 6px;
-            background: #00d4aa;
+            background: #ffffff;
             border-radius: 50%;
             display: inline-block;
             margin-right: 2px;
@@ -1115,8 +1115,8 @@
         .win-item .win-amount {
             font-size: 1.1em;
             font-weight: 700;
-            color: #00d4aa;
-            text-shadow: 0 0 10px rgba(0,212,170,0.4);
+            color: #ffffff;
+            text-shadow: 0 0 10px rgba(255,255,255,0.4);
         }
         .win-item .winner-name {
             font-size: 0.9em;
@@ -1491,6 +1491,7 @@
         </div>
     </div>
     
+    <script src="balance_sync.js"></script>
     <script>
         // Initialize Telegram WebApp
         let webApp = null;
@@ -1567,6 +1568,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             initializeUserData();
             initDemoToggle();
+            syncBalanceFromStorage(); // Ensure balance is synced on load
         });
         
         // Helper functions for user data and balance management
@@ -1591,17 +1593,20 @@
         }
         
         function getCurrentBalance() {
-            // Check URL params first (for return from games)
+            // Use the BalanceSync system if available, otherwise fallback
+            if (window.BalanceSync) {
+                return window.BalanceSync.getCurrentBalance().toString();
+            }
+            
+            // Fallback to original logic
             const urlParams = new URLSearchParams(window.location.search);
             const urlBalance = urlParams.get('balance');
             
             if (urlBalance) {
-                // Update localStorage with the returned balance
                 localStorage.setItem('userBalance', urlBalance);
                 return urlBalance;
             }
             
-            // Otherwise get from localStorage
             return localStorage.getItem('userBalance') || '1000';
         }
         
@@ -1609,7 +1614,6 @@
             const currentBalance = getCurrentBalance();
             const balanceElement = document.querySelector('.balance-amount');
             if (balanceElement) {
-                // Always show two decimal points
                 const formatted = Number(currentBalance).toFixed(2);
                 balanceElement.textContent = formatted + ' chips';
             }
@@ -1696,7 +1700,41 @@
         }
         
         function goToGame(game, rouletteNumber) {
-            // Navigate to specific game with proper user data
+            // Use BalanceSync for navigation if available
+            if (window.BalanceSync) {
+                const gameRoutes = {
+                    'Slots': 'game_slots.html',
+                    'Blackjack': 'game_blackjack.html',
+                    'Roulette': 'game_roulette.html',
+                    'Dice': 'game_dice.html',
+                    'Poker': 'game_poker.html',
+                    'Crash': 'game_crash.html',
+                    'Mines': 'game_mines.html',
+                    'Plinko': 'game_plinko.html',
+                    'Limbo': 'game_limbo.html',
+                    'Hi-Lo': 'game_hilo.html',
+                    'Hilo': 'game_hilo.html'
+                };
+                
+                let route = gameRoutes[game];
+                if (!route && game) {
+                    const normalized = game.replace(/[-\s]/g, '').toLowerCase();
+                    if (normalized === 'hilo') route = 'game_hilo.html';
+                }
+                
+                if (route) {
+                    const additionalParams = {};
+                    if ((game === 'Roulette' || game === 'roulette') && rouletteNumber) {
+                        additionalParams.number = rouletteNumber;
+                    }
+                    
+                    const url = window.BalanceSync.getNavigationUrl(route, additionalParams);
+                    window.location.href = url;
+                }
+                return;
+            }
+            
+            // Fallback to original logic
             const gameRoutes = {
                 'Slots': 'game_slots.html',
                 'Blackjack': 'game_blackjack.html',
@@ -1708,12 +1746,11 @@
                 'Plinko': 'game_plinko.html',
                 'Limbo': 'game_limbo.html',
                 'Hi-Lo': 'game_hilo.html',
-                'Hilo': 'game_hilo.html' // Fix: allow both spellings
+                'Hilo': 'game_hilo.html'
             };
-            // Normalize game name for mapping
+            
             let route = gameRoutes[game];
             if (!route && game) {
-                // Try fallback normalization (remove spaces/dashes, lowercase)
                 const normalized = game.replace(/[-\s]/g, '').toLowerCase();
                 if (normalized === 'hilo') route = 'game_hilo.html';
             }
@@ -1722,6 +1759,9 @@
                 const userName = getUserName();
                 const balance = getCurrentBalance();
                 const demo = localStorage.getItem('demoMode') === 'true' ? '1' : '0';
+                
+                localStorage.setItem('userBalance', balance);
+                
                 let url = `${route}?user_id=${encodeURIComponent(userId)}&user_name=${encodeURIComponent(userName)}&balance=${encodeURIComponent(balance)}&demo=${demo}`;
                 if ((game === 'Roulette' || game === 'roulette') && rouletteNumber) {
                     url += `&number=${encodeURIComponent(rouletteNumber)}`;
@@ -1787,7 +1827,7 @@
         let chatHistory = [];
         function appendChatMessage(user, text) {
             const msgDiv = document.createElement('div');
-            msgDiv.innerHTML = `<span style="color:#4ecdc4;font-weight:bold;">${user}:</span> ${text}`;
+            msgDiv.innerHTML = `<span style="color:#ffffff;font-weight:bold;">${user}:</span> ${text}`;
             chatMessages.appendChild(msgDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
@@ -1834,7 +1874,7 @@
             div.style.animation = 'fadeInSlide 0.5s';
             div.innerHTML = `
                 <div class="win-details">
-                    <span class="winner-name"><span style="color:#4ecdc4;">${win.user}</span> won <span class="win-amount">+${win.amount} chips</span> in <span style="color:#ff6b6b;">${win.game}</span></span>
+                    <span class="winner-name"><span style="color:#ffffff;">${win.user}</span> won <span class="win-amount">+${win.amount} chips</span> in <span style="color:#ff6b6b;">${win.game}</span></span>
                                        <span class="time-ago">${win.time}</span>
                 </div>
             `;
@@ -1955,6 +1995,24 @@
                 };
             }
         });
+        
+        // Balance synchronization helper - ensures balance is always current
+        function syncBalanceFromStorage() {
+            const storedBalance = localStorage.getItem('userBalance');
+            if (storedBalance) {
+                updateBalanceDisplay();
+            }
+        }
+        
+        // Listen for balance changes from other windows/tabs
+        window.addEventListener('storage', function(e) {
+            if (e.key === 'userBalance') {
+                updateBalanceDisplay();
+            }
+        });
+        
+        // Periodic balance sync (every 2 seconds) to catch any missed updates
+        setInterval(syncBalanceFromStorage, 2000);
         
         function openAxisOriginalsPage() {
             // Get user data for URL params
