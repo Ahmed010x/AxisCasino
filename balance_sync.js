@@ -101,6 +101,83 @@
         }
     };
 
+    // Universal balance sync for all casino games and main webapp
+    // Requires: user_id must be available in localStorage or as a global JS variable
+
+    const API_BASE = window.location.origin;
+
+    function getUserId() {
+        // Try to get user_id from localStorage, query string, or global variable
+        let userId = localStorage.getItem('user_id');
+        if (!userId) {
+            const params = new URLSearchParams(window.location.search);
+            userId = params.get('user_id');
+        }
+        if (!userId && window.USER_ID) userId = window.USER_ID;
+        return userId;
+    }
+
+    async function fetchBalance() {
+        const userId = getUserId();
+        if (!userId) return null;
+        try {
+            const res = await fetch(`${API_BASE}/api/balance?user_id=${userId}`);
+            const data = await res.json();
+            if (data.balance !== undefined) {
+                localStorage.setItem('balance', data.balance);
+                return data.balance;
+            }
+        } catch (e) {
+            // Optionally show error
+        }
+        return null;
+    }
+
+    async function updateBalance(amount) {
+        const userId = getUserId();
+        if (!userId) return null;
+        try {
+            const res = await fetch(`${API_BASE}/api/update_balance`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId, amount })
+            });
+            const data = await res.json();
+            if (data.balance !== undefined) {
+                localStorage.setItem('balance', data.balance);
+                return data.balance;
+            }
+        } catch (e) {
+            // Optionally show error
+        }
+        return null;
+    }
+
+    function syncBalanceUI(selector = '.balance-amount') {
+        const balance = localStorage.getItem('balance');
+        document.querySelectorAll(selector).forEach(el => {
+            if (balance !== null) el.textContent = `${balance} chips`;
+        });
+    }
+
+    // Listen for balance changes in other tabs
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'balance') {
+            syncBalanceUI();
+        }
+    });
+
+    // On page load, fetch and sync balance
+    (async () => {
+        const balance = await fetchBalance();
+        if (balance !== null) syncBalanceUI();
+    })();
+
+    // Export for use in games
+    window.fetchBalance = fetchBalance;
+    window.updateBalance = updateBalance;
+    window.syncBalanceUI = syncBalanceUI;
+
     // Auto-initialize when DOM is ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {

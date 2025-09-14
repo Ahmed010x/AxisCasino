@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>🎯 Plinko - Casino Game</title>
+    <title>Plinko - Casino Game</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="balance_sync.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * { 
@@ -838,268 +839,94 @@
         let autoBallsRemaining = 0;
         let autoTotalProfit = 0;
         let isAutoRunning = false;
+        let userId = null;
+        let userName = 'Player';
+        let returnUrl = 'casino_webapp_new.html';
         let isDemoMode = false;
         let ballTrails = [];
         
-        // User data variables
-        let currentBalance = 1000;
-        let userId = 'demo_user';
-        let userName = 'Demo Player';
-        let returnUrl = 'casino_webapp_new.html';
-        
-        // Difficulty settings with precise peg layouts
-        const difficultySettings = {
-            easy: {
-                rows: 8,
-                totalPegs: 36, // 1+2+3+4+5+6+7+8 = 36 pegs
-                multipliers: [5, 3, 2, 1.5, 1.2, 1, 0.8, 1, 1.2, 1.5, 2, 3, 5],
-                description: 'More pegs for variety, still predictable. Good for learning. (8 rows, 36 pegs)'
-            },
-            medium: {
-                rows: 9,
-                totalPegs: 45, // 1+2+3+4+5+6+7+8+9 = 45 pegs
-                multipliers: [10, 5, 3, 2, 1.5, 1, 0.5, 1, 1.5, 2, 3, 5, 10],
-                description: 'Fewer pegs, more direct paths. (9 rows, 45 pegs)'
-            },
-            hard: {
-                rows: 10,
-                totalPegs: 55, // 1+2+3+4+5+6+7+8+9+10 = 55 pegs
-                multipliers: [25, 10, 5, 3, 2, 1, 0.3, 1, 2, 3, 5, 10, 25],
-                description: 'Optimal peg density for maximum chaos. Expert level. (10 rows, 55 pegs)'
+        // --- DEMO MODE TOGGLE ---
+        function setDemoMode(enabled) {
+            isDemoMode = enabled;
+            localStorage.setItem('plinkoDemoMode', enabled ? '1' : '0');
+            document.body.classList.toggle('demo-mode', enabled);
+            let badge = document.getElementById('demoModeBadge');
+            if (enabled) {
+                if (!badge) {
+                    badge = document.createElement('div');
+                    badge.id = 'demoModeBadge';
+                    badge.textContent = 'Demo Mode';
+                    badge.style = 'position:fixed;top:10px;right:10px;background:#00d4aa;color:#1a1f29;padding:4px 12px;border-radius:8px;font-weight:700;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,0.15);font-size:0.95em;';
+                    document.body.appendChild(badge);
+                } else {
+                    badge.style.display = 'block';
+                }
+            } else if (badge) {
+                badge.style.display = 'none';
             }
-        };
-        
-        let multipliers = difficultySettings.easy.multipliers;
-        
-        // Optimize board size for mobile devices
-        function optimizeBoardSize() {
-            const gameBoard = document.querySelector('.plinko-board');
-            const gameContainer = document.querySelector('.game-container');
-            if (!gameBoard || !gameContainer) {
-                showBoardError('Plinko board failed to load. Please reload or contact support.');
-                showDebugOverlay('Missing .plinko-board or .game-container');
-                return;
-            }
-            // Calculate available height
-            const viewportHeight = window.innerHeight;
-            const containerPadding = 16; // 8px * 2
-            const headerHeight = document.querySelector('.header')?.offsetHeight || 60;
-            const controlsHeight = document.querySelector('.controls')?.offsetHeight || 200;
-            const statsHeight = document.querySelector('.stats')?.offsetHeight || 80;
-            const margins = 60; // Various margins and paddings
-            let availableHeight = viewportHeight - containerPadding - headerHeight - controlsHeight - statsHeight - margins;
-            // Fallback: If availableHeight is too small or negative, use a safe minimum
-            if (isNaN(availableHeight) || availableHeight < 120) {
-                availableHeight = Math.max(viewportHeight * 0.45, 180);
-                showDebugOverlay('Fallback: availableHeight too small, using ' + Math.round(availableHeight) + 'px');
-            } else {
-                hideDebugOverlay();
-            }
-            // Set minimum and maximum board heights
-            const minHeight = 180;
-            const maxHeight = 500;
-            let boardHeight = Math.max(minHeight, Math.min(maxHeight, availableHeight));
-            // Apply the calculated height
-            gameBoard.style.height = boardHeight + 'px';
-            // Hide error if board is visible
-            if (gameBoard.offsetHeight > 100) hideBoardError();
-            // Debug info
-            if (window.location.search.includes('debug=1') || localStorage.getItem('plinkoDebug') === '1') {
-                showDebugOverlay(`Viewport: ${viewportHeight}px, Board: ${boardHeight}px, Header: ${headerHeight}, Controls: ${controlsHeight}, Stats: ${statsHeight}`);
-            }
-        }
-        
-        // Initialize game
-        function initGame() {
-            createPegs();
-            createMultiplierSlots();
             updateBalance();
             updateStats();
-            optimizeBoardSize(); // Optimize board size for current device
-            
-            // Get balance from URL params - support both parameter formats
+        }
+        // Attach event to toggle
+        document.addEventListener('DOMContentLoaded', function() {
+            const demoToggle = document.getElementById('plinkoDemoToggle');
+            if (demoToggle) {
+                let demoParam = new URLSearchParams(window.location.search).get('demo');
+                let demoState = demoParam === '1' || localStorage.getItem('plinkoDemoMode') === '1';
+                demoToggle.checked = demoState;
+                setDemoMode(demoState);
+                demoToggle.addEventListener('change', function() {
+                    setDemoMode(this.checked);
+                });
+            }
+        });
+        
+        // User data variables
+        // let userId = null;
+        // let userName = 'Player';
+        // let returnUrl = 'casino_webapp_new.html';
+        // let isDemoMode = false;
+        
+        // On load, get userId and balance from balance_sync.js
+        function initializeUserData() {
             const urlParams = new URLSearchParams(window.location.search);
-            const urlBalance = urlParams.get('balance');
-            if (urlBalance) {
-                currentBalance = parseInt(urlBalance);
-                updateBalance();
-            }
-            // --- DEMO MODE AUTO-DETECT ---
+            userId = urlParams.get('user_id') || localStorage.getItem('user_id');
+            if (userId) localStorage.setItem('user_id', userId);
+            userName = urlParams.get('userName') || urlParams.get('user_name') || userName;
+            returnUrl = urlParams.get('returnUrl') || urlParams.get('return_url') || returnUrl;
+            // Demo mode
             const demoParam = urlParams.get('demo');
-            if (demoParam === '1') {
-                setMode('demo');
-            }
+            if (demoParam === '1') setDemoMode(true);
         }
         
-        function setDifficulty(difficulty) {
-            if (isAutoRunning) {
-                showResult('Cannot change difficulty during auto mode!', false);
-                return;
-            }
-            
-            currentDifficulty = difficulty;
-            const settings = difficultySettings[difficulty];
-            multipliers = settings.multipliers;
-            
-            // Update difficulty button states
-            document.querySelectorAll('.difficulty-btn').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(difficulty + 'Btn').classList.add('active');
-            
-            // Update difficulty info text with enhanced details
-            const riskEmoji = settings.riskLevel === 'Low' ? '🟢' : settings.riskLevel === 'Medium' ? '🟡' : '🔴';
-            const maxMultiplier = Math.max(...settings.multipliers);
-            const minMultiplier = Math.min(...settings.multipliers);
-            
-            document.getElementById('difficultyInfo').textContent = 
-                `${riskEmoji} ${settings.description} Max: ${maxMultiplier}x, Min: ${minMultiplier}x`;
-            
-            // Clear existing pegs and recreate board
-            const board = document.getElementById('plinkoBoard');
-            const existingPegs = board.querySelectorAll('.peg');
-            existingPegs.forEach(peg => peg.remove());
-            
-            // Clear peg positions array
-            window.pegPositions = [];
-            
-            // Recreate pegs with new difficulty settings
-            createPegs();
-            
-            // Recreate multiplier slots with new values
-            const slotsContainer = document.getElementById('multiplierSlots');
-            slotsContainer.innerHTML = '';
-            const existingSeparators = board.querySelectorAll('.slot-separator');
-            existingSeparators.forEach(sep => sep.remove());
-            createMultiplierSlots();
-            
-            // Show risk warning for hard difficulty
-            if (difficulty === 'hard') {
-                showResult(`🚨 HIGH RISK MODE: Up to ${maxMultiplier}x multiplier, but high chance of low payouts!`, true);
-            }
-            
-            console.log(`Switched to ${difficulty.toUpperCase()} difficulty - Risk: ${settings.riskLevel}`);
+        // Update balance display using balance_sync.js
+        function updateBalanceDisplay() {
+            window.syncBalanceUI('.balance-amount');
         }
         
-        function createPegs() {
-            const board = document.getElementById('plinkoBoard');
-            const boardWidth = board.offsetWidth || 300;
-            const boardHeight = board.offsetHeight || 400;
-            
-            // Store peg positions for collision detection
-            window.pegPositions = [];
-            
-            // Get current difficulty settings
-            const settings = difficultySettings[currentDifficulty];
-            let numRows = settings.rows;
-            
-            // Calculate vertical spacing to fit triangle in board
-            const topMargin = 40;
-            const bottomMargin = 60; // leave space for slots
-            const availableHeight = boardHeight - topMargin - bottomMargin;
-            const rowSpacing = availableHeight / (numRows - 1);
-            
-            // Peg dimensions
-            const pegRadius = 4;
-            const pegDiameter = pegRadius * 2;
-            
-            // Make triangle fill entire board width - outer pegs touch edges
-            const edgeMargin = pegRadius; // Small margin so pegs don't clip board edge
-            const availableWidth = boardWidth - (2 * edgeMargin);
-            
-            // Calculate peg spacing based on the bottom row filling the board width
-            const bottomRowPegs = numRows; // Bottom row has numRows pegs
-            const pegSpacing = availableWidth / (bottomRowPegs - 1);
-            
-            console.log(`Creating ${currentDifficulty.toUpperCase()} pyramid: ${numRows} rows, bottom row width: ${availableWidth}px`);
-            
-            // Create true triangular pyramid - each peg sits between the ones above
-            for (let row = 0; row < numRows; row++) {
-                const pegsInRow = row + 1; // Row 0: 1 peg, Row 1: 2 pegs, etc.
-                
-                // Y position
-                const pegY = topMargin + row * rowSpacing;
-                
-                for (let col = 0; col < pegsInRow; col++) {
-                    const peg = document.createElement('div');
-                    peg.className = 'peg';
-                    
-                    // Calculate X position - each peg sits between pegs above
-                    // For row 0 (top): center the single peg
-                    // For row n: position pegs so they sit between the pegs of row n-1
-                    let pegX;
-                    
-                    if (row === 0) {
-                        // Top row: single peg in center
-                        pegX = boardWidth / 2;
-                    } else {
-                        // Calculate position based on bottom row spacing and offset for pyramid
-                        // Each row is offset by half spacing from the row below
-                        const rowOffset = (numRows - 1 - row) * (pegSpacing / 2);
-                        pegX = edgeMargin + rowOffset + (col * pegSpacing);
-                    }
-                    
-                    // Center peg on its position
-                    pegX -= pegRadius;
-                    
-                    // Ensure pegs stay within board bounds
-                    pegX = Math.max(0, Math.min(boardWidth - pegDiameter, pegX));
-                    peg.style.left = pegX + 'px';
-                    peg.style.top = pegY + 'px';
-                    board.appendChild(peg);
-                    window.pegPositions.push({
-                        x: pegX + pegRadius,
-                        y: pegY + pegRadius,
-                        row: row,
-                        col: col
-                    });
-                }
+        // When placing a bet, use updateBalance from balance_sync.js
+        async function placeBet(betAmount) {
+            if (isDemoMode) return true;
+            const balance = parseInt(localStorage.getItem('balance') || '0');
+            if (betAmount > balance || betAmount <= 0) {
+                showResult('Invalid bet amount!', false);
+                return false;
             }
-            
-            // Verify peg count matches expected total
-            const actualPegCount = window.pegPositions.length;
-            console.log(`${currentDifficulty.toUpperCase()}: Created ${actualPegCount} pegs (expected ${settings.totalPegs})`);
-            
-            if (actualPegCount === settings.totalPegs) {
-                console.log(`✅ Correct peg count for ${currentDifficulty} difficulty!`);
+            const newBalance = await window.updateBalance(-betAmount);
+            if (newBalance !== null) {
+                updateBalanceDisplay();
+                return true;
             } else {
-                console.warn(`⚠️ Peg count mismatch: expected ${settings.totalPegs}, got ${actualPegCount}`);
+                showResult('Balance update failed!', false);
+                return false;
             }
         }
         
-        function createMultiplierSlots() {
-            const slotsContainer = document.getElementById('multiplierSlots');
-            const board = document.getElementById('plinkoBoard');
-            
-            // Clear existing content
-            slotsContainer.innerHTML = '';
-            const existingSeparators = board.querySelectorAll('.slot-separator');
-            existingSeparators.forEach(sep => sep.remove());
-            
-            multipliers.forEach((mult, index) => {
-                const slot = document.createElement('div');
-                slot.className = 'multiplier-slot';
-                slot.textContent = mult + 'x';
-                
-                // Color coding based on multiplier value
-                if (mult < 1) slot.classList.add('low');
-                else if (mult <= 2) slot.classList.add('medium');
-                else if (mult <= 10) slot.classList.add('high');
-                else slot.classList.add('jackpot');
-                
-                slotsContainer.appendChild(slot);
-                
-                // Add visual separators between slots (except after last slot)
-                if (index < multipliers.length - 1) {
-                    const separator = document.createElement('div');
-                    separator.className = 'slot-separator';
-                    const separatorPosition = ((index + 1) / multipliers.length) * 100;
-                    separator.style.left = separatorPosition + '%';
-                    board.appendChild(separator);
-                }
-            });
-        }
-        
-        function setBet(amount) {
-            document.getElementById('betAmount').value = amount;
+        // When winning, use updateBalance from balance_sync.js
+        async function awardWin(winAmount) {
+            if (isDemoMode) return;
+            await window.updateBalance(winAmount);
+            updateBalanceDisplay();
         }
         
         // Main drop ball function for manual mode
@@ -1109,10 +936,7 @@
             const betAmount = parseInt(document.getElementById('betAmount').value);
             
             // Validate bet amount
-            if (betAmount > currentBalance || betAmount <= 0) {
-                showResult('Invalid bet amount!', false);
-                return;
-            }
+            if (!(await placeBet(betAmount))) return;
             
             isPlaying = true;
             
@@ -1120,11 +944,6 @@
             const playBtn = document.getElementById('playBtn');
             playBtn.disabled = true;
             playBtn.textContent = 'Dropping...';
-            
-            // Deduct bet (unless in demo mode)
-            if (!isDemoMode) {
-                updateBalance(currentBalance - betAmount);
-            }
             
             // Create ball
             const ball = document.createElement('div');
@@ -1493,12 +1312,7 @@
                 showResult('Invalid bet amount!', false);
                 return;
             }
-            
-            if (autoBalls * betAmount > currentBalance) {
-                showResult('Insufficient balance for all auto drops!', false);
-                return;
-            }
-            
+
             // Initialize auto mode
             isAutoRunning = true;
             autoBallsRemaining = autoBalls;
@@ -1566,8 +1380,8 @@
                 const totalBalls = parseInt(document.getElementById('autoBalls').value);
                 const completedBalls = totalBalls - autoBallsRemaining;
                 const resultText = autoTotalProfit > 0 
-                    ? `🎉 Auto mode completed! ${completedBalls} balls dropped. Total profit: +${autoTotalProfit} chips`
-                    : `😔 Auto mode completed! ${completedBalls} balls dropped. Total loss: ${autoTotalProfit} chips`;
+                    ? `Auto mode completed! ${completedBalls} balls dropped. Total profit: +${autoTotalProfit} chips`
+                    : `Auto mode completed! ${completedBalls} balls dropped. Total loss: ${autoTotalProfit} chips`;
                 showResult(resultText, autoTotalProfit > 0);
             }
             
@@ -1583,10 +1397,7 @@
         
         async function dropBallAuto() {
             const betAmount = parseInt(document.getElementById('betAmount').value);
-            
-            // Deduct bet
-            updateBalance(currentBalance - betAmount);
-            autoBallsRemaining--;
+            if (!(await placeBet(betAmount))) return;
             
             // Create and animate ball (similar to manual but non-blocking)
             const ball = document.createElement('div');
@@ -1775,38 +1586,6 @@
             }, 5000);
         }
         
-        // Initialize user data from URL parameters
-        function initializeUserData() {
-            const urlParams = new URLSearchParams(window.location.search);
-            
-            // Get user data from URL - support both parameter formats for compatibility
-            const urlUserId = urlParams.get('userId') || urlParams.get('user_id');
-            const urlUserName = urlParams.get('userName') || urlParams.get('user_name');
-            const urlBalance = urlParams.get('balance');
-            const urlReturnUrl = urlParams.get('returnUrl') || urlParams.get('return_url');
-            
-            if (urlUserId) userId = urlUserId;
-            if (urlUserName) userName = urlUserName;
-            if (urlBalance) currentBalance = parseInt(urlBalance);
-            if (urlReturnUrl) returnUrl = urlReturnUrl;
-            
-            updateBalance();
-        }
-        
-        function updateBalanceDisplay() {
-            document.getElementById('balance').textContent = currentBalance;
-        }
-        
-        function updateBalance(newBalance = null) {
-            if (newBalance !== null) {
-                currentBalance = newBalance;
-            }
-            updateBalanceDisplay();
-            
-            // Store balance in localStorage for persistence
-            localStorage.setItem('casinoBalance', currentBalance.toString());
-        }
-        
         // Telegram Mini App integration
         function goBack() {
             try {
@@ -1928,9 +1707,12 @@
         }
         
         // Call initialization functions on page load
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
             initTelegramWebApp();
             initializeUserData();
+            // Always fetch and sync balance on load
+            await window.fetchBalance();
+            updateBalanceDisplay();
             initGame();
             // Show debug overlay if requested
             if (window.location.search.includes('debug=1')) {
@@ -1948,40 +1730,9 @@
             setTimeout(optimizeBoardSize, 300); // Longer delay for orientation change
         });
         
-        // --- DEMO MODE TOGGLE ---
-        function setDemoMode(enabled) {
-            isDemoMode = enabled;
-            localStorage.setItem('plinkoDemoMode', enabled ? '1' : '0');
-            document.body.classList.toggle('demo-mode', enabled);
-            let badge = document.getElementById('demoModeBadge');
-            if (enabled) {
-                if (!badge) {
-                    badge = document.createElement('div');
-                    badge.id = 'demoModeBadge';
-                    badge.textContent = 'Demo Mode';
-                    badge.style = 'position:fixed;top:10px;right:10px;background:#00d4aa;color:#1a1f29;padding:4px 12px;border-radius:8px;font-weight:700;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,0.15);font-size:0.95em;';
-                    document.body.appendChild(badge);
-                } else {
-                    badge.style.display = 'block';
-                }
-            } else if (badge) {
-                badge.style.display = 'none';
-            }
-            updateBalance();
-            updateStats();
-        }
-        // Attach event to toggle
-        document.addEventListener('DOMContentLoaded', function() {
-            const demoToggle = document.getElementById('plinkoDemoToggle');
-            if (demoToggle) {
-                let demoParam = new URLSearchParams(window.location.search).get('demo');
-                let demoState = demoParam === '1' || localStorage.getItem('plinkoDemoMode') === '1';
-                demoToggle.checked = demoState;
-                setDemoMode(demoState);
-                demoToggle.addEventListener('change', function() {
-                    setDemoMode(this.checked);
-                });
-            }
+        // Listen for balance changes in other tabs
+        window.addEventListener('storage', function(e) {
+            if (e.key === 'balance') updateBalanceDisplay();
         });
     </script>
 </body>
