@@ -11,6 +11,7 @@ import logging
 import uuid
 import signal
 import sys
+import random
 from datetime import datetime
 from dotenv import load_dotenv
 import aiohttp
@@ -118,6 +119,9 @@ VIP_DIAMOND_REQUIRED = int(os.environ.get("VIP_DIAMOND_REQUIRED", "10000"))
 WEEKLY_BONUS_RATE = float(os.environ.get("WEEKLY_BONUS_RATE", "0.05"))  # 5% of weekly bets
 MIN_SLOTS_BET = int(os.environ.get("MIN_SLOTS_BET", "10"))
 MIN_BLACKJACK_BET = int(os.environ.get("MIN_BLACKJACK_BET", "20"))
+
+# Global rigging configuration
+DICE_HOUSE_EDGE = 0.65  # Default 65% chance bot wins
 
 # --- Production Database System ---
 async def init_db():
@@ -1462,10 +1466,115 @@ Ready to claim your bonuses?
 
 # --- Telegram Animated Emoji Game Handlers ---
 async def dice_game_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Play a dice game with Telegram animated emoji"""
-    await update.message.reply_text("🎲 Rolling the dice...")
-    dice_message = await update.message.reply_dice(emoji="🎲")
-    # Optionally, you can add logic to compare with a bot roll or store results
+    """Play a rigged dice game with betting against the bot"""
+    user_id = update.effective_user.id
+    user = await get_user(user_id)
+    
+    if not user:
+        await update.message.reply_text("❌ Please use /start first!")
+        return
+    
+    # Minimum bet for dice game
+    min_bet = 10
+    if user['balance'] < min_bet:
+        await update.message.reply_text(f"❌ Insufficient balance! Minimum bet: {min_bet} chips")
+        return
+    
+    import random
+    
+    # House edge configuration - bot wins more often
+    HOUSE_EDGE = DICE_HOUSE_EDGE  # Use global configuration
+    
+    # Player rolls first
+    await update.message.reply_text("🎲 You roll first...")
+    player_dice = await update.message.reply_dice(emoji="🎲")
+    
+    # Wait a moment for dramatic effect
+    await asyncio.sleep(3)
+    
+    # Bot's "rigged" logic
+    player_value = player_dice.dice.value  # This will be 1-6
+    
+    # Determine if bot should win based on house edge
+    bot_should_win = random.random() < HOUSE_EDGE
+    
+    if bot_should_win:
+        # Bot wins - choose a value higher than player (if possible)
+        if player_value < 6:
+            # Bot can win legitimately
+            possible_winning_values = [i for i in range(player_value + 1, 7)]
+            bot_target = random.choice(possible_winning_values)
+        else:
+            # Player rolled 6, bot needs to tie or "get lucky"
+            bot_target = 6 if random.random() < 0.5 else random.randint(1, 5)
+    else:
+        # Let player win - bot rolls lower
+        if player_value > 1:
+            possible_losing_values = [i for i in range(1, player_value)]
+            bot_target = random.choice(possible_losing_values)
+        else:
+            # Player rolled 1, bot will likely win anyway
+            bot_target = random.randint(2, 6)
+    
+    # Send bot's dice (this will be random, but we'll "interpret" the result)
+    await update.message.reply_text("🤖 Bot rolls...")
+    bot_dice = await update.message.reply_dice(emoji="🎲")
+    
+    # Wait for dice animation to finish
+    await asyncio.sleep(3)
+    
+    # "Rigged" result interpretation
+    actual_bot_value = bot_dice.dice.value
+    
+    # We'll use our predetermined target for the actual game logic
+    # but show the real dice value to the user (for appearance of fairness)
+    display_bot_value = actual_bot_value  # Show real dice
+    game_bot_value = bot_target  # Use rigged value for game logic
+    
+    bet_amount = min_bet
+    
+    # Determine winner based on rigged logic
+    if game_bot_value > player_value:
+        # Bot wins
+        result = "loss"
+        await deduct_balance(user_id, bet_amount)
+        await update.message.reply_text(
+            f"🎲 **DICE RESULT** 🎲\n\n"
+            f"👤 Your roll: **{player_value}**\n"
+            f"🤖 Bot roll: **{display_bot_value}**\n\n"
+            f"🤖 **Bot wins!**\n"
+            f"💸 You lost {bet_amount} chips\n\n"
+            f"💰 New balance: {user['balance'] - bet_amount:,} chips"
+        )
+        await log_game_session(user_id, "dice", bet_amount, 0, result)
+        
+    elif game_bot_value < player_value:
+        # Player wins
+        result = "win"
+        win_amount = bet_amount * 2  # 2x payout
+        await update_balance(user_id, win_amount)
+        await update.message.reply_text(
+            f"🎲 **DICE RESULT** 🎲\n\n"
+            f"👤 Your roll: **{player_value}**\n"
+            f"🤖 Bot roll: **{display_bot_value}**\n\n"
+            f"🎉 **You win!**\n"
+            f"💰 You won {win_amount} chips\n\n"
+            f"💎 New balance: {user['balance'] + win_amount:,} chips"
+        )
+        await log_game_session(user_id, "dice", bet_amount, win_amount, result)
+        
+    else:
+        # Tie
+        result = "tie"
+        await update.message.reply_text(
+            f"🎲 **DICE RESULT** 🎲\n\n"
+            f"👤 Your roll: **{player_value}**\n"
+            f"🤖 Bot roll: **{display_bot_value}**\n\n"
+            f"🤝 **It's a tie!**\n"
+            f"💰 No chips won or lost\n\n"
+            f"💎 Balance: {user['balance']:,} chips"
+        )
+        await log_game_session(user_id, "dice", 0, 0, result)
 
 async def basketball_game_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Play a basketball game with Telegram animated emoji"""
@@ -1558,7 +1667,6 @@ async def claim_daily_bonus_callback(update: Update, context: ContextTypes.DEFAU
     user = await get_user(user_id)
     vip_level = get_vip_level(user['balance'])
     bonus_amount = get_daily_bonus_amount(vip_level)
-    import random
     bonus_amount += random.randint(-10, 20)
     await update_balance(user_id, bonus_amount)
     updated_user = await get_user(user_id)
@@ -1596,6 +1704,93 @@ async def bonus_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
+# --- Admin Commands ---
+async def set_dice_rigging_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin command to control dice rigging level"""
+    user_id = update.effective_user.id
+    
+    # Check if user is admin
+    if user_id not in ADMIN_USER_IDS:
+        await update.message.reply_text("❌ Admin access required!")
+        return
+    
+    if not context.args:
+        await update.message.reply_text(
+            f"🎯 **DICE RIGGING CONTROL** 🎯\n\n"
+            f"Current house edge: {DICE_HOUSE_EDGE:.0%}\n\n"
+            f"**Usage:** `/setdice <percentage>`\n"
+            f"**Examples:**\n"
+            f"• `/setdice 50` - Fair game (50% each)\n"
+            f"• `/setdice 65` - Moderate rigging (65% bot wins)\n"
+            f"• `/setdice 80` - Heavy rigging (80% bot wins)\n"
+            f"• `/setdice 20` - Player favored (20% bot wins)\n\n"
+            f"Range: 10-90%"
+        )
+        return
+    
+    try:
+        new_edge = float(context.args[0]) / 100
+        
+        if new_edge < 0.1 or new_edge > 0.9:
+            await update.message.reply_text("❌ House edge must be between 10% and 90%")
+            return
+        
+        global DICE_HOUSE_EDGE
+        DICE_HOUSE_EDGE = new_edge
+        
+        await update.message.reply_text(
+            f"✅ **DICE RIGGING UPDATED** ✅\n\n"
+            f"🎯 **New house edge:** {DICE_HOUSE_EDGE:.0%}\n"
+            f"🤖 **Bot win chance:** {DICE_HOUSE_EDGE:.0%}\n"
+            f"👤 **Player win chance:** {(1-DICE_HOUSE_EDGE):.0%}\n\n"
+            f"💡 Changes apply to all new dice games"
+        )
+        
+        logger.info(f"Admin {user_id} set dice house edge to {DICE_HOUSE_EDGE:.0%}")
+        
+    except ValueError:
+        await update.message.reply_text("❌ Invalid percentage. Use a number between 10-90")
+
+async def dice_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show dice game statistics"""
+    user_id = update.effective_user.id
+    
+    # Get user's dice game stats
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT 
+                COUNT(*) as total_games,
+                SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END) as wins,
+                SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END) as losses,
+                SUM(CASE WHEN result = 'tie' THEN 1 ELSE 0 END) as ties,
+                SUM(bet_amount) as total_bet,
+                SUM(win_amount) as total_won
+            FROM game_sessions 
+            WHERE user_id = ? AND game_type = 'dice'
+        """, (user_id,))
+        stats = await cur.fetchone()
+    
+    if not stats or stats[0] == 0:
+        await update.message.reply_text("🎲 No dice games played yet! Use /dice to start playing.")
+        return
+    
+    total_games, wins, losses, ties, total_bet, total_won = stats
+    win_rate = (wins / total_games) * 100 if total_games > 0 else 0
+    net_result = total_won - total_bet
+    
+    await update.message.reply_text(
+        f"🎲 **YOUR DICE STATISTICS** 🎲\n\n"
+        f"🎮 **Games Played:** {total_games}\n"
+        f"🏆 **Wins:** {wins} ({win_rate:.1f}%)\n"
+        f"💀 **Losses:** {losses}\n"
+        f"🤝 **Ties:** {ties}\n\n"
+        f"💰 **Total Bet:** {total_bet:,} chips\n"
+        f"💎 **Total Won:** {total_won:,} chips\n"
+        f"📊 **Net Result:** {net_result:+,} chips\n\n"
+        f"🎯 **Current House Edge:** {DICE_HOUSE_EDGE:.0%}\n"
+        f"🎲 Ready for another roll?"
+    )
+
 # --- Main Bot Application ---
 async def main():
     """Main bot application"""
@@ -1615,6 +1810,13 @@ async def main():
     application.add_handler(CommandHandler("help", help_command))
     
     # Add animated emoji game handlers
+    application.add_handler(CommandHandler("dice", dice_game_command))
+    application.add_handler(CommandHandler("basketball", basketball_game_command))
+    application.add_handler(CommandHandler("soccer", soccer_game_command))
+    
+    # Add admin commands
+    application.add_handler(CommandHandler("setdice", set_dice_rigging_command))
+    application.add_handler(CommandHandler("dicestats", dice_stats_command))
     application.add_handler(CommandHandler("dice", dice_game_command))
     application.add_handler(CommandHandler("basketball", basketball_game_command))
     application.add_handler(CommandHandler("soccer", soccer_game_command))
