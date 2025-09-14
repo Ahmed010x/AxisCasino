@@ -1289,12 +1289,10 @@ async def show_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.answer()
     user_id = query.from_user.id
     user = await get_user(user_id)
-    
     # Get user rank
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute("SELECT COUNT(*) FROM users WHERE balance > ?", (user['balance'],))
         rank = (await cur.fetchone())[0] + 1
-    
     text = f"""
 📊 **PLAYER STATISTICS** 📊
 
@@ -1309,7 +1307,7 @@ async def show_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 • Win Rate: {((user['total_won'] / max(user['total_wagered'], 1)) * 100):.1f}%
 
 🏅 **Achievements:**
-• First Deposit: ✅
+• First Deposit: {'✅' if user['balance'] > 0 else '❌'}
 • High Roller: {'✅' if user['balance'] >= 1000 else '❌'}
 • VIP Status: {'✅' if user['balance'] >= VIP_SILVER_REQUIRED else '❌'}
 
@@ -1318,32 +1316,10 @@ async def show_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 Ready to improve your stats?
 """
-
-def get_performance_rating(user: dict) -> str:
-    """Return a performance rating string based on user stats."""
-    try:
-        games_played = user.get('games_played', 0)
-        total_wagered = user.get('total_wagered', 0)
-        total_won = user.get('total_won', 0)
-        win_rate = (total_won / max(total_wagered, 1)) * 100
-        if games_played < 5:
-            return "🔹 New Player"
-        elif win_rate >= 120:
-            return "🌟 Casino Pro"
-        elif win_rate >= 100:
-            return "⭐ High Roller"
-        elif win_rate >= 80:
-            return "🎯 Consistent Winner"
-        else:
-            return "🎲 Keep Playing!"
-    except Exception:
-        return "🎲 Keep Playing!"
-    
     keyboard = [
         [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"), InlineKeyboardButton("🏆 View Leaderboard", callback_data="show_leaderboard")],
         [InlineKeyboardButton("🎁 Get Bonus", callback_data="bonus_centre"), InlineKeyboardButton("🔙 Back to Main", callback_data="main_panel")]
     ]
-    
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
 async def show_leaderboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1525,6 +1501,26 @@ def get_daily_bonus_amount(vip_level: str) -> int:
     base_bonus = 50
     multiplier = get_vip_multiplier(vip_level)
     return int(base_bonus * multiplier)
+
+def get_performance_rating(user: dict) -> str:
+    """Return a performance rating string based on user stats."""
+    try:
+        games_played = user.get('games_played', 0)
+        total_wagered = user.get('total_wagered', 0)
+        total_won = user.get('total_won', 0)
+        win_rate = (total_won / max(total_wagered, 1)) * 100
+        if games_played < 5:
+            return "🔹 New Player"
+        elif win_rate >= 120:
+            return "🌟 Casino Pro"
+        elif win_rate >= 100:
+            return "⭐ High Roller"
+        elif win_rate >= 80:
+            return "🎯 Consistent Winner"
+        else:
+            return "🎲 Keep Playing!"
+    except Exception:
+        return "🎲 Keep Playing!"
 
 async def deposit_method_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
