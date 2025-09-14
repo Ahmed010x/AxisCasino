@@ -688,16 +688,47 @@
             50% { transform: scale(2); opacity: 0.8; }
             100% { transform: scale(0.5); opacity: 0; }
         }
+        
+        .plinko-debug-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw;
+            background: rgba(0,212,170,0.95);
+            color: #1a1f29;
+            font-size: 0.95em;
+            z-index: 9999;
+            padding: 6px 10px;
+            border-bottom: 2px solid #ff6b6b;
+            display: none;
+        }
+        .plinko-board-error {
+            color: #ff6b6b;
+            background: #1a1f29;
+            border: 2px solid #ff6b6b;
+            border-radius: 12px;
+            padding: 18px;
+            text-align: center;
+            font-weight: bold;
+            margin: 24px auto;
+            max-width: 320px;
+        }
     </style>
 </head>
 <body>
+    <div id="plinkoDebugOverlay" class="plinko-debug-overlay"></div>
     <div class="game-container">
         <div class="header">
-            <button class="back-btn" onclick="goBack()">← Back</button>
-            <h1 style="color: #ffffff; font-size: 1.4em;">🎯 Plinko</h1>
+            <button class="back-btn" onclick="goBack()">←</button>
+            <div style="display:flex;align-items:center;gap:12px;">
+                <span style="font-size:1.2em;font-weight:700;letter-spacing:1px;">Plinko</span>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                    <input type="checkbox" id="plinkoDemoToggle" style="accent-color:#00d4aa;width:18px;height:18px;">
+                    <span style="font-size:0.95em;color:#00d4aa;font-weight:600;">Demo</span>
+                </label>
+            </div>
             <div class="balance-display">
                 <div class="balance-label">Balance</div>
-                <div class="balance-amount" id="balance">1000</div>
+                <div class="balance-amount" id="balanceAmount">{BALANCE}</div>
             </div>
         </div>
         
@@ -737,7 +768,6 @@
                 <div class="mode-buttons">
                     <button class="mode-btn active" id="manualBtn" onclick="setMode('manual')">Manual</button>
                     <button class="mode-btn" id="autoBtn" onclick="setMode('auto')">Auto</button>
-                    <button class="mode-btn" id="demoBtn" onclick="setMode('demo')">Demo</button>
                 </div>
                 <div class="auto-controls" id="autoControls">
                     <div class="auto-setting">
@@ -845,9 +875,11 @@
         function optimizeBoardSize() {
             const gameBoard = document.querySelector('.plinko-board');
             const gameContainer = document.querySelector('.game-container');
-            
-            if (!gameBoard || !gameContainer) return;
-            
+            if (!gameBoard || !gameContainer) {
+                showBoardError('Plinko board failed to load. Please reload or contact support.');
+                showDebugOverlay('Missing .plinko-board or .game-container');
+                return;
+            }
             // Calculate available height
             const viewportHeight = window.innerHeight;
             const containerPadding = 16; // 8px * 2
@@ -855,19 +887,26 @@
             const controlsHeight = document.querySelector('.controls')?.offsetHeight || 200;
             const statsHeight = document.querySelector('.stats')?.offsetHeight || 80;
             const margins = 60; // Various margins and paddings
-            
-            const availableHeight = viewportHeight - containerPadding - headerHeight - controlsHeight - statsHeight - margins;
-            
+            let availableHeight = viewportHeight - containerPadding - headerHeight - controlsHeight - statsHeight - margins;
+            // Fallback: If availableHeight is too small or negative, use a safe minimum
+            if (isNaN(availableHeight) || availableHeight < 120) {
+                availableHeight = Math.max(viewportHeight * 0.45, 180);
+                showDebugOverlay('Fallback: availableHeight too small, using ' + Math.round(availableHeight) + 'px');
+            } else {
+                hideDebugOverlay();
+            }
             // Set minimum and maximum board heights
             const minHeight = 180;
             const maxHeight = 500;
-            
             let boardHeight = Math.max(minHeight, Math.min(maxHeight, availableHeight));
-            
             // Apply the calculated height
             gameBoard.style.height = boardHeight + 'px';
-            
-            console.log(`Board optimized: viewport=${viewportHeight}, available=${availableHeight}, board=${boardHeight}`);
+            // Hide error if board is visible
+            if (gameBoard.offsetHeight > 100) hideBoardError();
+            // Debug info
+            if (window.location.search.includes('debug=1') || localStorage.getItem('plinkoDebug') === '1') {
+                showDebugOverlay(`Viewport: ${viewportHeight}px, Board: ${boardHeight}px, Header: ${headerHeight}, Controls: ${controlsHeight}, Stats: ${statsHeight}`);
+            }
         }
         
         // Initialize game
@@ -1113,19 +1152,10 @@
             let winAmount, profit;
             
             if (isDemoMode) {
-                // In demo mode, rig the result to a high multiplier
-                const highMultiplierSlots = multipliers.map((mult, idx) => ({mult, idx}))
-                    .filter(item => item.mult >= 5)
-                    .sort((a, b) => b.mult - a.mult);
-                const riggedSlot = highMultiplierSlots[0] || {mult: multiplier, idx: finalSlot};
-                winAmount = Math.floor(betAmount * riggedSlot.mult);
+                // In demo mode, show fixed high win for demo experience
+                winAmount = Math.floor(betAmount * 5);
                 profit = winAmount - betAmount;
-                
-                // Visual feedback for rigged slot
-                const slots = document.querySelectorAll('.multiplier-slot');
-                slots[riggedSlot.idx].classList.add('winning');
-                
-                showResult(`🎯 Demo Win! You won ${winAmount} chips with ${riggedSlot.mult}x multiplier!`, true);
+                showResult(`🎉 Demo Win! You won ${winAmount} chips!`, true);
             } else {
                 winAmount = Math.floor(betAmount * multiplier);
                 profit = winAmount - betAmount;
@@ -1412,7 +1442,6 @@
         
         function setMode(mode) {
             currentMode = mode;
-            isDemoMode = (mode === 'demo');
             // Update mode button states
             document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById(mode + 'Btn').classList.add('active');
@@ -1421,15 +1450,10 @@
             const playBtn = document.getElementById('playBtn');
             if (mode === 'auto') {
                 autoControls.classList.add('active');
-                playBtn.textContent = 'Start Auto Drop';
-            } else if (mode === 'demo') {
-                autoControls.classList.remove('active');
-                playBtn.textContent = 'Demo Drop';
-                playBtn.style.background = 'linear-gradient(135deg, #ffe066, #4ecdc4)';
+                playBtn.textContent = 'Stop Auto Drop';
             } else {
                 autoControls.classList.remove('active');
                 playBtn.textContent = 'Drop Ball';
-                playBtn.style.background = 'linear-gradient(135deg, #4ecdc4, #44a08d)';
                 stopAutoMode();
             }
             console.log(`Switched to ${mode.toUpperCase()} mode`);
@@ -1835,11 +1859,83 @@
             }
         }
         
+        // --- DEBUG OVERLAY ---
+        function showDebugOverlay(msg) {
+            const overlay = document.getElementById('plinkoDebugOverlay');
+            if (overlay) {
+                overlay.textContent = msg;
+                overlay.style.display = 'block';
+            }
+        }
+        function hideDebugOverlay() {
+            const overlay = document.getElementById('plinkoDebugOverlay');
+            if (overlay) overlay.style.display = 'none';
+                      }
+
+        // --- FALLBACK: Show error if board fails to render ---
+        function showBoardError(msg) {
+            let err = document.getElementById('plinkoBoardError');
+            if (!err) {
+                err = document.createElement('div');
+                err.id = 'plinkoBoardError';
+                err.className = 'plinko-board-error';
+                document.body.appendChild(err);
+            }
+            err.textContent = msg;
+            err.style.display = 'block';
+        }
+        function hideBoardError() {
+            const err = document.getElementById('plinkoBoardError');
+            if (err) err.style.display = 'none';
+        }
+
+        // Optimize board size for mobile devices (robust fallback)
+        function optimizeBoardSize() {
+            const gameBoard = document.querySelector('.plinko-board');
+            const gameContainer = document.querySelector('.game-container');
+            if (!gameBoard || !gameContainer) {
+                showBoardError('Plinko board failed to load. Please reload or contact support.');
+                showDebugOverlay('Missing .plinko-board or .game-container');
+                return;
+            }
+            // Calculate available height
+            const viewportHeight = window.innerHeight;
+            const containerPadding = 16; // 8px * 2
+            const headerHeight = document.querySelector('.header')?.offsetHeight || 60;
+            const controlsHeight = document.querySelector('.controls')?.offsetHeight || 200;
+            const statsHeight = document.querySelector('.stats')?.offsetHeight || 80;
+            const margins = 60; // Various margins and paddings
+            let availableHeight = viewportHeight - containerPadding - headerHeight - controlsHeight - statsHeight - margins;
+            // Fallback: If availableHeight is too small or negative, use a safe minimum
+            if (isNaN(availableHeight) || availableHeight < 120) {
+                availableHeight = Math.max(viewportHeight * 0.45, 180);
+                showDebugOverlay('Fallback: availableHeight too small, using ' + Math.round(availableHeight) + 'px');
+            } else {
+                hideDebugOverlay();
+            }
+            // Set minimum and maximum board heights
+            const minHeight = 180;
+            const maxHeight = 500;
+            let boardHeight = Math.max(minHeight, Math.min(maxHeight, availableHeight));
+            // Apply the calculated height
+            gameBoard.style.height = boardHeight + 'px';
+            // Hide error if board is visible
+            if (gameBoard.offsetHeight > 100) hideBoardError();
+            // Debug info
+            if (window.location.search.includes('debug=1') || localStorage.getItem('plinkoDebug') === '1') {
+                showDebugOverlay(`Viewport: ${viewportHeight}px, Board: ${boardHeight}px, Header: ${headerHeight}, Controls: ${controlsHeight}, Stats: ${statsHeight}`);
+            }
+        }
+        
         // Call initialization functions on page load
         document.addEventListener('DOMContentLoaded', function() {
             initTelegramWebApp();
             initializeUserData();
             initGame();
+            // Show debug overlay if requested
+            if (window.location.search.includes('debug=1')) {
+                localStorage.setItem('plinkoDebug', '1');
+            }
         });
         
         // Re-optimize board size on window resize/orientation change
@@ -1850,6 +1946,42 @@
         // Re-optimize on orientation change (mobile)
         window.addEventListener('orientationchange', function() {
             setTimeout(optimizeBoardSize, 300); // Longer delay for orientation change
+        });
+        
+        // --- DEMO MODE TOGGLE ---
+        function setDemoMode(enabled) {
+            isDemoMode = enabled;
+            localStorage.setItem('plinkoDemoMode', enabled ? '1' : '0');
+            document.body.classList.toggle('demo-mode', enabled);
+            let badge = document.getElementById('demoModeBadge');
+            if (enabled) {
+                if (!badge) {
+                    badge = document.createElement('div');
+                    badge.id = 'demoModeBadge';
+                    badge.textContent = 'Demo Mode';
+                    badge.style = 'position:fixed;top:10px;right:10px;background:#00d4aa;color:#1a1f29;padding:4px 12px;border-radius:8px;font-weight:700;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,0.15);font-size:0.95em;';
+                    document.body.appendChild(badge);
+                } else {
+                    badge.style.display = 'block';
+                }
+            } else if (badge) {
+                badge.style.display = 'none';
+            }
+            updateBalance();
+            updateStats();
+        }
+        // Attach event to toggle
+        document.addEventListener('DOMContentLoaded', function() {
+            const demoToggle = document.getElementById('plinkoDemoToggle');
+            if (demoToggle) {
+                let demoParam = new URLSearchParams(window.location.search).get('demo');
+                let demoState = demoParam === '1' || localStorage.getItem('plinkoDemoMode') === '1';
+                demoToggle.checked = demoState;
+                setDemoMode(demoState);
+                demoToggle.addEventListener('change', function() {
+                    setDemoMode(this.checked);
+                });
+            }
         });
     </script>
 </body>

@@ -12,46 +12,71 @@
         }
 
         body {
-            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
-            color: #ffffff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f1419 0%, #1a1f29 50%, #16213e 100%);
+            color: #b1bad3;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             min-height: 100vh;
             overflow-x: hidden;
         }
 
         .header {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 1rem;
+            background: rgba(26, 31, 41, 0.85);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid #2c3441;
+            padding: 1rem 1rem 1rem 0.5rem;
             display: flex;
             align-items: center;
             justify-content: space-between;
             position: sticky;
             top: 0;
             z-index: 100;
+            max-width: 500px;
+            margin: 0 auto;
+            border-radius: 0 0 18px 18px;
         }
 
-        .back-btn {
-            background: none;
-            border: none;
-            color: #4ecdc4;
-            font-size: 1.5rem;
-            cursor: pointer;
-            padding: 0.5rem;
-            border-radius: 8px;
-            transition: all 0.3s ease;
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        .back-btn:hover {
-            background: rgba(78, 205, 196, 0.1);
-            transform: translateX(-2px);
+        .demo-toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-right: 10px;
+        }
+
+        .demo-toggle {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .demo-toggle input { opacity: 0; width: 0; height: 0; }
+
+        .demo-slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #2c3441; transition: .4s; border-radius: 24px; border: 1px solid #00d4aa;
+        }
+
+        .demo-slider-dot {
+            position: absolute; height: 18px; width: 18px; left: 2px; bottom: 2px;
+            background-color: #7782aa; transition: .4s; border-radius: 50%;
+        }
+
+        .demo-toggle input:checked + .demo-slider { background-color: #00d4aa; }
+
+        .demo-toggle input:checked + .demo-slider .demo-slider-dot {
+            transform: translateX(20px); background-color: #1a1f29;
         }
 
         .game-title {
             font-size: 1.4rem;
             font-weight: 700;
-            background: linear-gradient(135deg, #4ecdc4, #44a08d);
+            background: linear-gradient(135deg, #00d4aa, #4ecdc4);
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -59,9 +84,13 @@
         }
 
         .balance-display {
-            color: #4ecdc4;
+            color: #00d4aa;
             font-weight: 600;
-            font-size: 0.9rem;
+            font-size: 0.95rem;
+            background: #1a1f29;
+            border-radius: 8px;
+            padding: 6px 14px;
+            margin-left: 10px;
         }
 
         .container {
@@ -353,16 +382,28 @@
 </head>
 <body>
     <div class="header">
-        <button class="back-btn" onclick="goBack()">←</button>
-        <div class="game-title">💣 Mines</div>
+        <div class="header-left">
+            <button class="back-btn" onclick="goBack()">←</button>
+            <div class="game-title">💣 Mines</div>
+        </div>
+        <div class="demo-toggle-container">
+            <span class="demo-text" style="font-size: 0.8em; color: #7782aa; font-weight: 500;">Demo</span>
+            <label class="demo-toggle">
+                <input type="checkbox" id="demoToggle">
+                <span class="demo-slider">
+                    <span class="demo-slider-dot"></span>
+                </span>
+            </label>
+        </div>
         <div class="balance-display">💰 <span id="balanceDisplay">1000</span></div>
     </div>
-
     <div class="container">
         <div class="game-info">
             <div class="game-icon">💎</div>
             <div class="game-description">
-                Click tiles to reveal gems and avoid mines. The more gems you find, the higher your multiplier!
+                Click tiles to reveal gems and avoid mines. The more gems you find, the higher your multiplier!<br><br>
+                <b>How to Play:</b> Set your bet and number of mines, then click Start. Tap tiles to reveal gems. Cash out anytime before hitting a mine to win!<br>
+                <span style="color:#00d4aa;">Demo mode lets you play for fun without affecting your real balance or stats.</span>
             </div>
         </div>
 
@@ -442,6 +483,13 @@
 
         // Load stats from localStorage
         function loadStats() {
+            if (isDemoMode()) {
+                gameState.balance = 1000;
+                stats = { totalWins: 0, totalLosses: 0, biggestWin: 0 };
+                updateBalanceDisplay();
+                updateStatsDisplay();
+                return;
+            }
             const savedStats = localStorage.getItem('minesStats');
             if (savedStats) {
                 stats = { ...stats, ...JSON.parse(savedStats) };
@@ -456,6 +504,7 @@
         }
 
         function saveStats() {
+            if (isDemoMode()) return;
             localStorage.setItem('minesStats', JSON.stringify(stats));
             localStorage.setItem('casinoBalance', gameState.balance.toString());
         }
@@ -504,28 +553,32 @@
 
         function generateMines() {
             gameState.minePositions = [];
-            while (gameState.minePositions.length < gameState.mineCount) {
-                const pos = Math.floor(Math.random() * 25);
-                if (!gameState.minePositions.includes(pos)) {
-                    gameState.minePositions.push(pos);
+            if (isDemoMode()) {
+                // Rig demo mode: place all mines at the end, so user always wins unless they click every cell
+                let safeCells = [];
+                for (let i = 0; i < 25 - gameState.mineCount; i++) safeCells.push(i);
+                let mineCells = [];
+                for (let i = 25 - gameState.mineCount; i < 25; i++) mineCells.push(i);
+                gameState.minePositions = mineCells;
+            } else {
+                while (gameState.minePositions.length < gameState.mineCount) {
+                    const pos = Math.floor(Math.random() * 25);
+                    if (!gameState.minePositions.includes(pos)) {
+                        gameState.minePositions.push(pos);
+                    }
                 }
             }
         }
 
         function calculateMultiplier(gemsFound) {
             const totalCells = 25;
-            const safeCells = totalCells - gameState.mineCount;
-            
+            const mineCount = gameState.mineCount;
             if (gemsFound === 0) return 1.0;
-            
-            // House edge calculation - progressive multiplier
+            // Fair multiplier: product of odds at each step
             let multiplier = 1.0;
-            for (let i = 1; i <= gemsFound; i++) {
-                const remaining = safeCells - i + 1;
-                const odds = remaining / (totalCells - i);
-                multiplier *= (0.97 / odds); // 3% house edge
+            for (let i = 0; i < gemsFound; i++) {
+                multiplier *= (totalCells - i) / (totalCells - mineCount - i);
             }
-            
             return Math.max(1.0, multiplier);
         }
 
@@ -547,14 +600,12 @@
                 alert('Please enter a valid bet amount!');
                 return;
             }
-            
-            if (betAmount > gameState.balance) {
+            if (!isDemoMode() && betAmount > gameState.balance) {
                 alert('Insufficient balance!');
                 return;
             }
-            
             gameState.betAmount = betAmount;
-            gameState.balance -= betAmount;
+            if (!isDemoMode()) gameState.balance -= betAmount;
             gameState.isPlaying = true;
             gameState.revealedGems = 0;
             
@@ -571,18 +622,55 @@
 
         function revealCell(index) {
             if (!gameState.isPlaying) return;
-            
             const cell = document.querySelector(`[data-index="${index}"]`);
             if (cell.classList.contains('revealed')) return;
-            
             cell.classList.add('revealed');
-            
             if (gameState.minePositions.includes(index)) {
-                // Hit a mine!
+                if (isDemoMode()) {
+                    // In demo mode, allow loss with 15% probability, otherwise move the mine
+                    if (Math.random() < 0.15) {
+                        // Rare loss: treat as a real mine
+                        cell.classList.add('mine');
+                        cell.textContent = '💣';
+                        gameState.minePositions.forEach(mineIndex => {
+                            const mineCell = document.querySelector(`[data-index="${mineIndex}"]`);
+                            if (!mineCell.classList.contains('revealed')) {
+                                mineCell.classList.add('revealed', 'mine');
+                                mineCell.textContent = '💣';
+                            }
+                        });
+                        endGame(false);
+                        return;
+                    } else {
+                        // Usual demo mode: move the mine to a new unrevealed cell
+                        let unrevealed = [];
+                        for (let i = 0; i < 25; i++) {
+                            const c = document.querySelector(`[data-index="${i}"]`);
+                            if (!c.classList.contains('revealed') && i !== index) {
+                                unrevealed.push(i);
+                            }
+                        }
+                        if (unrevealed.length > 0) {
+                            const newMine = unrevealed[Math.floor(Math.random() * unrevealed.length)];
+                            gameState.minePositions = gameState.minePositions.filter(m => m !== index);
+                            gameState.minePositions.push(newMine);
+                            cell.classList.add('gem');
+                            cell.textContent = '💎';
+                            gameState.revealedGems++;
+                            updateMultiplierDisplay();
+                            updateStatsDisplay();
+                            const totalSafeCells = 25 - gameState.mineCount;
+                            if (gameState.revealedGems === totalSafeCells) {
+                                endGame(true);
+                            }
+                            return;
+                        }
+                        // If no unrevealed cells left, treat as normal mine
+                    }
+                }
+                // Real mode or fallback: always lose on mine
                 cell.classList.add('mine');
                 cell.textContent = '💣';
-                
-                // Reveal all mines
                 gameState.minePositions.forEach(mineIndex => {
                     const mineCell = document.querySelector(`[data-index="${mineIndex}"]`);
                     if (!mineCell.classList.contains('revealed')) {
@@ -590,18 +678,14 @@
                         mineCell.textContent = '💣';
                     }
                 });
-                
                 endGame(false);
             } else {
                 // Found a gem!
                 cell.classList.add('gem');
                 cell.textContent = '💎';
                 gameState.revealedGems++;
-                
                 updateMultiplierDisplay();
                 updateStatsDisplay();
-                
-                // Check for full win
                 const totalSafeCells = 25 - gameState.mineCount;
                 if (gameState.revealedGems === totalSafeCells) {
                     endGame(true);
@@ -614,6 +698,18 @@
             endGame(true);
         }
 
+        function showNewGameButton() {
+            let btn = document.getElementById('newGameBtn');
+            if (!btn) {
+                btn = document.createElement('button');
+                btn.id = 'newGameBtn';
+                btn.className = 'btn btn-primary';
+                btn.textContent = 'New Game';
+                btn.onclick = () => { window.location.reload(); };
+                document.getElementById('resultDisplay').appendChild(btn);
+            }
+        }
+
         function endGame(isWin) {
             gameState.isPlaying = false;
             
@@ -623,36 +719,51 @@
             
             if (isWin && gameState.revealedGems > 0) {
                 const winAmount = Math.floor(gameState.betAmount * gameState.currentMultiplier);
-                gameState.balance += winAmount;
-                
-                stats.totalWins++;
-                if (winAmount > stats.biggestWin) {
-                    stats.biggestWin = winAmount;
+                if (!isDemoMode()) gameState.balance += winAmount;
+                if (!isDemoMode()) {
+                    stats.totalWins++;
+                    if (winAmount > stats.biggestWin) stats.biggestWin = winAmount;
                 }
-                
                 resultDisplay.className = 'result-display win';
                 payoutAmount.textContent = `+${winAmount} 💰`;
                 resultMessage.textContent = `You won ${gameState.currentMultiplier.toFixed(2)}x your bet!`;
             } else {
-                stats.totalLosses++;
-                
+                if (!isDemoMode()) stats.totalLosses++;
                 resultDisplay.className = 'result-display lose';
                 payoutAmount.textContent = `-${gameState.betAmount} 💰`;
                 resultMessage.textContent = 'You hit a mine! Better luck next time.';
             }
-            
             resultDisplay.style.display = 'block';
-            
             document.getElementById('startBtn').disabled = false;
             document.getElementById('cashoutBtn').disabled = true;
-            
             updateBalanceDisplay();
             updateStatsDisplay();
-            saveStats();
+            if (!isDemoMode()) saveStats();
+
+            showNewGameButton();
         }
 
-        // Initialize the game
+        // Demo mode logic
+        function initDemoToggle() {
+            const demoToggle = document.getElementById('demoToggle');
+            if (!demoToggle) return;
+            // Load demo mode state from localStorage
+            const demoMode = localStorage.getItem('minesDemoMode') === 'true';
+            demoToggle.checked = demoMode;
+            demoToggle.addEventListener('change', function() {
+                const isDemo = this.checked;
+                localStorage.setItem('minesDemoMode', isDemo.toString());
+                window.location.reload();
+            });
+        }
+        // Overwrite balance/stat logic for demo mode
+        function isDemoMode() {
+            return document.getElementById('demoToggle')?.checked || localStorage.getItem('minesDemoMode') === 'true';
+        }
+
+        // Initialize
         window.addEventListener('load', () => {
+            initDemoToggle();
             loadStats();
             createMinefield();
             updateMultiplierDisplay();

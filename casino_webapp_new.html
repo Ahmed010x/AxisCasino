@@ -1235,10 +1235,7 @@
             <button class="btn" id="viewAllGamesBtn" style="padding: 6px 12px; font-size: 0.8em; margin: 0; background: #00d4aa; color: #1a1f29; border-radius: 6px; border: none; font-weight: 600;">View All</button>
         </div>
         <div class="carousel" id="axis-originals-carousel" style="overflow-x:auto; display:flex; gap:12px; padding-bottom:12px; margin-bottom:32px;">
-            <button class="carousel-card img-fill game" onclick="goToGame('Plinko')" style="border:none; background:none; padding:0; cursor:pointer;">
-                <img src="https://mediumrare.imgix.net/5cbb2498c956527e6584c6af216489b85bbb7a909c7d3c4e131a3be9bd1cc6bf?w=300&h=400&fit=min&auto=format" alt="Plinko">
-                <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Plinko">0</span> playing</div>
-            </button>
+            <!-- Plinko REMOVED -->
             <button class="carousel-card img-fill game" onclick="goToGame('Mines')" style="border:none; background:none; padding:0; cursor:pointer;">
                 <img src="https://mediumrare.imgix.net/15a51a2ae2895872ae2b600fa6fe8d7f8d32c9814766b66ddea2b288d04ba89c?w=360&h=472&fit=min&auto=format" alt="Mines">
                 <div class="game-player-count"><span class="game-player-dot"></span><span id="players-Mines">0</span> playing</div>
@@ -1284,7 +1281,7 @@
             <p>🎮 Full casino games are being developed</p>
             <p>🔥 Real-time multiplayer coming soon</p>
             <p>💎 VIP features and tournaments</p>
-            <button class="btn" onclick="goBack()">🔙 Back to Bot</button>
+            <button class="btn" onclick="goBack()"><span style="font-size:1.2em;margin-right:6px;">←</span>Back to Bot</button>
         </div>
     </div>
     
@@ -1441,6 +1438,27 @@
             updateBalanceDisplay();
         }
         
+        // Mines Multiplier Calculation (true odds with house edge and cap)
+        function calculateMinesMultiplier(picks, totalCells, mineCount) {
+            let multiplier = 1;
+            for (let i = 0; i < picks; i++) {
+                multiplier *= (totalCells - i) / (totalCells - mineCount - i);
+            }
+            // Apply house edge (2%)
+            multiplier *= 0.98;
+            // Cap the multiplier for UI safety
+            if (multiplier > 9999) multiplier = 9999;
+            return multiplier;
+        }
+        // Update multiplier display with 3 decimals
+        function updateMinesMultiplierDisplay(picks, totalCells, mineCount) {
+            const multiplier = calculateMinesMultiplier(picks, totalCells, mineCount);
+            const multiplierElement = document.getElementById('minesMultiplier');
+            if (multiplierElement) {
+                multiplierElement.textContent = multiplier.toFixed(3) + 'x';
+            }
+        }
+        
         function playGame(gameType) {
             // Navigate to individual game pages
             const gameRoutes = {
@@ -1481,7 +1499,7 @@
         function goToGame(game) {
             // Navigate to specific game with proper user data
             const gameRoutes = {
-                'Plinko': 'game_plinko.html',
+                // 'Plinko': 'game_plinko.html', // REMOVED
                 'Mines': 'game_mines.html',
                 'Hilo': 'game_hilo.html',
                 'Limbo': 'game_limbo.html',
