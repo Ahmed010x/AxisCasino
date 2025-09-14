@@ -72,8 +72,11 @@ PORT = int(os.environ.get("PORT", "3000"))
 RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
 HEARTBEAT_INTERVAL = int(os.environ.get("HEARTBEAT_INTERVAL", "300"))  # 5 minutes default
 
-if not BOT_TOKEN:
-    raise RuntimeError("Set BOT_TOKEN in environment or .env")
+if not BOT_TOKEN or BOT_TOKEN == "your_bot_token_here":
+    logger.error("❌ BOT_TOKEN is required! Get your token from @BotFather on Telegram")
+    logger.error("💡 Set BOT_TOKEN environment variable or create .env file")
+    logger.error("📝 Example: BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11")
+    raise RuntimeError("❌ BOT_TOKEN is required for bot operation")
 
 # Security Configuration
 MAX_BET_PER_GAME = int(os.environ.get("MAX_BET_PER_GAME", "1000"))
@@ -1592,3 +1595,86 @@ async def bonus_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
         [InlineKeyboardButton("🔙 Back to Main", callback_data="main_panel")]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+
+# --- Main Bot Application ---
+async def main():
+    """Main bot application"""
+    logger.info("🤖 Starting Telegram Casino Bot v2.0...")
+    
+    # Initialize database
+    await init_db()
+    
+    # Create application
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
+    
+    # Add command handlers
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("app", mini_app_centre_command))
+    application.add_handler(CommandHandler("webapp", webapp_command))
+    application.add_handler(CommandHandler("casino", webapp_command))
+    application.add_handler(CommandHandler("help", help_command))
+    
+    # Add animated emoji game handlers
+    application.add_handler(CommandHandler("dice", dice_game_command))
+    application.add_handler(CommandHandler("basketball", basketball_game_command))
+    application.add_handler(CommandHandler("soccer", soccer_game_command))
+    
+    # Add callback handler
+    application.add_handler(CallbackQueryHandler(handle_callback))
+    
+    # Setup WebApp menu button
+    await setup_webapp_menu_button(application)
+    
+    # Start web server for WebApp and health checks
+    web_runner = await start_web_server()
+    
+    # Start heartbeat task if on Render
+    heartbeat_task = None
+    if RENDER_EXTERNAL_URL:
+        heartbeat_task = asyncio.create_task(keep_alive_heartbeat())
+    
+    # Setup graceful shutdown
+    async def shutdown_handler():
+        logger.info("🛑 Shutting down bot...")
+        if heartbeat_task:
+            heartbeat_task.cancel()
+        await web_runner.cleanup()
+        await application.shutdown()
+        logger.info("✅ Bot shutdown complete")
+    
+    # Handle signals for graceful shutdown
+    def signal_handler(signum, frame):
+        logger.info(f"Received signal {signum}")
+        asyncio.create_task(shutdown_handler())
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    try:
+        # Start the bot
+        logger.info("🚀 Starting bot polling...")
+        await application.initialize()
+        await application.start()
+        await application.updater.start_polling()
+        
+        logger.info("✅ Bot is running! Press Ctrl+C to stop.")
+        
+        # Keep the bot running
+        while True:
+            await asyncio.sleep(1)
+            
+    except KeyboardInterrupt:
+        logger.info("👋 Bot stopped by user")
+    except Exception as e:
+        logger.error(f"❌ Bot error: {e}")
+    finally:
+        await shutdown_handler()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("👋 Bot stopped")
+    except Exception as e:
+        logger.error(f"❌ Fatal error: {e}")
+        sys.exit(1)
