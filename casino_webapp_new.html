@@ -1231,7 +1231,9 @@
             </div>
         </div>
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
-            <h3 class="axis-originals-heading" style="color:#ffffff; font-size:1.1em; font-weight:600; margin:0; letter-spacing:0px;">🎮 Originals</h3>
+            <h3 class="axis-originals-heading" style="color:#ffffff; font-size:1.1em; font-weight:600; margin:0; letter-spacing:0px; display:flex; align-items:center; gap:8px;">
+                <img src="https://cdn-icons-png.flaticon.com/512/17/17521.png" alt="Axis Originals" style="width:1.5em; height:1.5em; vertical-align:middle; margin-right:4px;">Axis Originals
+            </h3>
             <button class="btn" id="viewAllGamesBtn" style="padding: 6px 12px; font-size: 0.8em; margin: 0; background: #00d4aa; color: #1a1f29; border-radius: 6px; border: none; font-weight: 600;">View All</button>
         </div>
         <div class="carousel" id="axis-originals-carousel" style="overflow-x:auto; display:flex; gap:12px; padding-bottom:12px; margin-bottom:32px;">
@@ -1282,6 +1284,13 @@
             <p>🔥 Real-time multiplayer coming soon</p>
             <p>💎 VIP features and tournaments</p>
             <button class="btn" onclick="goBack()"><span style="font-size:1.2em;margin-right:6px;">←</span>Back to Bot</button>
+        </div>
+        
+        <!-- --- Roulette Number Selection Section --- -->
+        <div class="roulette-number-section" style="background:#181f29; border-radius:12px; padding:18px 12px 16px 12px; margin-bottom:28px; border:1px solid #2c3441; max-width:500px; margin-left:auto; margin-right:auto;">
+            <h3 style="color:#fff; font-size:1.05em; font-weight:600; margin-bottom:12px; text-align:center;">🎯 Select a Roulette Number</h3>
+            <div id="rouletteNumberGrid" style="display:grid; grid-template-columns:repeat(6,1fr); gap:8px; justify-items:center; margin-bottom:14px;"></div>
+            <button class="btn" id="goToRouletteBtn" style="width:100%;" disabled>Go to Roulette</button>
         </div>
     </div>
     
@@ -1414,7 +1423,9 @@
             const currentBalance = getCurrentBalance();
             const balanceElement = document.querySelector('.balance-amount');
             if (balanceElement) {
-                balanceElement.textContent = currentBalance + ' chips';
+                // Always show two decimal points
+                const formatted = Number(currentBalance).toFixed(2);
+                balanceElement.textContent = formatted + ' chips';
             }
         }
         
@@ -1496,69 +1507,32 @@
             window.location.href = '/all-games'; // Change this to your actual all games page route
         }
         
-        function goToGame(game) {
+        function goToGame(game, rouletteNumber) {
             // Navigate to specific game with proper user data
             const gameRoutes = {
-                // 'Plinko': 'game_plinko.html', // REMOVED
-                'Mines': 'game_mines.html',
-                'Hilo': 'game_hilo.html',
-                'Limbo': 'game_limbo.html',
-                'Roulette': 'game_roulette.html',
-                'Crash': 'game_crash.html',
-                'Dice': 'game_dice.html',
-                'Blackjack': 'game_blackjack.html',
-                'Coin Flip': 'game_coinflip.html',
                 'Slots': 'game_slots.html',
-                'Poker': 'game_poker.html'
+                'Blackjack': 'game_blackjack.html',
+                'Roulette': 'game_roulette.html',
+                'Dice': 'game_dice.html',
+                'Poker': 'game_poker.html',
+                'Crash': 'game_crash.html',
+                'Mines': 'game_mines.html',
+                'Plinko': 'game_plinko.html',
+                'Limbo': 'game_limbo.html',
+                'Hi-Lo': 'game_hilo.html',
+                'Coin Flip': 'game_coinflip.html'
             };
-            
             const route = gameRoutes[game];
             if (route) {
-                // Get current user data and balance
-                const currentBalance = getCurrentBalance();
                 const userId = getUserId();
                 const userName = getUserName();
-                
-                // Check if demo mode is enabled
-                const demoMode = localStorage.getItem('demoMode') === 'true' ? '1' : '0';
-                
-                // Save current state before navigation
-                localStorage.setItem('userBalance', currentBalance);
-                localStorage.setItem('userId', userId);
-                localStorage.setItem('userName', userName);
-                
-                // Build URL with all parameters including demo mode
-                const params = new URLSearchParams({
-                    userId: userId,
-                    userName: userName,
-                    balance: currentBalance,
-                    returnUrl: 'casino_webapp_new.html',
-                    demo: demoMode
-                });
-                
-                const gameUrl = `${route}?${params.toString()}`;
-                
-                // Use Telegram WebApp navigation if available
-                if (webApp && webApp.openTelegramLink) {
-                    try {
-                        webApp.openTelegramLink(gameUrl);
-                    } catch (e) {
-                        window.location.href = gameUrl;
-                    }
-                } else {
-                    window.location.href = gameUrl;
+                const balance = getCurrentBalance();
+                const demo = localStorage.getItem('demoMode') === 'true' ? '1' : '0';
+                let url = `${route}?user_id=${encodeURIComponent(userId)}&user_name=${encodeURIComponent(userName)}&balance=${encodeURIComponent(balance)}&demo=${demo}`;
+                if (game === 'Roulette' && rouletteNumber) {
+                    url += `&number=${encodeURIComponent(rouletteNumber)}`;
                 }
-            } else {
-                // Fallback for unknown games
-                const message = '🎮 ' + game + ' is coming soon!\n\n' +
-                              '🚀 We are building an amazing casino experience\n' +
-                              '💫 Stay tuned for updates!';
-                
-                if (webApp && webApp.showAlert) {
-                    webApp.showAlert(message);
-                } else {
-                    alert(message);
-                }
+                window.location.href = url;
             }
         }
         
@@ -1666,7 +1640,7 @@
             div.innerHTML = `
                 <div class="win-details">
                     <span class="winner-name"><span style="color:#4ecdc4;">${win.user}</span> won <span class="win-amount">+${win.amount} chips</span> in <span style="color:#ff6b6b;">${win.game}</span></span>
-                    <span class="time-ago">${win.time}</span>
+                                       <span class="time-ago">${win.time}</span>
                 </div>
             `;
             return div;
@@ -1775,6 +1749,46 @@
         function closeAllGamesModal() {
             document.getElementById('allGamesModal').style.display = 'none';
         }
+        
+        // --- Roulette Number Selection Section ---
+        const rouletteNumbers = ["0","28","9","26","30","11","7","20","32","17","5","22","34","15","3","24","36","13","1","00","27","10","25","29","12","8","19","31","18","6","21","33","16","4","23","35","14","2"];
+        let selectedRouletteNumber = null;
+        function renderRouletteNumberGrid() {
+            const grid = document.getElementById('rouletteNumberGrid');
+            if (!grid) return;
+            grid.innerHTML = '';
+            rouletteNumbers.forEach(num => {
+                const btn = document.createElement('button');
+                btn.textContent = num;
+                btn.className = 'btn';
+                btn.style.padding = '8px 0';
+                btn.style.fontSize = '1em';
+                btn.style.width = '100%';
+                btn.style.background = (selectedRouletteNumber === num) ? 'linear-gradient(135deg,#00d4aa,#2edd91)' : '#232b39';
+                btn.style.color = (selectedRouletteNumber === num) ? '#1a1f29' : '#b1bad3';
+                btn.style.border = (selectedRouletteNumber === num) ? '2px solid #00d4aa' : '1px solid #2c3441';
+                btn.style.borderRadius = '8px';
+                btn.style.fontWeight = '700';
+                btn.style.margin = '0';
+                btn.onclick = function() {
+                    selectedRouletteNumber = num;
+                    renderRouletteNumberGrid();
+                    document.getElementById('goToRouletteBtn').disabled = false;
+                };
+                grid.appendChild(btn);
+            });
+        }
+        document.addEventListener('DOMContentLoaded', function() {
+            renderRouletteNumberGrid();
+            const goBtn = document.getElementById('goToRouletteBtn');
+            if (goBtn) {
+                goBtn.onclick = function() {
+                    if (!selectedRouletteNumber) return;
+                    // Use goToGame with number param
+                    goToGame('Roulette', selectedRouletteNumber);
+                };
+            }
+        });
     </script>
 </body>
 </html>

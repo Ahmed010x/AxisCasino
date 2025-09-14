@@ -587,7 +587,16 @@
 
         function drawNextCard() {
             if (gameState.deck.length === 0) gameState.deck = shuffleDeck();
-            gameState.currentCard = gameState.deck.pop();
+            let prevCard = gameState.currentCard;
+            let nextCard;
+            do {
+                nextCard = gameState.deck.pop();
+                // If this is the first card, or if 'same' is allowed, accept any card
+                if (!prevCard) break;
+                // If 'same' button is visible (Ace or King), allow same value
+                if ((prevCard.value === 1 || prevCard.value === 13)) break;
+            } while (nextCard.value === prevCard.value);
+            gameState.currentCard = nextCard;
             displayCard(document.getElementById('currentCard'), gameState.currentCard);
             updateHiloOddsDisplay(gameState.currentCard.value);
             updatePredictionButtons(gameState.currentCard.value);
