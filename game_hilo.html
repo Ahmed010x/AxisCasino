@@ -384,7 +384,8 @@
         <div class="game-info">
             <div class="game-icon">🎯</div>
             <div class="game-description">
-                Predict if the next card will be higher or lower than the current card. Ace is low, King is high!
+                Guess if the next card will be higher or lower. Continue your streak for bigger rewards, or cash out anytime! Ace is low, King is high.<br>
+                <span id="hilo-odds" style="display:block; margin-top:10px; color:#00d4aa; font-weight:600; font-size:0.98em;"></span>
             </div>
         </div>
 
@@ -395,28 +396,31 @@
             </div>
         </div>
 
-        <div class="card-display">
-            <div class="card" id="firstCard">
+        <div class="card-display" id="cardDisplay">
+            <div class="card" id="currentCard">
                 <div class="card-value">?</div>
                 <div class="card-suit">♠</div>
             </div>
-            <div class="vs-text">VS</div>
-            <div class="card hidden" id="secondCard"></div>
         </div>
 
         <div class="prediction-buttons">
-            <button class="prediction-btn" id="higherBtn" onclick="selectPrediction('higher')">
+            <button class="prediction-btn" id="higherBtn" onclick="makePrediction('higher')">
                 <div class="prediction-icon">📈</div>
-                <div>Higher</div>
+                <div>Higher <span id="odds-higher" style="color:#00d4aa;font-size:0.95em;font-weight:600;"></span></div>
             </button>
-            <button class="prediction-btn" id="lowerBtn" onclick="selectPrediction('lower')">
+            <button class="prediction-btn" id="lowerBtn" onclick="makePrediction('lower')">
                 <div class="prediction-icon">📉</div>
-                <div>Lower</div>
+                <div>Lower <span id="odds-lower" style="color:#00d4aa;font-size:0.95em;font-weight:600;"></span></div>
+            </button>
+            <button class="prediction-btn" id="sameBtn" onclick="makePrediction('same')" style="display:none;">
+                <div class="prediction-icon">🤝</div>
+                <div>Same <span id="odds-same" style="color:#ffc107;font-size:0.95em;font-weight:600;"></span></div>
             </button>
         </div>
 
         <div class="action-buttons">
-            <button class="btn btn-primary" id="playBtn" onclick="playGame()">Deal Cards</button>
+            <button class="btn btn-primary" id="startBtn" onclick="startGame()">Start Game</button>
+            <button class="btn btn-secondary" id="cashoutBtn" onclick="cashOut()" disabled>Cash Out</button>
             <button class="btn btn-secondary" id="newGameBtn" onclick="newGame()" disabled>New Game</button>
         </div>
 
@@ -427,16 +431,20 @@
 
         <div class="game-stats">
             <div class="stat-item">
+                <span class="stat-value" id="currentStreak">0</span>
+                <span class="stat-label">Current Streak</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="potentialPayout">0</span>
+                <span class="stat-label">Potential Payout</span>
+            </div>
+            <div class="stat-item">
                 <span class="stat-value" id="totalWins">0</span>
                 <span class="stat-label">Total Wins</span>
             </div>
             <div class="stat-item">
                 <span class="stat-value" id="totalLosses">0</span>
                 <span class="stat-label">Total Losses</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-value" id="totalTies">0</span>
-                <span class="stat-label">Total Ties</span>
             </div>
             <div class="stat-item">
                 <span class="stat-value" id="biggestWin">0</span>
@@ -449,16 +457,17 @@
         let gameState = {
             isPlaying: false,
             betAmount: 10,
-            prediction: null,
-            firstCard: null,
-            secondCard: null,
-            balance: 1000
+            balance: 1000,
+            streak: 0,
+            currentCard: null,
+            lastPrediction: null,
+            deck: [],
+            potentialPayout: 0
         };
 
         let stats = {
             totalWins: 0,
             totalLosses: 0,
-            totalTies: 0,
             biggestWin: 0
         };
 
@@ -517,6 +526,209 @@
             {value: 13, name: 'K', suit: '♣', color: 'black'}
         ];
 
+        function shuffleDeck() {
+            let deck = [...cards];
+            for (let i = deck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [deck[i], deck[j]] = [deck[j], deck[i]];
+            }
+            return deck;
+        }
+
+        function startGame() {
+            const betInput = document.getElementById('betAmount');
+            const betAmount = parseInt(betInput.value);
+            if (!betAmount || betAmount <= 0) {
+                alert('Please enter a valid bet amount!');
+                return;
+            }
+            if (betAmount > gameState.balance) {
+                alert('Insufficient balance!');
+                return;
+            }
+            gameState.betAmount = betAmount;
+            gameState.balance -= betAmount;
+            gameState.streak = 0;
+            gameState.potentialPayout = betAmount;
+            gameState.deck = shuffleDeck();
+            gameState.isPlaying = true;
+            gameState.lastPrediction = null;
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('higherBtn').disabled = false;
+            document.getElementById('lowerBtn').disabled = false;
+            document.getElementById('cashoutBtn').disabled = true;
+            document.getElementById('newGameBtn').disabled = true;
+            document.getElementById('resultDisplay').style.display = 'none';
+            betInput.disabled = true; // Disable bet input during game
+            drawNextCard();
+            updateStatsDisplay();
+            updateBalanceDisplay();
+        }
+
+        function updatePredictionButtons(cardValue) {
+            // Enable/disable buttons based on card value
+            const higherBtn = document.getElementById('higherBtn');
+            const lowerBtn = document.getElementById('lowerBtn');
+            const sameBtn = document.getElementById('sameBtn');
+            higherBtn.disabled = false;
+            lowerBtn.disabled = false;
+            sameBtn.disabled = false;
+            sameBtn.style.display = 'none';
+            if (cardValue === 1) { // Ace: can't go lower
+                lowerBtn.disabled = true;
+                sameBtn.style.display = 'inline-flex';
+            } else if (cardValue === 13) { // King: can't go higher
+                higherBtn.disabled = true;
+                sameBtn.style.display = 'inline-flex';
+            } else {
+                sameBtn.style.display = 'none';
+            }
+        }
+
+        function drawNextCard() {
+            if (gameState.deck.length === 0) gameState.deck = shuffleDeck();
+            gameState.currentCard = gameState.deck.pop();
+            displayCard(document.getElementById('currentCard'), gameState.currentCard);
+            updateHiloOddsDisplay(gameState.currentCard.value);
+            updatePredictionButtons(gameState.currentCard.value);
+        }
+
+        function makePrediction(prediction) {
+            if (!gameState.isPlaying) return;
+            document.getElementById('higherBtn').disabled = true;
+            document.getElementById('lowerBtn').disabled = true;
+            document.getElementById('sameBtn').disabled = true;
+            gameState.lastPrediction = prediction;
+            setTimeout(() => {
+                const prevCard = gameState.currentCard;
+                drawNextCard();
+                const nextCard = gameState.currentCard;
+                let win = false;
+                if (prediction === 'same') {
+                    if (nextCard.value === prevCard.value) {
+                        win = true;
+                    }
+                } else if (nextCard.value === prevCard.value) {
+                    endGame(false, 'It\'s a tie! You lose your streak.');
+                    return;
+                } else if (
+                    (prediction === 'higher' && nextCard.value > prevCard.value) ||
+                    (prediction === 'lower' && nextCard.value < prevCard.value)
+                ) {
+                    win = true;
+                }
+                if (win) {
+                    gameState.streak++;
+                    // Use dynamic multiplier
+                    const multiplier = getMultiplier(prediction, prevCard.value);
+                    gameState.potentialPayout = Math.round(gameState.potentialPayout * multiplier * 100) / 100;
+                    updateStatsDisplay();
+                    document.getElementById('cashoutBtn').disabled = false;
+                    updatePredictionButtons(nextCard.value);
+                } else {
+                    endGame(false, 'Wrong guess! Streak lost.');
+                }
+            }, 700);
+        }
+
+        function cashOut() {
+            if (!gameState.isPlaying || gameState.streak === 0) return;
+            endGame(true, `You cashed out!`);
+        }
+
+        function endGame(won, message) {
+            gameState.isPlaying = false;
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('higherBtn').disabled = true;
+            document.getElementById('lowerBtn').disabled = true;
+            document.getElementById('cashoutBtn').disabled = true;
+            document.getElementById('newGameBtn').disabled = false;
+            document.getElementById('betAmount').disabled = false; // Re-enable bet input after game
+            const resultDisplay = document.getElementById('resultDisplay');
+            const payoutAmount = document.getElementById('payoutAmount');
+            const resultMessage = document.getElementById('resultMessage');
+            if (won) {
+                gameState.balance += gameState.potentialPayout;
+                stats.totalWins++;
+                if (gameState.potentialPayout > stats.biggestWin) stats.biggestWin = gameState.potentialPayout;
+                resultDisplay.className = 'result-display win';
+                payoutAmount.textContent = `+${gameState.potentialPayout} 💰`;
+                resultMessage.textContent = message + ` Streak: ${gameState.streak}`;
+            } else {
+                stats.totalLosses++;
+                resultDisplay.className = 'result-display lose';
+                payoutAmount.textContent = `-${gameState.betAmount} 💰`;
+                resultMessage.textContent = message;
+            }
+            resultDisplay.style.display = 'block';
+            updateBalanceDisplay();
+            updateStatsDisplay();
+            saveStats();
+        }
+
+        function newGame() {
+            gameState.isPlaying = false;
+            gameState.streak = 0;
+            gameState.potentialPayout = 0;
+            gameState.currentCard = null;
+            document.getElementById('currentCard').innerHTML = '<div class="card-value">?</div><div class="card-suit">♠</div>';
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('higherBtn').disabled = true;
+            document.getElementById('lowerBtn').disabled = true;
+            document.getElementById('cashoutBtn').disabled = true;
+            document.getElementById('newGameBtn').disabled = true;
+            document.getElementById('resultDisplay').style.display = 'none';
+            document.getElementById('betAmount').disabled = false; // Re-enable bet input for new game
+            updateStatsDisplay();
+        }
+
+        function updateStatsDisplay() {
+            document.getElementById('currentStreak').textContent = gameState.streak;
+            document.getElementById('potentialPayout').textContent = gameState.potentialPayout;
+            document.getElementById('totalWins').textContent = stats.totalWins;
+            document.getElementById('totalLosses').textContent = stats.totalLosses;
+            document.getElementById('biggestWin').textContent = stats.biggestWin;
+        }
+
+        // HiLo Odds Calculation (for display)
+        function calculateHiloOdds(currentCardValue) {
+            let higher = 0, lower = 0, same = 0;
+            for (let v = 1; v <= 13; v++) {
+                if (v > currentCardValue) higher += 4;
+                else if (v < currentCardValue) lower += 4;
+                else same += 4;
+            }
+            const total = 51; // 1 card is already shown
+            return {
+                higher: (higher / total * 100).toFixed(1),
+                lower: (lower / total * 100).toFixed(1),
+                same: (same / total * 100).toFixed(1),
+                higherRaw: higher,
+                lowerRaw: lower,
+                sameRaw: same,
+                total: total
+            };
+        }
+
+        function getMultiplier(prediction, currentCardValue) {
+            const odds = calculateHiloOdds(currentCardValue);
+            let prob = 0;
+            if (prediction === 'higher') prob = odds.higherRaw / odds.total;
+            else if (prediction === 'lower') prob = odds.lowerRaw / odds.total;
+            else if (prediction === 'same') prob = odds.sameRaw / odds.total;
+            // House edge: 0.95 payout ratio (reduced from 0.98)
+            return prob > 0 ? Math.max(1.01, (0.95 / prob)) : 0;
+        }
+
+        function updateHiloOddsDisplay(cardValue) {
+            const odds = calculateHiloOdds(cardValue);
+            document.getElementById('odds-higher').textContent = `(${odds.higher}%)`;
+            document.getElementById('odds-lower').textContent = `(${odds.lower}%)`;
+            if (document.getElementById('odds-same')) {
+                document.getElementById('odds-same').textContent = `(${odds.same}%)`;
+            }
+        }
+
         // Load stats from localStorage
         function loadStats() {
             const savedStats = localStorage.getItem('hiloStats');
@@ -537,13 +749,6 @@
             localStorage.setItem('casinoBalance', gameState.balance.toString());
         }
 
-        function updateStatsDisplay() {
-            document.getElementById('totalWins').textContent = stats.totalWins;
-            document.getElementById('totalLosses').textContent = stats.totalLosses;
-            document.getElementById('totalTies').textContent = stats.totalTies;
-            document.getElementById('biggestWin').textContent = stats.biggestWin;
-        }
-
         function updateBalanceDisplay() {
             document.getElementById('balanceDisplay').textContent = gameState.balance;
         }
@@ -552,173 +757,20 @@
             window.history.back();
         }
 
-        function getRandomCard() {
-            return cards[Math.floor(Math.random() * cards.length)];
-        }
-
         function displayCard(cardElement, card) {
             cardElement.querySelector('.card-value').textContent = card.name;
             cardElement.querySelector('.card-suit').textContent = card.suit;
             cardElement.className = `card ${card.color}`;
         }
 
-        function selectPrediction(pred) {
-            if (gameState.isPlaying) return;
-            
-            gameState.prediction = pred;
-            
-            // Update button states
-            document.getElementById('higherBtn').classList.remove('selected');
-            document.getElementById('lowerBtn').classList.remove('selected');
-            
-            if (pred === 'higher') {
-                document.getElementById('higherBtn').classList.add('selected');
-            } else {
-                document.getElementById('lowerBtn').classList.add('selected');
-            }
-        }
-
-        function playGame() {
-            const betInput = document.getElementById('betAmount');
-            const betAmount = parseInt(betInput.value);
-            
-            if (!betAmount || betAmount <= 0) {
-                alert('Please enter a valid bet amount!');
-                return;
-            }
-            
-            if (betAmount > gameState.balance) {
-                alert('Insufficient balance!');
-                return;
-            }
-            
-            if (!gameState.prediction) {
-                alert('Please select Higher or Lower!');
-                return;
-            }
-            
-            gameState.betAmount = betAmount;
-            gameState.balance -= betAmount;
-            gameState.isPlaying = true;
-            
-            // Deal first card
-            gameState.firstCard = getRandomCard();
-            displayCard(document.getElementById('firstCard'), gameState.firstCard);
-            
-            updateBalanceDisplay();
-            
-            // Disable controls
-            document.getElementById('playBtn').disabled = true;
-            document.getElementById('higherBtn').disabled = true;
-            document.getElementById('lowerBtn').disabled = true;
-            document.getElementById('resultDisplay').style.display = 'none';
-            
-            // Deal second card after delay
-            setTimeout(() => {
-                dealSecondCard();
-            }, 1000);
-        }
-
-        function dealSecondCard() {
-            gameState.secondCard = getRandomCard();
-            
-            const secondCardElement = document.getElementById('secondCard');
-            secondCardElement.classList.add('revealed');
-            
-            setTimeout(() => {
-                secondCardElement.classList.remove('hidden');
-                displayCard(secondCardElement, gameState.secondCard);
-                
-                // Determine result
-                determineResult();
-            }, 300);
-        }
-
-        function determineResult() {
-            const firstValue = gameState.firstCard.value;
-            const secondValue = gameState.secondCard.value;
-            
-            let isWin = false;
-            let isTie = false;
-            
-            if (firstValue === secondValue) {
-                isTie = true;
-            } else if (gameState.prediction === 'higher' && secondValue > firstValue) {
-                isWin = true;
-            } else if (gameState.prediction === 'lower' && secondValue < firstValue) {
-                isWin = true;
-            }
-            
-            showResult(isWin, isTie);
-        }
-
-        function showResult(isWin, isTie) {
-            const resultDisplay = document.getElementById('resultDisplay');
-            const payoutAmount = document.getElementById('payoutAmount');
-            const resultMessage = document.getElementById('resultMessage');
-            
-            if (isTie) {
-                // Return bet on tie
-                gameState.balance += gameState.betAmount;
-                stats.totalTies++;
-                
-                resultDisplay.className = 'result-display tie';
-                payoutAmount.textContent = `${gameState.betAmount} 💰 Returned`;
-                resultMessage.textContent = 'It\'s a tie! Your bet has been returned.';
-            } else if (isWin) {
-                const winAmount = gameState.betAmount * 2;
-                gameState.balance += winAmount;
-                stats.totalWins++;
-                
-                if (winAmount > stats.biggestWin) {
-                    stats.biggestWin = winAmount;
-                }
-                
-                resultDisplay.className = 'result-display win';
-                payoutAmount.textContent = `+${winAmount} 💰`;
-                resultMessage.textContent = 'Correct prediction! You doubled your bet!';
-            } else {
-                stats.totalLosses++;
-                
-                resultDisplay.className = 'result-display lose';
-                payoutAmount.textContent = `-${gameState.betAmount} 💰`;
-                resultMessage.textContent = 'Wrong prediction. Better luck next time!';
-            }
-            
-            resultDisplay.style.display = 'block';
-            document.getElementById('newGameBtn').disabled = false;
-            
-            updateBalanceDisplay();
-            updateStatsDisplay();
-            saveStats();
-        }
-
-        function newGame() {
-            gameState.isPlaying = false;
-            gameState.prediction = null;
-            gameState.firstCard = null;
-            gameState.secondCard = null;
-            
-            // Reset UI
-            document.getElementById('firstCard').innerHTML = '<div class="card-value">?</div><div class="card-suit">♠</div>';
-            document.getElementById('firstCard').className = 'card';
-            
-            document.getElementById('secondCard').innerHTML = '';
-            document.getElementById('secondCard').className = 'card hidden';
-            
-            document.getElementById('higherBtn').classList.remove('selected');
-            document.getElementById('lowerBtn').classList.remove('selected');
-            
-            document.getElementById('playBtn').disabled = false;
-            document.getElementById('higherBtn').disabled = false;
-            document.getElementById('lowerBtn').disabled = false;
-            document.getElementById('newGameBtn').disabled = true;
-            document.getElementById('resultDisplay').style.display = 'none';
-        }
-
         // Initialize the game
         window.addEventListener('load', () => {
             loadStats();
+            document.getElementById('higherBtn').disabled = true;
+            document.getElementById('lowerBtn').disabled = true;
+            document.getElementById('sameBtn').disabled = true;
+            document.getElementById('sameBtn').style.display = 'none';
+            document.getElementById('cashoutBtn').disabled = true;
         });
     </script>
 </body>

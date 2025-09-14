@@ -23,8 +23,8 @@
             font-family: 'Inter', sans-serif;
             background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
             color: #ffffff;
-            min-height: 100vh;
-            height: 100vh;
+            min-height: 100dvh;
+            height: 100dvh;
             overflow-x: hidden;
             overflow-y: auto;
             /* Handle safe areas for devices with notches */
@@ -38,8 +38,8 @@
             max-width: 500px;
             margin: 0 auto;
             padding: 12px;
-            min-height: 100vh;
-            height: 100vh;
+            min-height: 100dvh;
+            height: 100dvh;
             display: flex;
             flex-direction: column;
         }
@@ -47,204 +47,31 @@
         /* Mobile optimizations */
         @media (max-width: 480px) {
             body {
-                height: 100vh;
-                height: 100dvh; /* Dynamic viewport height for mobile */
+                height: 100dvh;
+                min-height: 100dvh;
             }
-            
             .game-container {
                 padding: 8px;
-                height: 100vh;
-                height: 100dvh; /* Dynamic viewport height for mobile */
+                height: 100dvh;
+                min-height: 100dvh;
             }
-            
             .header {
                 padding: 12px 0;
                 margin-bottom: 12px;
                 flex-shrink: 0;
             }
-            
             .game-board {
                 margin: 12px 0;
-                padding: 15px;
-                flex: 1;
-                min-height: 0;
-            }
-            
-            .plinko-board {
-                min-height: 250px;
-                max-height: none;
-            }
-            
-            .controls {
-                padding: 12px;
-                flex-shrink: 0;
-            }
-            
-            .stats {
-                margin-top: 12px;
-                flex-shrink: 0;
-            }
-            
-            /* Improve touch targets */
-            .mode-btn, .difficulty-btn {
-                padding: 12px 8px;
-                font-size: 0.9em;
-                min-height: 40px;
-            }
-            
-            .play-btn {
-                padding: 16px;
-                font-size: 1.1em;
-                min-height: 48px;
-            }
-            
-            .back-btn {
-                padding: 10px 14px;
-                font-size: 0.95em;
-                min-height: 40px;
-            }
-            
-            .bet-btn {
                 padding: 10px;
-                font-size: 0.9em;
-                min-height: 40px;
+                flex: 1 1 0%;
+                min-height: 0;
+                overflow: auto;
             }
-            
-            /* Improve multiplier slots visibility */
-            .multiplier-slots {
-                height: 40px;
-            }
-            
-            .multiplier-slot {
-                font-size: 0.75em;
-                font-weight: 700;
-            }
-            
-            /* Better spacing for controls */
-            .controls {
-                gap: 8px;
-            }
-            
-            .control-group {
-                margin-bottom: 10px;
-            }
-            
-            /* Improve bet input */
-            .bet-input {
-                padding: 12px 14px;
-                font-size: 1em;
-                min-height: 44px;
-                -webkit-appearance: none;
-                -moz-appearance: textfield;
-                appearance: none;
-            }
-            
-            .bet-input::-webkit-outer-spin-button,
-            .bet-input::-webkit-inner-spin-button {
-                -webkit-appearance: none;
-                appearance: none;
-                margin: 0;
-            }
-            
-            /* Responsive text */
-            .header h1 {
-                font-size: 1.8em;
-            }
-            
-            .balance {
-                font-size: 1em;
-            }
-            
-            .demo-mode {
-                font-size: 0.85em;
-                padding: 6px 12px;
-            }
-            
-            /* Adjust peg sizes for mobile */
-            .peg {
-                width: 8px;
-                height: 8px;
-            }
-            
-            /* Better ball visibility */
-            .ball {
-                width: 12px;
-                height: 12px;
-            }
-            
-            /* Auto controls mobile optimization */
-            .auto-controls {
-                padding: 14px;
-                margin-top: 12px;
-            }
-            
-            .auto-setting {
-                margin-bottom: 12px;
-                flex-wrap: wrap;
-                gap: 8px;
-            }
-            
-            .auto-setting label {
-                font-size: 0.95em;
-                min-width: 120px;
-            }
-            
-            .auto-setting input[type="number"] {
-                padding: 10px 12px;
-                font-size: 1em;
-                min-height: 44px;
-                flex: 1;
-                min-width: 80px;
-            }
-            
-            /* Stats section mobile optimization */
-            .stats {
-                grid-template-columns: 1fr;
-                gap: 8px;
-                margin-top: 15px;
-            }
-            
-            .stat-card {
-                padding: 12px 10px;
-                font-size: 0.9em;
-            }
-            
-            .stat-value {
-                font-size: 1.3em;
-            }
-            
-            .stat-label {
-                font-size: 0.8em;
-            }
-            
-            .auto-stats {
-                font-size: 0.8em;
-                margin-top: 8px;
-            }
-            
-            .difficulty-info {
-                font-size: 0.8em;
-                margin-top: 6px;
-            }
-            
-            /* Touch improvements */
-            button, input, .mode-btn, .difficulty-btn {
-                -webkit-tap-highlight-color: rgba(78, 205, 196, 0.3);
-                touch-action: manipulation;
-            }
-            
-            .game-board {
-                touch-action: none;
-                -webkit-touch-callout: none;
-            }
-            
-            /* Prevent text selection on game elements */
-            .multiplier-slot, .peg, .ball {
-                -webkit-user-select: none;
-                -moz-user-select: none;
-                -ms-user-select: none;
-                user-select: none;
-                pointer-events: none;
+            .plinko-board {
+                min-height: 0 !important;
+                height: 100% !important;
+                max-height: 400px;
+                flex: 1 1 0%;
             }
         }
         
@@ -253,84 +80,13 @@
             .game-container {
                 padding: 6px;
             }
-            
-            .header {
-                padding: 10px 0;
-                margin-bottom: 10px;
-            }
-            
             .game-board {
-                margin: 10px 0;
-                padding: 12px;
+                margin: 8px 0;
+                padding: 6px;
             }
-            
             .plinko-board {
-                min-height: 220px;
-            }
-            
-            .controls {
-                padding: 10px;
-            }
-            
-            .stats {
-                margin-top: 10px;
-                gap: 8px;
-            }
-            
-            .header h1 {
-                font-size: 1.4em;
-            }
-            
-            .balance-amount {
-                font-size: 1em;
-            }
-            
-            .mode-btn, .difficulty-btn {
-                padding: 10px 6px;
-                font-size: 0.8em;
-                min-height: 36px;
-            }
-            
-            .bet-btn {
-                padding: 8px 6px;
-                font-size: 0.8em;
-                min-height: 36px;
-            }
-            
-            .play-btn {
-                padding: 14px;
-                font-size: 1em;
-                min-height: 44px;
-            }
-            
-            .multiplier-slot {
-                font-size: 0.65em;
-            }
-            
-            .multiplier-slots {
-                height: 35px;
-            }
-            
-            .peg {
-                width: 6px;
-                height: 6px;
-            }
-            
-            .ball {
-                width: 8px;
-                height: 8px;
-            }
-            
-            .stat-card {
-                padding: 12px 8px;
-            }
-            
-            .stat-label {
-                font-size: 0.7em;
-            }
-            
-            .stat-value {
-                font-size: 1em;
+                min-height: 0 !important;
+                max-height: 300px;
             }
         }
         
@@ -339,49 +95,19 @@
             .game-container {
                 padding: 6px;
             }
-            
             .header {
                 padding: 8px 0;
                 margin-bottom: 8px;
             }
-            
             .game-board {
                 margin: 8px 0;
-                padding: 12px;
+                padding: 10px;
             }
-            
             .plinko-board {
-                min-height: 200px;
-            }
-            
-            .controls {
-                padding: 8px;
-                gap: 6px;
-            }
-            
-            .control-group {
-                margin-bottom: 6px;
-            }
-            
-            .stats {
-                margin-top: 8px;
-                gap: 6px;
-            }
-            
-            .stat-card {
-                padding: 8px 6px;
-            }
-            
-            .header h1 {
-                font-size: 1.2em;
-            }
-            
-            .multiplier-slots {
-                height: 30px;
-            }
-            
-            .multiplier-slot {
-                font-size: 0.6em;
+                min-height: 0 !important;
+                height: 100% !important;
+                max-height: 400px;
+                flex: 1 1 0%;
             }
         }
         
@@ -459,8 +185,8 @@
             margin: 20px 0;
             border: 1px solid rgba(78, 205, 196,0.2);
             position: relative;
-            overflow: hidden;
-            flex: 1;
+            overflow: auto;
+            flex: 1 1 0%;
             display: flex;
             flex-direction: column;
             min-height: 0;
@@ -469,14 +195,14 @@
         .plinko-board {
             width: 100%;
             height: 100%;
-            min-height: 300px;
             max-height: 500px;
             position: relative;
             background: linear-gradient(180deg, #1e2833 0%, #1a1f29 100%);
             border-radius: 16px;
             border: 2px solid rgba(78, 205, 196,0.3);
             overflow: hidden;
-            flex: 1;
+            flex: 1 1 0%;
+            min-height: 0;
         }
         
         .peg {
@@ -744,25 +470,56 @@
         
         .difficulty-btn {
             flex: 1;
-            padding: 10px;
+            padding: 12px 8px;
             border: 2px solid rgba(78, 205, 196,0.3);
-            border-radius: 8px;
+            border-radius: 10px;
             background: rgba(78, 205, 196,0.1);
             color: #4ecdc4;
             font-size: 0.9em;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.3s ease;
             font-weight: 600;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        
+        .difficulty-btn .diff-name {
+            font-size: 0.95em;
+            font-weight: 700;
+        }
+        
+        .difficulty-btn .diff-risk {
+            font-size: 0.7em;
+            opacity: 0.8;
+            font-weight: 500;
+        }
+        
+        .difficulty-btn .diff-rows {
+            font-size: 0.65em;
+            opacity: 0.7;
+            font-weight: 400;
         }
         
         .difficulty-btn:hover {
             background: rgba(78, 205, 196,0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(78, 205, 196, 0.2);
         }
         
         .difficulty-btn.active {
             background: linear-gradient(135deg, #4ecdc4, #44a08d);
             color: #1a1f29;
             border-color: #4ecdc4;
+            box-shadow: 0 4px 16px rgba(78, 205, 196, 0.4);
+        }
+        
+        .difficulty-btn.active .diff-name,
+        .difficulty-btn.active .diff-risk,
+        .difficulty-btn.active .diff-rows {
+            color: #1a1f29;
+            opacity: 1;
         }
         
         .bet-label {
@@ -954,9 +711,21 @@
             <div class="difficulty-section">
                 <div class="bet-label">Difficulty</div>
                 <div class="difficulty-buttons">
-                    <button class="difficulty-btn active" id="easyBtn" onclick="setDifficulty('easy')">Easy</button>
-                    <button class="difficulty-btn" id="mediumBtn" onclick="setDifficulty('medium')">Medium</button>
-                    <button class="difficulty-btn" id="hardBtn" onclick="setDifficulty('hard')">Hard</button>
+                    <button class="difficulty-btn active" id="easyBtn" onclick="setDifficulty('easy')">
+                        <div class="diff-name">Easy</div>
+                        <div class="diff-risk">Low Risk</div>
+                        <div class="diff-rows">8 rows</div>
+                    </button>
+                    <button class="difficulty-btn" id="mediumBtn" onclick="setDifficulty('medium')">
+                        <div class="diff-name">Medium</div>
+                        <div class="diff-risk">Med Risk</div>
+                        <div class="diff-rows">12 rows</div>
+                    </button>
+                    <button class="difficulty-btn" id="hardBtn" onclick="setDifficulty('hard')">
+                        <div class="diff-name">Hard</div>
+                        <div class="diff-risk">High Risk</div>
+                        <div class="diff-rows">16 rows</div>
+                    </button>
                 </div>
                 <div class="difficulty-info" id="difficultyInfo">
                     Lower risk, steady wins. Max multiplier: 5x
@@ -1137,8 +906,13 @@
             document.querySelectorAll('.difficulty-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById(difficulty + 'Btn').classList.add('active');
             
-            // Update difficulty info text with detailed stats
-            document.getElementById('difficultyInfo').textContent = settings.description;
+            // Update difficulty info text with enhanced details
+            const riskEmoji = settings.riskLevel === 'Low' ? '🟢' : settings.riskLevel === 'Medium' ? '🟡' : '🔴';
+            const maxMultiplier = Math.max(...settings.multipliers);
+            const minMultiplier = Math.min(...settings.multipliers);
+            
+            document.getElementById('difficultyInfo').textContent = 
+                `${riskEmoji} ${settings.description} Max: ${maxMultiplier}x, Min: ${minMultiplier}x`;
             
             // Clear existing pegs and recreate board
             const board = document.getElementById('plinkoBoard');
@@ -1158,7 +932,12 @@
             existingSeparators.forEach(sep => sep.remove());
             createMultiplierSlots();
             
-            console.log(`Switched to ${difficulty.toUpperCase()} difficulty`);
+            // Show risk warning for hard difficulty
+            if (difficulty === 'hard') {
+                showResult(`🚨 HIGH RISK MODE: Up to ${maxMultiplier}x multiplier, but high chance of low payouts!`, true);
+            }
+            
+            console.log(`Switched to ${difficulty.toUpperCase()} difficulty - Risk: ${settings.riskLevel}`);
         }
         
         function createPegs() {
@@ -1386,142 +1165,187 @@
             }, 2000);
         }
         
+        // Enhanced physics simulation for realistic Plinko behavior
+        async function simulatePlinkoPhysics(startX, boardWidth, boardHeight) {
+            const settings = difficultySettings[currentDifficulty];
+            const numRows = settings.rows;
+            const pegBias = settings.pegBias; // Probability of going right at each peg
+            const bounceVariance = settings.bounceVariance;
+            
+            // Track path through the pyramid
+            let position = 0; // Start at center (position 0)
+            let path = [];
+            
+            // For each row, determine left (-1) or right (+1) movement
+            for (let row = 0; row < numRows; row++) {
+                // Apply difficulty-specific bias and variance
+                let rightProbability = pegBias;
+                
+                // Add some variance based on current position (edge effects)
+                const maxPosition = row + 1; // Max positions in current row
+                const normalizedPos = (position + maxPosition / 2) / maxPosition;
+                
+                // Slightly favor center movement for stability
+                if (normalizedPos < 0.3) {
+                    rightProbability += 0.1; // Favor right if too far left
+                } else if (normalizedPos > 0.7) {
+                    rightProbability -= 0.1; // Favor left if too far right
+                }
+                
+                // Add random variance
+                rightProbability += (Math.random() - 0.5) * bounceVariance * 0.2;
+                rightProbability = Math.max(0.1, Math.min(0.9, rightProbability));
+                
+                // Make the decision
+                const goesRight = Math.random() < rightProbability;
+                const movement = goesRight ? 1 : -1;
+                
+                position += movement;
+                path.push({
+                    row: row,
+                    position: position,
+                    decision: goesRight ? 'right' : 'left',
+                    probability: rightProbability
+                });
+            }
+            
+            // Convert final position to slot index
+            // The final position range is roughly -numRows to +numRows
+            // Map this to slot indices (0 to multipliers.length - 1)
+            const minPos = -numRows;
+            const maxPos = numRows;
+            const positionRange = maxPos - minPos;
+            const normalizedPosition = (position - minPos) / positionRange;
+            
+            let slotIndex = Math.floor(normalizedPosition * multipliers.length);
+            slotIndex = Math.max(0, Math.min(multipliers.length - 1, slotIndex));
+            
+            // Add final variance for slot selection
+            const finalVariance = Math.floor((Math.random() - 0.5) * bounceVariance * 3);
+            slotIndex = Math.max(0, Math.min(multipliers.length - 1, slotIndex + finalVariance));
+            
+            // Calculate final X position for visual
+            const slotWidth = boardWidth / multipliers.length;
+            const finalX = (slotIndex + 0.5) * slotWidth;
+            
+            return {
+                path: path,
+                finalPosition: position,
+                slotIndex: slotIndex,
+                finalX: finalX,
+                probability: rightProbability
+            };
+        }
+        
         // Ball physics animation for manual mode
         async function animateBallFall(ball, startX, startY, boardWidth) {
-            let x = startX;
-            let y = startY;
-            let velocityX = 0;
-            let velocityY = 0.3; // Slower initial velocity for better viewing
-            const gravity = 0.1; // Reduced gravity for slower fall
-            const pegRadius = 8;
-            const ballRadius = 7;
-            const friction = 0.98;
-            
-            // Anti-stuck mechanisms
-            let frameCount = 0;
-            let lastY = y;
-            let stuckCounter = 0;
-            let lastGoodY = y;
-            const maxFrames = 600;
-            const stuckThreshold = 10;
-            const minProgressPerFrame = 0.15;
-            
-            const boardHeight = ball.parentElement.offsetHeight || 400;
-            const targetY = boardHeight - 50;
-            
-            while (y < targetY && frameCount < maxFrames) {
-                frameCount++;
+            return new Promise(async (resolve) => {
+                // First, simulate the physics to get the path
+                const boardHeight = ball.parentElement.offsetHeight || 400;
+                const result = await simulatePlinkoPhysics(startX, boardWidth, boardHeight);
+                const path = result.path;
+                const finalX = result.finalX;
                 
-                // Add slight random nudge for variety
-                velocityX += (Math.random() - 0.5) * 0.15;
-                velocityX = Math.max(-2, Math.min(2, velocityX));
+                // Now animate the ball following the simulated path
+                let x = startX;
+                let y = startY;
+                let velocityX = 0;
+                let velocityY = 0.5;
+                const gravity = 0.15;
+                const pegRadius = 4;
+                const ballRadius = 6;
                 
-                // Enhanced stuck detection
-                const yProgress = y - lastY;
-                if (yProgress < minProgressPerFrame) {
-                    stuckCounter++;
-                } else {
-                    stuckCounter = 0;
-                    lastGoodY = y;
-                }
-                lastY = y;
+                let currentRow = 0;
+                let rowDecisionMade = false;
+                let frameCount = 0;
+                const maxFrames = 500;
                 
-                if (stuckCounter > stuckThreshold) {
-                    velocityY = Math.max(velocityY, 1.0);
-                    velocityX *= 0.5;
-                    y += 1.5;
-                    stuckCounter = 0;
-                }
+                const settings = difficultySettings[currentDifficulty];
+                const topMargin = 40;
+                const bottomMargin = 60;
+                const availableHeight = boardHeight - topMargin - bottomMargin;
+                const rowSpacing = availableHeight / (settings.rows - 1);
+                const targetY = boardHeight - 50;
                 
-                velocityY += gravity;
-                if (velocityY < 0.3) velocityY = 0.3;
-                
-                x += velocityX;
-                y += velocityY;
-                
-                // Peg collision detection
-                for (let i = 0; i < window.pegPositions.length; i++) {
-                    const peg = window.pegPositions[i];
-                    const distance = Math.sqrt(Math.pow(x - peg.x, 2) + Math.pow(y - peg.y, 2));
+                while (y < targetY && frameCount < maxFrames) {
+                    frameCount++;
                     
-                    if (distance < (pegRadius + ballRadius) && y >= peg.y - 10 && y <= peg.y + 10) {
-                        const angle = Math.atan2(y - peg.y, x - peg.x);
-                        const randomAngle = angle + (Math.random() - 0.5) * 0.4;
-                        const currentSpeed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
-                        const bounceReduction = 0.75 + Math.random() * 0.1;
+                    // Check if we've reached a new row
+                    const currentRowY = topMargin + currentRow * rowSpacing;
+                    if (y >= currentRowY && !rowDecisionMade && currentRow < path.length) {
+                        // Make the decision for this row
+                        const decision = path[currentRow];
+                        rowDecisionMade = true;
                         
-                        let newVelocityX = Math.cos(randomAngle) * currentSpeed * bounceReduction;
-                        let newVelocityY = Math.abs(Math.sin(randomAngle) * currentSpeed * bounceReduction) + 0.5 + Math.random() * 0.2;
-                        
-                        newVelocityX = Math.max(-2, Math.min(2, newVelocityX));
-                        newVelocityY = Math.max(0.4, Math.min(2, newVelocityY));
-                        
-                        velocityX = newVelocityX;
-                        velocityY = newVelocityY;
-                        
-                        // Move ball out of peg
-                        const separationDistance = pegRadius + ballRadius + 1;
-                        x = peg.x + Math.cos(randomAngle) * separationDistance;
-                        y = peg.y + Math.sin(randomAngle) * separationDistance;
-                        
-                        // Visual feedback
-                        hitPeg(document.querySelectorAll('.peg')[i]);
-                        createBounceEffect(x, y);
-                        break;
-                    }
-                }
-                
-                // Slot separator collisions
-                if (y > boardHeight * 0.65) {
-                    const slotWidth = boardWidth / multipliers.length;
-                    for (let i = 1; i < multipliers.length; i++) {
-                        const separatorX = i * slotWidth;
-                        const separatorWidth = 3;
-                        
-                        if (x + ballRadius > separatorX - separatorWidth/2 && x - ballRadius < separatorX + separatorWidth/2) {
-                            if (velocityX > 0) {
-                                x = separatorX - separatorWidth/2 - ballRadius;
-                                velocityX = -Math.abs(velocityX) * 0.6;
-                            } else {
-                                x = separatorX + separatorWidth/2 + ballRadius;
-                                velocityX = Math.abs(velocityX) * 0.6;
-                            }
-                            break;
+                        // Apply the physics decision
+                        if (decision.decision === 'right') {
+                            velocityX += 0.6 + Math.random() * 0.3;
+                        } else {
+                            velocityX -= 0.6 + Math.random() * 0.3;
                         }
+                        
+                        // Add some vertical bounce
+                        velocityY *= 0.8;
+                        velocityY += 0.2 + Math.random() * 0.1;
+                        
+                        // Visual feedback - find nearest peg to highlight
+                        let nearestPegIndex = -1;
+                        let minDistance = Infinity;
+                        for (let i = 0; i < window.pegPositions.length; i++) {
+                            const peg = window.pegPositions[i];
+                            if (peg.row === currentRow) {
+                                const distance = Math.abs(x - peg.x);
+                                if (distance < minDistance) {
+                                    minDistance = distance;
+                                    nearestPegIndex = i;
+                                }
+                            }
+                        }
+                        
+                        if (nearestPegIndex !== -1) {
+                            hitPeg(document.querySelectorAll('.peg')[nearestPegIndex]);
+                            createBounceEffect(x, y);
+                        }
+                        
+                        console.log(`Row ${currentRow}: Going ${decision.decision} (prob: ${decision.probability.toFixed(2)})`);
                     }
+                    
+                    // Move to next row when we pass it
+                    if (y > currentRowY + rowSpacing * 0.3 && rowDecisionMade) {
+                        currentRow++;
+                        rowDecisionMade = false;
+                    }
+                    
+                    // Apply physics
+                    velocityY += gravity;
+                    velocityX *= 0.995; // Slight air resistance
+                    
+                    x += velocityX;
+                    y += velocityY;
+                    
+                    // Boundary checks
+                    if (x < ballRadius) {
+                        x = ballRadius;
+                        velocityX = Math.abs(velocityX) * 0.6;
+                    } else if (x > boardWidth - ballRadius) {
+                        x = boardWidth - ballRadius;
+                        velocityX = -Math.abs(velocityX) * 0.6;
+                    }
+                    
+                    // Update ball position
+                    ball.style.left = x + 'px';
+                    ball.style.top = y + 'px';
+                    
+                    await new Promise(resolve => setTimeout(resolve, 20)); // Smooth 50fps
                 }
                 
-                // Boundary checks
-                if (x < ballRadius) {
-                    x = ballRadius;
-                    velocityX = Math.abs(velocityX) * 0.5;
-                } else if (x > boardWidth - ballRadius) {
-                    x = boardWidth - ballRadius;
-                    velocityX = -Math.abs(velocityX) * 0.5;
-                }
+                // Final positioning
+                ball.style.left = finalX + 'px';
+                ball.style.top = (targetY + 5) + 'px';
                 
-                velocityX *= friction;
-                ball.style.left = x + 'px';
-                ball.style.top = y + 'px';
-                
-                await new Promise(resolve => setTimeout(resolve, 16)); // 60fps
-            }
-            
-            // Ensure ball reaches bottom
-            if (frameCount >= maxFrames) {
-                y = targetY;
-            }
-            
-            // Final positioning in center of slot
-            const slotWidth = boardWidth / multipliers.length;
-            const slotIndex = Math.floor(x / slotWidth);
-            const finalSlotIndex = Math.max(0, Math.min(multipliers.length - 1, slotIndex));
-            const finalX = (finalSlotIndex * slotWidth) + (slotWidth / 2);
-            
-            ball.style.left = finalX + 'px';
-            ball.style.top = (targetY + 5) + 'px';
-            
-            return finalX;
+                console.log(`Ball finished at slot ${result.slotIndex} with multiplier ${multipliers[result.slotIndex]}x`);
+                resolve(finalX);
+            });
         }
         
         // Visual effect functions
