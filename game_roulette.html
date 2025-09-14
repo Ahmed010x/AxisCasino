@@ -93,84 +93,6 @@
             margin: 2rem 0;
         }
 
-        .roulette-wheel {
-            width: 200px;
-            height: 200px;
-            border-radius: 50%;
-            background: conic-gradient(
-                #dc3545 0deg 9.73deg,
-                #212529 9.73deg 19.46deg,
-                #dc3545 19.46deg 29.19deg,
-                #212529 29.19deg 38.92deg,
-                #dc3545 38.92deg 48.65deg,
-                #212529 48.65deg 58.38deg,
-                #dc3545 58.38deg 68.11deg,
-                #212529 68.11deg 77.84deg,
-                #dc3545 77.84deg 87.57deg,
-                #212529 87.57deg 97.30deg,
-                #dc3545 97.30deg 107.03deg,
-                #212529 107.03deg 116.76deg,
-                #dc3545 116.76deg 126.49deg,
-                #212529 126.49deg 136.22deg,
-                #dc3545 136.22deg 145.95deg,
-                #212529 145.95deg 155.68deg,
-                #dc3545 155.68deg 165.41deg,
-                #212529 165.41deg 175.14deg,
-                #dc3545 175.14deg 184.87deg,
-                #212529 184.87deg 194.60deg,
-                #dc3545 194.60deg 204.33deg,
-                #212529 204.33deg 214.06deg,
-                #dc3545 214.06deg 223.79deg,
-                #212529 223.79deg 233.52deg,
-                #dc3545 233.52deg 243.25deg,
-                #212529 243.25deg 252.98deg,
-                #dc3545 252.98deg 262.71deg,
-                #212529 262.71deg 272.44deg,
-                #dc3545 272.44deg 282.17deg,
-                #212529 282.17deg 291.90deg,
-                #dc3545 291.90deg 301.63deg,
-                #212529 301.63deg 311.36deg,
-                #dc3545 311.36deg 321.09deg,
-                #212529 321.09deg 330.82deg,
-                #dc3545 330.82deg 340.55deg,
-                #212529 340.55deg 350.28deg,
-                #dc3545 350.28deg 360deg
-            );
-            border: 6px solid #4ecdc4;
-            margin: 0 auto;
-            position: relative;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
-            animation: wheelIdle 10s linear infinite;
-        }
-
-        .roulette-wheel.spinning {
-            animation: wheelSpin 3s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
-        }
-
-        @keyframes wheelIdle {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-
-        @keyframes wheelSpin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(1440deg); }
-        }
-
-        .roulette-ball {
-            width: 16px;
-            height: 16px;
-            background: linear-gradient(45deg, #ffffff, #f0f0f0);
-            border-radius: 50%;
-            position: absolute;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-            z-index: 10;
-            transition: all 3s cubic-bezier(0.25, 0.1, 0.25, 1);
-        }
-
         .winning-number {
             font-size: 2rem;
             font-weight: 700;
@@ -451,14 +373,15 @@
             margin-bottom: 0.5rem;
         }
 
+        .svg-segment.selected {
+            filter: drop-shadow(0 0 10px #4ecdc4cc) drop-shadow(0 0 2px #fff);
+            stroke: #4ecdc4;
+            stroke-width: 4 !important;
+        }
+
         @media (max-width: 480px) {
             .container {
                 padding: 1rem;
-            }
-            
-            .roulette-wheel {
-                width: 150px;
-                height: 150px;
             }
             
             .action-buttons {
@@ -487,10 +410,29 @@
         </div>
 
         <div class="roulette-section">
-            <div class="roulette-wheel" id="rouletteWheel">
-                <div class="roulette-ball" id="rouletteBall"></div>
+            <div style="position:relative; width:380px; height:380px; margin:0 auto; perspective:1200px;">
+                <svg id="svgRouletteWheel" width="380" height="380" viewBox="0 0 380 380" style="display:block; margin:0 auto; filter: drop-shadow(0 12px 40px #00d4aa55);">
+                    <defs>
+                        <radialGradient id="wheelShadow" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="#fff" stop-opacity="0.10"/>
+                            <stop offset="100%" stop-color="#000" stop-opacity="0.8"/>
+                        </radialGradient>
+                        <radialGradient id="rimGradient" cx="50%" cy="50%" r="50%">
+                            <stop offset="60%" stop-color="#e2c16b"/>
+                            <stop offset="100%" stop-color="#b8860b"/>
+                        </radialGradient>
+                    </defs>
+                    <circle cx="190" cy="190" r="180" fill="url(#rimGradient)" stroke="#fff7" stroke-width="2"/>
+                    <g id="wheelSegments"></g>
+                    <circle cx="190" cy="190" r="165" fill="none" stroke="url(#wheelShadow)" stroke-width="18"/>
+                    <circle cx="190" cy="190" r="55" fill="#222" stroke="#4ecdc4" stroke-width="6"/>
+                    <circle cx="190" cy="190" r="22" fill="#e2c16b" stroke="#fff" stroke-width="2"/>
+                </svg>
+                <svg id="svgBall" width="380" height="380" style="position:absolute; top:0; left:0; pointer-events:none;">
+                    <circle id="ballCircle" cx="190" cy="50" r="13" fill="#fff" stroke="#e2c16b" stroke-width="3" filter="drop-shadow(0 2px 8px #0008)"/>
+                </svg>
             </div>
-            <div class="winning-number" id="winningNumber">32</div>
+            <div class="winning-number" id="winningNumber">0</div>
         </div>
 
         <div class="game-controls">
@@ -513,6 +455,10 @@
                 <label class="control-label">Number Bets (36x payout)</label>
                 <div class="numbers-grid" id="numbersGrid">
                     <!-- Generated by JavaScript -->
+                </div>
+                <div style="margin-top:1rem;">
+                    <label style="color:#b0b0b0; font-size:0.9rem; font-weight:500; display:block; margin-bottom:0.5rem;">Quick Number Select</label>
+                    <div id="quickNumberList" style="display:flex; flex-wrap:wrap; gap:6px; justify-content:center;"></div>
                 </div>
             </div>
         </div>
@@ -600,7 +546,7 @@
         }
 
         function updateBalanceDisplay() {
-            document.getElementById('balanceDisplay').textContent = gameState.balance;
+            document.getElementById('balanceDisplay').textContent = gameState.balance.toFixed(2);
         }
 
         function goBack() {
@@ -610,59 +556,56 @@
         function createNumbersGrid() {
             const numbersGrid = document.getElementById('numbersGrid');
             numbersGrid.innerHTML = '';
-            
             for (let i = 0; i <= 36; i++) {
                 const button = document.createElement('button');
                 button.className = `number-btn ${rouletteNumbers[i]}`;
                 button.textContent = i;
+                button.setAttribute('data-number', i);
                 button.onclick = () => selectNumber(i);
                 numbersGrid.appendChild(button);
             }
+            // Add '00' as the first button for American roulette
+            const doubleZeroBtn = document.createElement('button');
+            doubleZeroBtn.className = 'number-btn green';
+            doubleZeroBtn.textContent = '00';
+            doubleZeroBtn.setAttribute('data-number', '00');
+            doubleZeroBtn.onclick = () => selectNumber('00');
+            numbersGrid.insertBefore(doubleZeroBtn, numbersGrid.firstChild);
+            // Add multiplier counter below grid if not present
+            let multiplierDiv = document.getElementById('multiplierCounter');
+            if (!multiplierDiv) {
+                multiplierDiv = document.createElement('div');
+                multiplierDiv.id = 'multiplierCounter';
+                multiplierDiv.style = 'margin-top:0.7rem; color:#4ecdc4; font-weight:600; text-align:center; font-size:1.1rem;';
+                numbersGrid.parentNode.appendChild(multiplierDiv);
+            }
+            updateMultiplierCounter();
         }
 
         function selectBet(betType) {
+            // Only toggle bet in selectedBets, do not update balance here
             const betAmount = parseInt(document.getElementById('betAmount').value) || 10;
-            
-            if (betAmount > gameState.balance) {
-                alert('Insufficient balance!');
-                return;
-            }
-            
             if (gameState.selectedBets[betType]) {
-                // Remove bet
-                gameState.balance += gameState.selectedBets[betType];
                 delete gameState.selectedBets[betType];
             } else {
-                // Add bet
-                gameState.balance -= betAmount;
                 gameState.selectedBets[betType] = betAmount;
             }
-            
             updateBetDisplay();
             updateBalanceDisplay();
         }
 
         function selectNumber(number) {
+            // Only toggle bet in selectedBets, do not update balance here
             const betAmount = parseInt(document.getElementById('betAmount').value) || 10;
             const betKey = `number_${number}`;
-            
-            if (betAmount > gameState.balance) {
-                alert('Insufficient balance!');
-                return;
-            }
-            
             if (gameState.selectedBets[betKey]) {
-                // Remove bet
-                gameState.balance += gameState.selectedBets[betKey];
                 delete gameState.selectedBets[betKey];
             } else {
-                // Add bet
-                gameState.balance -= betAmount;
                 gameState.selectedBets[betKey] = betAmount;
             }
-            
             updateBetDisplay();
             updateBalanceDisplay();
+            updateMultiplierCounter();
         }
 
         function updateBetDisplay() {
@@ -670,135 +613,109 @@
             document.querySelectorAll('.bet-option').forEach(btn => {
                 btn.classList.remove('active');
             });
-            
             // Update number buttons
             document.querySelectorAll('.number-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
-            
             // Show active bets
             Object.keys(gameState.selectedBets).forEach(betKey => {
                 if (betKey.startsWith('number_')) {
                     const number = betKey.split('_')[1];
-                    const btn = document.querySelector(`.number-btn:nth-child(${parseInt(number) + 1})`);
+                    const btn = document.querySelector(`.number-btn[data-number="${number}"]`);
                     if (btn) btn.classList.add('active');
                 } else {
                     const btn = document.querySelector(`.bet-option[onclick*="${betKey}"]`);
                     if (btn) btn.classList.add('active');
                 }
             });
-            
             // Calculate total bet amount
             gameState.totalBetAmount = Object.values(gameState.selectedBets).reduce((sum, amount) => sum + amount, 0);
         }
 
         function clearBets() {
-            // Return all bet amounts to balance
-            gameState.balance += gameState.totalBetAmount;
+            // Just clear bets, do not update balance
             gameState.selectedBets = {};
             gameState.totalBetAmount = 0;
-            
             updateBetDisplay();
             updateBalanceDisplay();
         }
 
+        // --- SVG Wheel Animation Integration ---
+        // Replace old wheel and ball animation logic
         function spinRoulette() {
             if (gameState.isSpinning) return;
-            
             if (Object.keys(gameState.selectedBets).length === 0) {
                 alert('Please place at least one bet!');
                 return;
             }
-            
+            // Check if user has enough balance for all bets
+            if (gameState.totalBetAmount > gameState.balance) {
+                alert('Insufficient balance!');
+                return;
+            }
+            // Deduct total bet amount from balance now
+            gameState.balance -= gameState.totalBetAmount;
+            updateBalanceDisplay();
             gameState.isSpinning = true;
-            
             // Generate random winning number
-            const winningNumber = Math.floor(Math.random() * 37); // 0-36
-            const winningColor = rouletteNumbers[winningNumber];
-            
-            // Start wheel animation
-            const wheel = document.getElementById('rouletteWheel');
-            const ball = document.getElementById('rouletteBall');
-            
-            wheel.classList.add('spinning');
-            
-            // Animate ball
-            const finalAngle = (winningNumber * 9.73) + Math.random() * 9.73; // Each number spans ~9.73 degrees
-            ball.style.transform = `translateX(-50%) rotate(${1440 + finalAngle}deg) translateX(80px)`;
-            
+            const winningNumber = Math.floor(Math.random() * numbers.length); // 0-37
+            const winningIdx = winningNumber;
+            // Animate SVG wheel (optional: can add wheel spin if desired)
+            // Animate ball: decelerate and land on winning number
+            stopBallSpinToNumber(winningIdx);
             // Disable controls
             document.getElementById('spinBtn').disabled = true;
             document.getElementById('clearBtn').disabled = true;
             document.getElementById('resultDisplay').style.display = 'none';
-            
-            // Show result after animation
             setTimeout(() => {
-                showResult(winningNumber, winningColor);
+                showResult(numbers[winningIdx], colors[winningIdx]);
             }, 3000);
         }
-
         function showResult(winningNumber, winningColor) {
             gameState.isSpinning = false;
-            
             // Show winning number
             const winningNumberDisplay = document.getElementById('winningNumber');
             winningNumberDisplay.textContent = winningNumber;
             winningNumberDisplay.className = `winning-number ${winningColor}`;
             winningNumberDisplay.style.display = 'block';
-            
-            // Calculate winnings
+            // Calculate winnings with multiplier logic for number bets
             let totalWinnings = 0;
             let winningBets = [];
-            
-            // Check each bet
+            // Count how many number bets
+            const numberBetKeys = Object.keys(gameState.selectedBets).filter(k => k.startsWith('number_'));
+            const N = numberBetKeys.length;
+            const multiplier = N > 0 ? 36 / N : 0;
             Object.entries(gameState.selectedBets).forEach(([betKey, betAmount]) => {
                 let isWin = false;
                 let payout = 0;
-                
                 if (betKey.startsWith('number_')) {
-                    const betNumber = parseInt(betKey.split('_')[1]);
-                    if (betNumber === winningNumber) {
+                    const betNum = betKey.split('_')[1];
+                    if (betNum === winningNumber.toString()) {
                         isWin = true;
-                        payout = betAmount * 36; // 35 to 1 + original bet
+                        payout = betAmount * multiplier;
                     }
                 } else {
                     switch (betKey) {
                         case 'red':
-                            if (winningColor === 'red') {
-                                isWin = true;
-                                payout = betAmount * 2;
-                            }
+                            if (winningColor === 'red') { isWin = true; payout = betAmount * 2; }
                             break;
                         case 'black':
-                            if (winningColor === 'black') {
-                                isWin = true;
-                                payout = betAmount * 2;
-                            }
+                            if (winningColor === 'black') { isWin = true; payout = betAmount * 2; }
                             break;
                         case 'even':
-                            if (winningNumber > 0 && winningNumber % 2 === 0) {
-                                isWin = true;
-                                payout = betAmount * 2;
-                            }
+                            if (!isNaN(Number(winningNumber)) && Number(winningNumber) > 0 && Number(winningNumber) % 2 === 0) { isWin = true; payout = betAmount * 2; }
                             break;
                         case 'odd':
-                            if (winningNumber > 0 && winningNumber % 2 === 1) {
-                                isWin = true;
-                                payout = betAmount * 2;
-                            }
+                            if (!isNaN(Number(winningNumber)) && Number(winningNumber) > 0 && Number(winningNumber) % 2 === 1) { isWin = true; payout = betAmount * 2; }
                             break;
                     }
                 }
-                
                 if (isWin) {
                     totalWinnings += payout;
                     winningBets.push({ bet: betKey, amount: payout });
                 }
             });
-            
-            // Update balance and stats
             gameState.balance += totalWinnings;
-            
             if (totalWinnings > 0) {
                 stats.totalWins++;
                 if (totalWinnings > stats.biggestWin) {
@@ -807,56 +724,264 @@
             } else {
                 stats.totalLosses++;
             }
-            
             if (winningColor === 'red') {
                 stats.redHits++;
             }
-            
             // Show result
             const resultDisplay = document.getElementById('resultDisplay');
             const payoutAmount = document.getElementById('payoutAmount');
             const resultMessage = document.getElementById('resultMessage');
-            
             if (totalWinnings > 0) {
                 resultDisplay.className = 'result-display win';
-                payoutAmount.textContent = `+${totalWinnings} 💰`;
+                payoutAmount.textContent = `+${totalWinnings.toFixed(2)} 💰`;
                 resultMessage.textContent = `🎉 Winning number: ${winningNumber} (${winningColor})!`;
             } else {
+                // Show total lost as the sum of all bets placed
+                payoutAmount.textContent = `-${gameState.totalBetAmount.toFixed(2)} 💰`;
                 resultDisplay.className = 'result-display lose';
-                payoutAmount.textContent = `-${gameState.totalBetAmount} 💰`;
                 resultMessage.textContent = `😞 Number ${winningNumber} (${winningColor}). Better luck next time!`;
             }
-            
             resultDisplay.style.display = 'block';
-            
             // Reset game state
             gameState.selectedBets = {};
             gameState.totalBetAmount = 0;
-            
-            // Reset wheel animation
-            const wheel = document.getElementById('rouletteWheel');
-            const ball = document.getElementById('rouletteBall');
-            
+            // Restart ball spin after delay
             setTimeout(() => {
-                wheel.classList.remove('spinning');
-                ball.style.transform = 'translateX(-50%)';
                 winningNumberDisplay.style.display = 'none';
+                startBallSpin();
             }, 3000);
-            
             // Re-enable controls
             document.getElementById('spinBtn').disabled = false;
             document.getElementById('clearBtn').disabled = false;
-            
             updateBetDisplay();
             updateBalanceDisplay();
             updateStatsDisplay();
             saveStats();
         }
+        // --- End integration ---
 
-        // Initialize the game
-        window.addEventListener('load', () => {
-            loadStats();
-            createNumbersGrid();
+        // --- SVG Wheel Drawing (Perfect Circle, Interactive Segments) ---
+        const svgWheel = document.getElementById('svgRouletteWheel');
+        const wheelSegments = document.getElementById('wheelSegments');
+        const svgBall = document.getElementById('svgBall');
+        const ballCircle = document.getElementById('ballCircle');
+        const R = 165, CX = 190, CY = 190;
+        const numbers = ["0","28","9","26","30","11","7","20","32","17","5","22","34","15","3","24","36","13","1","00","27","10","25","29","12","8","19","31","18","6","21","33","16","4","23","35","14","2"];
+        const colors = ["green","black","red","black","red","black","red","black","red","black","red","black","red","black","red","black","red","black","red","green","red","black","red","black","red","black","red","black","red","black","red","black","red","black","red","black","red"];
+        let svgSegmentElements = [];
+        function drawWheel() {
+            let segAngle = 360 / numbers.length;
+            let html = '';
+            svgSegmentElements = [];
+            for(let i=0; i<numbers.length; i++) {
+                let start = (i * segAngle - 90), end = ((i+1) * segAngle - 90);
+                let x1 = CX + R * Math.cos(start * Math.PI/180);
+                let y1 = CY + R * Math.sin(start * Math.PI/180);
+                let x2 = CX + R * Math.cos(end * Math.PI/180);
+                let y2 = CY + R * Math.sin(end * Math.PI/180);
+                let fill;
+                if(colors[i]==='red') fill = 'url(#redGrad'+i+')';
+                else if(colors[i]==='black') fill = 'url(#blackGrad'+i+')';
+                else fill = 'url(#greenGrad'+i+')';
+                html += `<defs>
+                    <linearGradient id="redGrad${i}" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stop-color="#ff3b3b"/>
+                        <stop offset="100%" stop-color="#b80000"/>
+                    </linearGradient>
+                    <linearGradient id="blackGrad${i}" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stop-color="#444"/>
+                        <stop offset="100%" stop-color="#000"/>
+                    </linearGradient>
+                    <linearGradient id="greenGrad${i}" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stop-color="#00e676"/>
+                        <stop offset="100%" stop-color="#007f3b"/>
+                    </linearGradient>
+                </defs>`;
+                // Add clickable path with data-index
+                html += `<path class="svg-segment" data-index="${i}" d="M${CX},${CY} L${x1},${y1} A${R},${R} 0 0,1 ${x2},${y2} Z" fill="${fill}" stroke="#fff" stroke-width="2" style="cursor:pointer;"/>`;
+                // Number labels
+                let labelAngle = (start + end) / 2;
+                let lx = CX + (R-32) * Math.cos(labelAngle * Math.PI/180);
+                let ly = CY + (R-32) * Math.sin(labelAngle * Math.PI/180) + 2;
+                let numColor = colors[i]==='red' ? '#ff3b3b' : colors[i]==='black' ? '#fff' : '#00e676';
+                let textShadow = colors[i]==='black' ? '#00d4aa' : '#000';
+                html += `<text x="${lx}" y="${ly}" text-anchor="middle" font-size="15" font-weight="bold" fill="${numColor}" stroke="${textShadow}" stroke-width="2" paint-order="stroke" style="user-select:none;filter:drop-shadow(0 0 4px #00d4aa88);">${numbers[i]}</text>`;
+            }
+            wheelSegments.innerHTML = html;
+            // Attach click listeners after rendering
+            setTimeout(() => {
+                svgSegmentElements = Array.from(document.querySelectorAll('.svg-segment'));
+                svgSegmentElements.forEach(seg => {
+                    seg.addEventListener('click', function(e) {
+                        if (gameState.isSpinning) return;
+                        const idx = parseInt(this.getAttribute('data-index'));
+                        selectNumberSVG(idx);
+                    });
+                });
+                updateSVGSegmentSelection();
+            }, 0);
+        }
+        function updateSVGSegmentSelection() {
+            if (!svgSegmentElements.length) return;
+            svgSegmentElements.forEach((seg, idx) => {
+                const betKey = `number_${numbers[idx]}`;
+                if (gameState.selectedBets[betKey]) {
+                    seg.classList.add('selected');
+                } else {
+                    seg.classList.remove('selected');
+                }
+            });
+        }
+        function selectNumberSVG(idx) {
+            // Only toggle bet in selectedBets, do not update balance here
+            const number = numbers[idx];
+            const betAmount = parseInt(document.getElementById('betAmount').value) || 10;
+            const betKey = `number_${number}`;
+            if (gameState.selectedBets[betKey]) {
+                delete gameState.selectedBets[betKey];
+            } else {
+                gameState.selectedBets[betKey] = betAmount;
+            }
+            updateBetDisplay();
+            updateBalanceDisplay();
+            updateSVGSegmentSelection();
+        }
+        // Patch updateBetDisplay to update SVG selection
+        const origUpdateBetDisplay = updateBetDisplay;
+        updateBetDisplay = function() {
+            origUpdateBetDisplay();
+            updateSVGSegmentSelection();
+        }
+        drawWheel();
+        // --- End SVG Wheel Drawing ---
+        // --- Ball Animation: Spins until number is chosen ---
+        let ballSpinInterval = null;
+        let ballSpinAngle = 0;
+        function startBallSpin() {
+            if(ballSpinInterval) clearInterval(ballSpinInterval);
+            ballSpinAngle = 0;
+            ballSpinInterval = setInterval(() => {
+                ballSpinAngle += 7 + Math.random()*2;
+                if(ballSpinAngle > 360) ballSpinAngle -= 360;
+                let rad = ballSpinAngle * Math.PI/180;
+                let bx = CX + (R-10) * Math.cos(rad);
+                let by = CY + (R-10) * Math.sin(rad);
+                ballCircle.setAttribute('cx', bx);
+                ballCircle.setAttribute('cy', by);
+            }, 16);
+        }
+        function stopBallSpinToNumber(winningIdx) {
+            if(ballSpinInterval) clearInterval(ballSpinInterval);
+            let segAngle = 360 / numbers.length;
+            let targetAngle = winningIdx * segAngle - 90 + segAngle/2;
+            let current = ballSpinAngle;
+            let totalSpin = 720 + (targetAngle - current + 360) % 360;
+            let duration = 2200 + Math.random()*600;
+            let start = null;
+            function animateBall(ts) {
+                if(!start) start = ts;
+                let elapsed = ts - start;
+                let progress = Math.min(elapsed/duration, 1);
+                let ease = 1 - Math.pow(1-progress, 3);
+                let angle = current + totalSpin * ease;
+                let rad = angle * Math.PI/180;
+                let bx = CX + (R-10) * Math.cos(rad);
+                let by = CY + (R-10) * Math.sin(rad);
+                ballCircle.setAttribute('cx', bx);
+                ballCircle.setAttribute('cy', by);
+                if(progress < 1) requestAnimationFrame(animateBall);
+            }
+            requestAnimationFrame(animateBall);
+        }
+        startBallSpin();
+        // --- End Ball Animation ---
+        function createQuickNumberList() {
+            const quickList = document.getElementById('quickNumberList');
+            if (!quickList) return;
+            quickList.innerHTML = '';
+            // American roulette: 00, 0, 1, 2, ..., 36
+            const quickNumbers = ['00', 0];
+            for (let i = 1; i <= 36; i++) quickNumbers.push(i);
+            quickNumbers.forEach(num => {
+                const btn = document.createElement('button');
+                btn.className = 'number-btn';
+                btn.textContent = num;
+                btn.style.width = '38px';
+                btn.style.height = '38px';
+                btn.style.fontSize = '1em';
+                btn.onclick = () => {
+                    // Toggle bet for this number only (no clearing others)
+                    const betAmount = parseInt(document.getElementById('betAmount').value) || 10;
+                    const betKey = `number_${num}`;
+                    if (betAmount > gameState.balance && !gameState.selectedBets[betKey]) {
+                        alert('Insufficient balance!');
+                        updateBetDisplay();
+                        updateBalanceDisplay();
+                        return;
+                    }
+                    if (gameState.selectedBets[betKey]) {
+                        gameState.balance += gameState.selectedBets[betKey];
+                        delete gameState.selectedBets[betKey];
+                    } else {
+                        gameState.balance -= betAmount;
+                        gameState.selectedBets[betKey] = betAmount;
+                    }
+                    updateBetDisplay();
+                    updateBalanceDisplay();
+                    updateSVGSegmentSelection();
+                    updateMultiplierCounter();
+                };
+                // Highlight active quick number
+                const betKey = `number_${num}`;
+                if (gameState.selectedBets[betKey]) {
+                    btn.classList.add('active');
+                }
+                quickList.appendChild(btn);
+            });
+            // Add multiplier counter below quick list if not present
+            let multiplierDiv = document.getElementById('multiplierCounterQuick');
+            if (!multiplierDiv) {
+                multiplierDiv = document.createElement('div');
+                multiplierDiv.id = 'multiplierCounterQuick';
+                multiplierDiv.style = 'margin-top:0.5rem; color:#4ecdc4; font-weight:600; text-align:center; font-size:1.1rem;';
+                quickList.parentNode.appendChild(multiplierDiv);
+            }
+            updateMultiplierCounter();
+        }
+
+        function updateMultiplierCounter() {
+            // Count selected number bets
+            const numBets = Object.keys(gameState.selectedBets).filter(k => k.startsWith('number_')).length;
+            let multiplier = numBets > 0 ? (36 / numBets).toFixed(2) : '—';
+            let text = numBets > 0 ? `Multiplier: <b>${multiplier}x</b> for each number bet` : 'Multiplier: —';
+            let div1 = document.getElementById('multiplierCounter');
+            let div2 = document.getElementById('multiplierCounterQuick');
+            if (div1) div1.innerHTML = text;
+            if (div2) div2.innerHTML = text;
+        }
+
+        // Patch updateBetDisplay to update quick number list active state and multiplier counter
+        const origUpdateBetDisplay2 = updateBetDisplay;
+        updateBetDisplay = function() {
+            origUpdateBetDisplay2();
+            updateSVGSegmentSelection();
+            // Update quick number list active state
+            const quickList = document.getElementById('quickNumberList');
+            if (quickList) {
+                Array.from(quickList.children).forEach(btn => {
+                    const num = btn.textContent;
+                    const betKey = `number_${num}`;
+                    if (gameState.selectedBets[betKey]) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                });
+            }
+            updateMultiplierCounter();
+        }
+        document.addEventListener('DOMContentLoaded', function() {
+            createQuickNumberList();
         });
     </script>
 </body>
