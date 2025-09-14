@@ -574,12 +574,26 @@
             const totalCells = 25;
             const mineCount = gameState.mineCount;
             if (gemsFound === 0) return 1.0;
-            // Fair multiplier: product of odds at each step
+            
+            // More balanced multiplier system that considers mine count
+            // Base multiplier increases with difficulty but caps exponential growth
+            const baseDifficulty = mineCount / totalCells;
+            const difficultyMultiplier = 1 + (baseDifficulty * 0.8);
+            
+            // Progressive multiplier with diminishing returns
             let multiplier = 1.0;
             for (let i = 0; i < gemsFound; i++) {
-                multiplier *= (totalCells - i) / (totalCells - mineCount - i);
+                const stepMultiplier = 1 + (0.1 + (mineCount * 0.02)) * (1 - i * 0.05);
+                multiplier *= Math.max(1.05, stepMultiplier);
             }
-            return Math.max(1.0, multiplier);
+            
+            // Apply difficulty bonus but cap the maximum
+            multiplier *= difficultyMultiplier;
+            
+            // Cap multiplier based on mine count to prevent excessive payouts
+            const maxMultiplier = Math.min(50, 5 + (mineCount * 3));
+            
+            return Math.min(maxMultiplier, Math.max(1.0, multiplier));
         }
 
         function updateMultiplierDisplay() {
