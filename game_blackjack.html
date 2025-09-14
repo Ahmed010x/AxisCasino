@@ -191,7 +191,7 @@
         }
 
         .card.hidden::after {
-            content: '🂠';
+            content: '';
             font-size: 2rem;
         }
 
@@ -393,6 +393,7 @@
             }
         }
     </style>
+    <script src="balance_sync.js"></script>
 </head>
 <body>
     <div class="header">
@@ -414,7 +415,7 @@
 
     <div class="container">
         <div class="game-info">
-            <div class="game-icon">🎯</div>
+            <div class="game-icon"></div>
             <div class="game-description">
                 Get as close to 21 as possible without going over. Beat the dealer to win!
             </div>
@@ -555,9 +556,21 @@
         }
 
         function goBack() {
-            // Return to main app with updated balance
-            const backUrl = `${returnUrl}?user_id=${encodeURIComponent(userId)}&balance=${encodeURIComponent(currentBalance)}&user_name=${encodeURIComponent(userName)}`;
-            window.location.href = backUrl;
+            try {
+                if (window.Telegram && window.Telegram.WebApp) {
+                    window.Telegram.WebApp.close();
+                    return;
+                }
+                const params = new URLSearchParams();
+                params.set('user_id', userId || localStorage.getItem('user_id') || '');
+                params.set('userName', userName || 'Player');
+                const latestBalance = localStorage.getItem('balance') || '0';
+                params.set('balance', latestBalance);
+                const backUrl = `${returnUrl || 'casino_webapp_new.html'}?${params.toString()}`;
+                window.location.href = backUrl;
+            } catch (error) {
+                window.location.href = 'casino_webapp_new.html';
+            }
         }
 
         function createDeck() {

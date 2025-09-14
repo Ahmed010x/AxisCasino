@@ -4,6 +4,7 @@
     <title>🚀 Crash - Casino Game</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="balance_sync.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -431,11 +432,12 @@
             document.getElementById('balance').textContent = currentBalance;
         }
         
-        function updateBalance(newBalance) {
-            currentBalance = newBalance;
-            updateBalanceDisplay();
-            // Update localStorage
-            localStorage.setItem('userBalance', currentBalance.toString());
+        async function updateBalance(amount) {
+            const newBalance = await window.updateBalance(amount);
+            if (newBalance !== null) {
+                currentBalance = newBalance;
+                updateBalanceDisplay();
+            }
         }
         
         function updateStats() {
@@ -460,7 +462,7 @@
             }
         }
         
-        function placeBet() {
+        async function placeBet() {
             if (gameState !== 'waiting') return;
             const bet = parseInt(document.getElementById('betAmount').value);
             const guess = parseFloat(document.getElementById('guessMultiplier').value);
@@ -472,7 +474,7 @@
                 showResult('Enter a valid multiplier guess (1.01 - 50.00)', false);
                 return;
             }
-            updateBalance(currentBalance - bet);
+            await updateBalance(-bet);
             betAmount = bet;
             guessMultiplier = guess;
             playerInRound = true;
@@ -713,10 +715,21 @@
         }
         
         function goBack() {
-            if (gameInterval) clearInterval(gameInterval);
-            // Return to main app with updated balance
-            const backUrl = `${returnUrl}?user_id=${encodeURIComponent(userId)}&balance=${encodeURIComponent(currentBalance)}&user_name=${encodeURIComponent(userName)}`;
-            window.location.href = backUrl;
+            try {
+                if (window.Telegram && window.Telegram.WebApp) {
+                    window.Telegram.WebApp.close();
+                    return;
+                }
+                const params = new URLSearchParams();
+                params.set('user_id', userId || localStorage.getItem('user_id') || '');
+                params.set('userName', userName || 'Player');
+                const latestBalance = localStorage.getItem('balance') || '0';
+                params.set('balance', latestBalance);
+                const backUrl = `${returnUrl || 'casino_webapp_new.html'}?${params.toString()}`;
+                window.location.href = backUrl;
+            } catch (error) {
+                window.location.href = 'casino_webapp_new.html';
+            }
         }
         
         // Initialize when page loads

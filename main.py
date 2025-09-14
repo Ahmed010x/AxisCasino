@@ -538,6 +538,9 @@ async def start_web_server():
     app.router.add_get('/health', health_check)
     app.router.add_get('/', casino_webapp)
     app.router.add_get('/casino', casino_webapp)
+    # --- API endpoints for balance sync ---
+    app.router.add_get('/api/balance', api_get_balance)
+    app.router.add_post('/api/update_balance', api_update_balance)
     
     # Add routes for individual game pages
     app.router.add_get('/{game_file:game_[a-z_]+\.html}', serve_game_page)
@@ -1155,6 +1158,44 @@ Click the button below to launch:
         reply_markup=InlineKeyboardMarkup(keyboard), 
         parse_mode=ParseMode.MARKDOWN
     )
+
+# --- API Endpoints for Balance Sync ---
+async def api_get_balance(request):
+    """API endpoint to get user balance"""
+    user_id = request.query.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Missing user_id'}, status=400)
+    try:
+        user_id = int(user_id)
+        user = await get_user(user_id)
+        if not user:
+            return web.json_response({'error': 'User not found'}, status=404)
+        return web.json_response({'balance': user['balance']})
+    except Exception as e:
+        logger.error(f"/api/balance error: {e}")
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+async def api_update_balance(request):
+    """API endpoint to update user balance atomically"""
+    try:
+        data = await request.json()
+        user_id = int(data.get('user_id'))
+        amount = int(data.get('amount'))
+        if not user_id or amount == 0:
+            return web.json_response({'error': 'Missing user_id or amount'}, status=400)
+        # Validate user exists
+        user = await get_user(user_id)
+        if not user:
+            return web.json_response({'error': 'User not found'}, status=404)
+        # Prevent negative balances
+        if user['balance'] + amount < 0:
+            return web.json_response({'error': 'Insufficient balance'}, status=400)
+        # Update balance atomically
+        new_balance = await update_balance(user_id, amount)
+        return web.json_response({'balance': new_balance})
+    except Exception as e:
+        logger.error(f"/api/update_balance error: {e}")
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 # --- Main Callback Handler ---
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):

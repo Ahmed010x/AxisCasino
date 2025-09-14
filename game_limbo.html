@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌈 Limbo - Casino WebApp</title>
+    <title>Limbo - Casino WebApp</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="balance_sync.js"></script>
     <style>
         * {
             margin: 0;
@@ -347,13 +349,13 @@
 <body>
     <div class="header">
         <button class="back-btn" onclick="goBack()">←</button>
-        <div class="game-title">🌈 Limbo</div>
+        <div class="game-title">Limbo</div>
         <div class="balance-display"><span id="balanceDisplay">1000</span></div>
     </div>
 
     <div class="container">
         <div class="game-info">
-            <div class="game-icon">🎯</div>
+            <div class="game-icon"></div>
             <div class="game-description">
                 Set your target multiplier and bet. If the random result is higher than your target, you win!
             </div>
@@ -379,7 +381,7 @@
         </div>
 
         <div class="payout-info">
-            <div class="payout-amount" id="payoutAmount">20 💰</div>
+            <div class="payout-amount" id="payoutAmount">20</div>
             <div class="win-chance" id="winChance">Win Chance: 50.00%</div>
         </div>
 
@@ -467,7 +469,21 @@
         }
 
         function goBack() {
-            window.history.back();
+            try {
+                if (window.Telegram && window.Telegram.WebApp) {
+                    window.Telegram.WebApp.close();
+                    return;
+                }
+                const params = new URLSearchParams();
+                params.set('user_id', userId || localStorage.getItem('user_id') || '');
+                params.set('userName', userName || 'Player');
+                const latestBalance = localStorage.getItem('balance') || '0';
+                params.set('balance', latestBalance);
+                const backUrl = `${returnUrl || 'casino_webapp_new.html'}?${params.toString()}`;
+                window.location.href = backUrl;
+            } catch (error) {
+                window.location.href = 'casino_webapp_new.html';
+            }
         }
 
         function setMultiplier(multiplier) {

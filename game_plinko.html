@@ -1430,7 +1430,7 @@
             gamesPlayed++;
             if (winAmount > betAmount) {
                 totalWon += (winAmount - betAmount);
-                totalWins++; // Track wins for win rate calculation
+                totalWins; // Track wins for win rate calculation
             }
             
             updateStats();
@@ -1594,19 +1594,22 @@
                     window.Telegram.WebApp.close();
                     return;
                 }
-                
+
                 // Fallback: navigate to return URL with updated balance
                 const params = new URLSearchParams();
-                params.set('userId', userId);
-                params.set('userName', userName);
-                params.set('balance', currentBalance.toString());
-                
-                const backUrl = `${returnUrl}?${params.toString()}`;
+                params.set('user_id', userId || localStorage.getItem('user_id') || '');
+                params.set('userName', userName || 'Player');
+                // Use latest balance from localStorage (synced by balance_sync.js)
+                const latestBalance = localStorage.getItem('balance') || '0';
+                params.set('balance', latestBalance);
+
+                // Always go to main webapp page
+                const backUrl = `${returnUrl || 'casino_webapp_new.html'}?${params.toString()}`;
                 window.location.href = backUrl;
             } catch (error) {
                 console.error('Error navigating back:', error);
-                // Final fallback
-                window.history.back();
+                // Final fallback: always go to main webapp
+                window.location.href = 'casino_webapp_new.html';
             }
         }
         

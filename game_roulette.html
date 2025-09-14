@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🎯 Roulette - Casino WebApp</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="balance_sync.js"></script>
     <style>
         * {
             margin: 0;
@@ -609,7 +611,21 @@
         }
 
         function goBack() {
-            window.history.back();
+            try {
+                if (window.Telegram && window.Telegram.WebApp) {
+                    window.Telegram.WebApp.close();
+                    return;
+                }
+                const params = new URLSearchParams();
+                params.set('user_id', userId || localStorage.getItem('user_id') || '');
+                params.set('userName', userName || 'Player');
+                const latestBalance = localStorage.getItem('balance') || '0';
+                params.set('balance', latestBalance);
+                const backUrl = `${returnUrl || 'casino_webapp_new.html'}?${params.toString()}`;
+                window.location.href = backUrl;
+            } catch (error) {
+                window.location.href = 'casino_webapp_new.html';
+            }
         }
 
         function createNumbersGrid() {
