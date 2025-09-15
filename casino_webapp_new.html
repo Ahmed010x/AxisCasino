@@ -1472,9 +1472,6 @@
 </head>
 <body>
     <div class="header">
-        <button id="backBtn" class="btn-glass" style="margin-right:12px;display:flex;align-items:center;gap:4px;">
-            <span style="font-size:1.2em;">←</span> Back
-        </button>
         <div class="logo-section">
             <button id="menuButton" class="back-btn" style="background:none; border:none; outline:none; cursor:pointer; padding:0 8px 0 0; display:flex; align-items:center; justify-content:center; height:32px; font-size:1.5em; color:#fff;" tabindex="0">
                 <span style="display:block; width:26px; height:22px; position:relative;">
@@ -1485,19 +1482,7 @@
             </button>
         </div>
         <div class="right-section">
-            <button class="btn-glass" id="depositBtn" style="margin-right:8px;">Deposit</button>
-            <button class="btn-glass" id="withdrawBtn" style="margin-right:12px;">Withdraw</button>
-            <div class="balance-section">
-                <div class="balance-label">Your Balance</div>
-                <div class="balance-amount">{BALANCE} chips</div>
-            </div>
-            <div class="profile-section" id="profileBtn" style="cursor:pointer;">
-                <div class="profile-pic" id="profilePic">👤</div>
-                <div class="user-info">
-                    <div class="username" id="username">Player</div>
-                    <div class="user-id">ID: {USER_ID}</div>
-                </div>
-            </div>
+            <!-- Top buttons removed -->
         </div>
     </div>
     
@@ -1550,11 +1535,12 @@
         </div>
         
         <!-- Recent Wins Section -->
-        <div id="recentWinsSection" style="background:#1f1f1f;border-radius:12px;padding:20px 16px 16px 16px;margin-bottom:24px;border:1px solid #2c3441;">
+        <div id="recentWinsSection" style="background:#1f1f1f;border-radius:12px;padding:20px 16px 16px 16px;margin-bottom:24px;">
             <h3 style="color:#ffffff;font-size:1.1em;font-weight:600;margin:0 0 16px 0;letter-spacing:0px;">Recent Wins</h3>
             <div id="recentWinsList" style="display:flex;flex-direction:column;gap:8px;"></div>
         </div>
         
+        <!-- Description/Instructions moved below stats -->
         <div class="coming-soon">
             <h3>Professional Casino Experience</h3>
             <p>Full casino games are being developed</p>
@@ -1573,15 +1559,6 @@
         <a href="#" style="color:#b1bad3; text-decoration:none; font-size:1em; margin-bottom:8px;">VIP & Tournaments</a>
         <a href="#" style="color:#b1bad3; text-decoration:none; font-size:1em; margin-bottom:8px;">Settings</a>
         <a href="#" style="color:#b1bad3; text-decoration:none; font-size:1em; margin-bottom:8px;">Support</a>
-        <!-- Live Chat Widget -->
-        <div id="liveChat" class="live-chat-container" style="margin-top:24px;">
-            <div class="live-chat-header">Live Chat</div>
-            <div class="live-chat-messages" id="chatMessages" style="height:100px;"></div>
-            <div class="live-chat-input-row">
-                <input type="text" class="live-chat-input" id="chatInput" placeholder="Type a message..." />
-                <button class="live-chat-send-btn" id="sendChatBtn">Send</button>
-            </div>
-        </div>
     </div>
     <div id="sidebarOverlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.35); z-index:999;" onclick="closeSidebar()"></div>
     
@@ -1591,27 +1568,6 @@
             <button onclick="closeAllGamesModal()" style="position:absolute; top:12px; right:16px; background:none; border:none; color:#ffffff; font-size:1.8em; cursor:pointer;">&times;</button>
             <h3 style="color:#ffffff; text-align:center; margin-bottom:20px; font-weight:600;">All Games</h3>
             <div id="allGamesGrid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px;"></div>
-        </div>
-    </div>
-    
-    <button id="liveChatFab" style="position:fixed; bottom:90px; right:18px; z-index:1300; background:linear-gradient(135deg,#4ecdc4,#45b7d1); color:#fff; border:none; border-radius:50%; width:56px; height:56px; box-shadow:0 4px 16px rgba(0,0,0,0.18); display:flex; align-items:center; justify-content:center; font-size:2em; cursor:pointer; transition:background 0.2s;">
-        💬
-    </button>
-    
-    <!-- Profile Modal -->
-    <div id="profileModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(15,20,25,0.92); z-index:3000; align-items:center; justify-content:center;">
-        <div style="background:#1a1f29; border-radius:16px; padding:32px 24px 24px 24px; max-width:340px; margin:40px auto; border:1px solid #2c3441; position:relative; box-shadow:0 8px 32px rgba(0,0,0,0.25);">
-            <button onclick="closeProfileModal()" style="position:absolute; top:12px; right:16px; background:none; border:none; color:#ffffff; font-size:1.8em; cursor:pointer;">&times;</button>
-            <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
-                <div class="profile-pic" id="modalProfilePic" style="width:64px; height:64px; font-size:2em; border-width:3px;"></div>
-                <div class="username" id="modalUsername" style="font-size:1.2em; font-weight:700; color:#fff;"></div>
-                <div class="user-id" id="modalUserId" style="font-size:0.9em; color:#4ecdc4;"></div>
-                <div id="modalVipLevel" style="margin:8px 0 0 0; font-size:1em; font-weight:600; color:#ffd700;">VIP: Standard</div>
-                <div style="margin:16px 0 0 0; display:flex; gap:12px;">
-                    <button class="btn-glass" onclick="openDeposit()">Deposit</button>
-                    <button class="btn-glass" onclick="openWithdraw()">Withdraw</button>
-                </div>
-            </div>
         </div>
     </div>
     
@@ -1908,17 +1864,6 @@ window.$crisp=[];window.CRISP_WEBSITE_ID="YOUR_CRISP_WEBSITE_ID";
         // Allow closing sidebar with Escape key
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') closeSidebar();
-        });
-        // Floating live chat button logic
-        const liveChatFab = document.getElementById('liveChatFab');
-        const liveChat = document.getElementById('liveChat');
-        liveChatFab.addEventListener('click', function() {
-            sidebarMenu.style.left = '0';
-            sidebarOverlay.style.display = 'block';
-            // Scroll to live chat in sidebar
-            setTimeout(() => {
-                liveChat.scrollIntoView({behavior:'smooth', block:'center'});
-            }, 200);
         });
         // Profile modal logic
         const profileBtn = document.getElementById('profileBtn');

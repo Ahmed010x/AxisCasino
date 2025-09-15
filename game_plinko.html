@@ -927,36 +927,6 @@
     </style>
 </head>
 <body>
-    <!-- Modern header with sidebar, balance, profile, deposit/withdraw, back button -->
-    <div class="header">
-        <button id="backBtn" class="btn-glass" style="margin-right:12px;display:flex;align-items:center;gap:4px;">
-            <span style="font-size:1.2em;">←</span> Back
-        </button>
-        <div class="logo-section">
-            <button id="menuButton" class="back-btn" style="background:none; border:none; outline:none; cursor:pointer; padding:0 8px 0 0; display:flex; align-items:center; justify-content:center; height:32px; font-size:1.5em; color:#fff;" tabindex="0">
-                <span style="display:block; width:26px; height:22px; position:relative;">
-                    <span style="position:absolute; left:0; top:0; width:100%; height:3px; background:#ffffff; border-radius:2px;"></span>
-                    <span style="position:absolute; left:0; top:8px; width:100%; height:3px; background:#ffffff; border-radius:2px;"></span>
-                    <span style="position:absolute; left:0; top:16px; width:100%; height:3px; background:#ffffff; border-radius:2px;"></span>
-                </span>
-            </button>
-        </div>
-        <div class="right-section">
-            <button class="btn-glass" id="depositBtn" style="margin-right:8px;">Deposit</button>
-            <button class="btn-glass" id="withdrawBtn" style="margin-right:12px;">Withdraw</button>
-            <div class="balance-section">
-                <div class="balance-label">Your Balance</div>
-                <div class="balance-amount">{BALANCE} chips</div>
-            </div>
-            <div class="profile-section" id="profileBtn" style="cursor:pointer;">
-                <div class="profile-pic" id="profilePic">👤</div>
-                <div class="user-info">
-                    <div class="username" id="username">Player</div>
-                    <div class="user-id">ID: {USER_ID}</div>
-                </div>
-            </div>
-        </div>
-    </div>
     
     <div id="plinkoDebugOverlay" class="plinko-debug-overlay"></div>
     <div class="game-container">
