@@ -730,19 +730,29 @@ async def deposit_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TY
     
     # Create invoice with unique address and mini app invoice type
     try:
-        # Add invoice_type='miniapp' to request a mini app invoice from CryptoBot
         invoice = await create_litecoin_invoice(amount, user_id, address=True, invoice_type='miniapp')
         logger.info(f"CryptoBot invoice response: {invoice}")
         if invoice.get("ok"):
             result = invoice["result"]
-            pay_url = result.get("pay_url")
+            mini_app_url = result.get("mini_app_invoice_url")
+            bot_invoice_url = result.get("bot_invoice_url")
             address = result.get("address")
             text = f"✅ Deposit Invoice Created!\n\n" \
                    f"Send <b>{amount} LTC</b> to the unique address below:\n" \
-                   f"<code>{address}</code>\n\n" \
-                   f"Or pay using this link: {pay_url}\n\n" \
-                   f"After payment, your balance will be updated automatically."
-            await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+                   f"<code>{address}</code>\n\n"
+            buttons = []
+            if mini_app_url:
+                text += "Or pay instantly in Telegram Mini App:"
+                # Use 'url' for InlineKeyboardButton to open mini app invoice
+                buttons.append([InlineKeyboardButton("💸 Pay in Mini App", url=mini_app_url)])
+            elif bot_invoice_url:
+                text += "Or pay using this link:"
+                buttons.append([InlineKeyboardButton("💸 Pay Invoice", url=bot_invoice_url)])
+            else:
+                text += "(No payment link available, please contact support.)"
+            text += "\n\nAfter payment, your balance will be updated automatically."
+            # Always send as a new message to avoid Telegram Mini App button issues
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons) if buttons else None, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
         else:
             await update.message.reply_text("❌ Failed to create invoice. Please try again later.")
     except Exception as e:
