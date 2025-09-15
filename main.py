@@ -703,7 +703,12 @@ async def deposit_crypto_start(update: Update, context: ContextTypes.DEFAULT_TYP
         f"Current Balance: {format_ltc(user['balance'])}\n\n"
         f"Enter the amount of LTC you want to deposit (min {min_deposit:.2f}):"
     )
-    await update.message.reply_text(text)
+    # Use message if available, else fallback to callback_query.message
+    message = getattr(update, 'message', None) or getattr(getattr(update, 'callback_query', None), 'message', None)
+    if message:
+        await message.reply_text(text)
+    else:
+        logger.error("No message object found in update for deposit_crypto_start")
     return DEPOSIT_LTC_AMOUNT
 
 async def deposit_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
