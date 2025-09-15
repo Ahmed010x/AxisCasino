@@ -112,6 +112,10 @@ try:
 except ImportError:
     logger.warning("CryptoBot utilities not available")
 
+# --- Utility: Format LTC with 2 decimals ---
+def format_ltc(amount: float) -> str:
+    return f"{amount:.2f} LTC"
+
 # --- Production Database System ---
 async def init_db():
     """Initialize production database"""
@@ -217,31 +221,22 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     username = user.username or user.first_name
-    
-    # Get or create user
     user_data = await get_user(user_id)
     if not user_data:
         user_data = await create_user(user_id, username)
-    
-    text = f"""
-🎰 **CASINO BOT** 🎰
-
-👋 *Welcome, {username}!*
-
-💰 **Balance: {user_data['balance']:.8f} LTC**
-🏆 **Games Played: {user_data['games_played']}**
-
-Choose an action below:
-"""
-    
+    text = (
+        f"🎰 CASINO BOT 🎰\n\n"
+        f"👋 Welcome, {username}!\n\n"
+        f"💰 Balance: {format_ltc(user_data['balance'])}\n"
+        f"🏆 Games Played: {user_data['games_played']}\n\n"
+        "Choose an action below:"
+    )
     keyboard = [
-        [InlineKeyboardButton("🎮 Mini App Centre", callback_data="mini_app_centre"), InlineKeyboardButton("💰 Check Balance", callback_data="show_balance")],
-        [InlineKeyboardButton("🎁 Bonuses", callback_data="bonus_centre"), InlineKeyboardButton("📊 My Statistics", callback_data="show_stats")],
-        [InlineKeyboardButton("🏆 Leaderboard", callback_data="show_leaderboard"), InlineKeyboardButton("⚙️ Settings", callback_data="user_settings")],
-        [InlineKeyboardButton("ℹ️ Help & Info", callback_data="show_help")]
+        [InlineKeyboardButton("🎮 Play", callback_data="mini_app_centre"), InlineKeyboardButton("💰 Balance", callback_data="show_balance")],
+        [InlineKeyboardButton("💳 Deposit", callback_data="deposit"), InlineKeyboardButton("💸 Withdraw", callback_data="withdraw")],
+        [InlineKeyboardButton("ℹ️ Help", callback_data="show_help")]
     ]
-    
-    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 # --- Mini App Centre ---
 async def show_mini_app_centre(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -611,25 +606,18 @@ async def show_balance_callback(update: Update, context: ContextTypes.DEFAULT_TY
     user = await get_user(user_id)
     if not user:
         user = await create_user(user_id, query.from_user.username or query.from_user.first_name)
-    
-    text = f"""
-💰 **BALANCE OVERVIEW** 💰
-
-💎 **Current Balance:** {user['balance']:.8f} LTC
-🎮 **Games Played:** {user['games_played']}
-💸 **Total Wagered:** {user['total_wagered']:.8f} LTC
-💰 **Total Won:** {user['total_won']:.8f} LTC
-
-Ready to manage your funds or play more games?
-"""
-    
+    text = (
+        f"💰 BALANCE\n\n"
+        f"Current Balance: {format_ltc(user['balance'])}\n"
+        f"Games Played: {user['games_played']}\n"
+        f"Total Wagered: {format_ltc(user['total_wagered'])}\n"
+        f"Total Won: {format_ltc(user['total_won'])}\n"
+    )
     keyboard = [
         [InlineKeyboardButton("💳 Deposit", callback_data="deposit"), InlineKeyboardButton("💸 Withdraw", callback_data="withdraw")],
-        [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"), InlineKeyboardButton("🎁 Get Bonus", callback_data="bonus_centre")],
-        [InlineKeyboardButton("🔙 Back to Main", callback_data="main_panel")]
+        [InlineKeyboardButton("🎮 Play", callback_data="mini_app_centre")]
     ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def main_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Return to main panel"""
@@ -711,11 +699,11 @@ async def deposit_crypto_start(update: Update, context: ContextTypes.DEFAULT_TYP
     user = await get_user(user_id)
     min_deposit = 0.01
     text = (
-        f"₿ <b>Litecoin Deposit</b>\n\n"
-        f"Current Balance: <b>{user['balance']:.8f} LTC</b>\n\n"
-        f"Enter the amount of LTC you want to deposit (min {min_deposit} LTC):"
+        f"₿ Litecoin Deposit\n\n"
+        f"Current Balance: {format_ltc(user['balance'])}\n\n"
+        f"Enter the amount of LTC you want to deposit (min {min_deposit:.2f}):"
     )
-    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+    await update.message.reply_text(text)
     return DEPOSIT_LTC_AMOUNT
 
 async def deposit_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -727,8 +715,6 @@ async def deposit_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TY
     except Exception:
         await update.message.reply_text("❌ Invalid amount. Please enter a valid LTC amount (min 0.01):")
         return DEPOSIT_LTC_AMOUNT
-    
-    # Create invoice with unique address and mini app invoice type
     try:
         invoice = await create_litecoin_invoice(amount, user_id, address=True, invoice_type='miniapp')
         logger.info(f"CryptoBot invoice response: {invoice}")
@@ -738,27 +724,24 @@ async def deposit_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TY
             bot_invoice_url = result.get("bot_invoice_url")
             address = result.get("address")
             text = f"✅ Deposit Invoice Created!\n\n" \
-                   f"Send <b>{amount} LTC</b> to the unique address below:\n" \
-                   f"<code>{address}</code>\n\n"
+                   f"Send {format_ltc(amount)} to the unique address below:\n" \
+                   f"{address}\n\n"
             buttons = []
             if mini_app_url:
                 text += "Or pay instantly in Telegram Mini App:"
-                # Use 'url' for InlineKeyboardButton to open mini app invoice
                 buttons.append([InlineKeyboardButton("💸 Pay in Mini App", url=mini_app_url)])
-            elif bot_invoice_url:
-                text += "Or pay using this link:"
+            if bot_invoice_url:
+                text += "\nOr pay using this link:"
                 buttons.append([InlineKeyboardButton("💸 Pay Invoice", url=bot_invoice_url)])
-            else:
+            if not buttons:
                 text += "(No payment link available, please contact support.)"
             text += "\n\nAfter payment, your balance will be updated automatically."
-            # Always send as a new message to avoid Telegram Mini App button issues
-            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons) if buttons else None, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons) if buttons else None)
         else:
             await update.message.reply_text("❌ Failed to create invoice. Please try again later.")
     except Exception as e:
         logger.error(f"Deposit error: {e}")
         await update.message.reply_text("❌ Deposit system temporarily unavailable. Please try again later.")
-    
     return ConversationHandler.END
 
 # --- Withdraw Conversation Handlers ---
@@ -767,11 +750,11 @@ async def withdraw_crypto_start(update: Update, context: ContextTypes.DEFAULT_TY
     user = await get_user(user_id)
     min_withdraw = 0.01
     text = (
-        f"₿ <b>Litecoin Withdraw</b>\n\n"
-        f"Available Balance: <b>{user['balance']:.8f} LTC</b>\n\n"
-        f"Enter the amount of LTC you want to withdraw (min {min_withdraw} LTC):"
+        f"₿ Litecoin Withdraw\n\n"
+        f"Available Balance: {format_ltc(user['balance'])}\n\n"
+        f"Enter the amount of LTC you want to withdraw (min {min_withdraw:.2f}):"
     )
-    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+    await update.message.reply_text(text)
     return WITHDRAW_LTC_AMOUNT
 
 async def withdraw_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -786,17 +769,13 @@ async def withdraw_crypto_amount(update: Update, context: ContextTypes.DEFAULT_T
     except Exception:
         await update.message.reply_text("❌ Invalid amount. Please enter a valid LTC amount (min 0.01) within your balance:")
         return WITHDRAW_LTC_AMOUNT
-    
-    # Store amount in context for next step
     context.user_data['withdraw_amount'] = amount
-    
     text = (
-        f"₿ <b>Litecoin Withdraw</b>\n\n"
-        f"Amount: <b>{amount} LTC</b>\n\n"
-        f"Now enter your Litecoin address:\n"
-        f"(Example: ltc1q... or M...)"
+        f"₿ Litecoin Withdraw\n\n"
+        f"Amount: {format_ltc(amount)}\n\n"
+        f"Now enter your Litecoin address:\n(Example: ltc1q... or M...)"
     )
-    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+    await update.message.reply_text(text)
     return WITHDRAW_LTC_ADDRESS
 
 async def withdraw_crypto_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -804,52 +783,33 @@ async def withdraw_crypto_address(update: Update, context: ContextTypes.DEFAULT_
     user = await get_user(user_id)
     address = update.message.text.strip()
     amount = context.user_data.get('withdraw_amount')
-    
     if not amount:
         await update.message.reply_text("❌ Session expired. Please start withdrawal again.")
         return ConversationHandler.END
-    
-    # Basic address validation
     if not (address.startswith(('ltc1', 'L', 'M', '3')) and len(address) >= 26):
         await update.message.reply_text("❌ Invalid Litecoin address format. Please enter a valid address:")
         return WITHDRAW_LTC_ADDRESS
-    
-    # Process withdrawal
     try:
-        # Check balance again
         if user['balance'] < amount:
             await update.message.reply_text("❌ Insufficient balance.")
             return ConversationHandler.END
-        
-        # Deduct balance
         if not await deduct_balance(user_id, amount):
             await update.message.reply_text("❌ Failed to process withdrawal.")
             return ConversationHandler.END
-        
-        # Send LTC via CryptoBot
         result = await send_litecoin(address, amount, f"Withdrawal for user {user_id}")
-        
         if result.get("ok"):
             await update.message.reply_text(
-                f"✅ Withdrawal Successful!\n\n"
-                f"Amount: <b>{amount} LTC</b>\n"
-                f"Address: <code>{address}</code>\n\n"
-                f"Transaction has been processed via CryptoBot.",
-                parse_mode=ParseMode.HTML
+                f"✅ Withdrawal Successful!\n\nAmount: {format_ltc(amount)}\nAddress: {address}\n\nTransaction has been processed via CryptoBot."
             )
             logger.info(f"Withdrawal processed: {amount} LTC to {address} for user {user_id}")
         else:
-            # Refund balance if withdrawal failed
             await update_balance(user_id, amount)
             await update.message.reply_text("❌ Withdrawal failed. Your balance has been refunded. Please try again later.")
             logger.error(f"CryptoBot withdrawal failed for user {user_id}: {result}")
-        
     except Exception as e:
-        # Refund balance if withdrawal failed
         await update_balance(user_id, amount)
         await update.message.reply_text("❌ Withdrawal failed. Your balance has been refunded. Please try again later.")
         logger.error(f"Withdrawal error for user {user_id}: {e}")
-    
     return ConversationHandler.END
 
 # --- CryptoBot Webhook Endpoint (for payment detection) ---
