@@ -355,29 +355,17 @@ async def show_balance_callback(update: Update, context: ContextTypes.DEFAULT_TY
     user = await get_user(user_id)
     
     text = f"""
-💰 **BALANCE OVERVIEW** 💰
-
-💎 **Current Balance:** {user['balance']:.8f} LTC
-🎮 **Games Played:** {user['games_played']}
-💸 **Total Wagered:** {user['total_wagered']:.8f} LTC
-💰 **Total Won:** {user['total_won']:.8f} LTC
-
-📊 **Account Status:**
-• Account Type: Standard
-• Withdrawal Limit: 25,000 LTC/day
-• Minimum Withdrawal: 1,000 LTC
-
-💳 **Financial Operations:**
-Manage your funds with secure deposit and withdrawal options.
+💰 <b>Balance:</b> {user['balance']:.8f} LTC
+🎮 <b>Games Played:</b> {user['games_played']}
+💸 <b>Total Wagered:</b> {user['total_wagered']:.8f} LTC
+💰 <b>Total Won:</b> {user['total_won']:.8f} LTC
 """
-    
     keyboard = [
         [InlineKeyboardButton("💳 Deposit", callback_data="deposit"), InlineKeyboardButton("💸 Withdraw", callback_data="withdraw")],
         [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"), InlineKeyboardButton("🎁 Get Bonus", callback_data="bonus_centre")],
         [InlineKeyboardButton("🔙 Back to Main", callback_data="main_panel")]
     ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
 async def main_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Return to main panel"""
@@ -404,34 +392,18 @@ async def placeholder_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
 # --- Deposit Handler ---
 async def deposit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle deposit requests"""
     query = update.callback_query
     await query.answer()
-    user_id = query.from_user.id
-    user = await get_user(user_id)
-    
-    text = f"""
-💳 **DEPOSIT FUNDS** 💳
-
-💰 **Current Balance:** {user['balance']:.8f} LTC
-👤 **Player:** {user['username']}
-
-🏦 **Deposit Methods:**
-
-**Ł Litecoin (Only)**
-• Fast, low-fee crypto deposits
-• Min: 50 LTC
-• Max: 50,000 LTC
-• Fee: Network fee only
-• Address provided after amount selection
-
-Choose your deposit method:
-"""
+    text = (
+        "💳 <b>Deposit</b>\n\n"
+        "Choose your deposit method below.\n\n"
+        "• Litecoin (CryptoBot, instant)\n"
+    )
     keyboard = [
-        [InlineKeyboardButton("Ł Litecoin (Crypto)", callback_data="deposit_litecoin")],
+        [InlineKeyboardButton("Ł Litecoin (CryptoBot)", callback_data="deposit_crypto")],
         [InlineKeyboardButton("🔙 Back to Balance", callback_data="show_balance")]
     ]
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
 # --- Litecoin Deposit Handler ---
 async def deposit_litecoin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -536,7 +508,7 @@ async def withdraw_crypto_callback(update: Update, context: ContextTypes.DEFAULT
     text = (
         f"₿ <b>Litecoin Withdraw</b>\n\n"
         f"Enter the amount of LTC you want to withdraw (min {min_withdraw} LTC) and your Litecoin address.\n\n"
-        f"Example: 0.05 ltc1q...\n\n"
+        f"Example: 0.05 ltc1...\n\n"
         f"Withdrawals are processed automatically."
     )
     keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="withdraw")]]
