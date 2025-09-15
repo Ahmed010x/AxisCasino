@@ -249,15 +249,54 @@
             font-weight: 700;
             color: #4ecdc4;
         }
+        
+        .btn-glass {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #ffffff;
+            padding: 10px 16px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-glass:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
     </style>
 </head>
 <body>
     <div class="game-container">
         <div class="header">
-            <button class="back-btn" onclick="goBack()">← Back</button>
-            <h1 style="color: #ffffff; font-size: 1.4em;">🪙 Coin Flip</h1>
-            <div class="balance-display">
-                <div class="balance-amount" id="balance">1000</div>
+            <button id="backBtn" class="btn-glass" style="margin-right:12px;display:flex;align-items:center;gap:4px;"><span style="font-size:1.2em;">←</span> Back</button>
+            <div class="logo-section">
+                <button id="menuButton" class="back-btn" style="background:none; border:none; outline:none; cursor:pointer; padding:0 8px 0 0; display:flex; align-items:center; justify-content:center; height:32px; font-size:1.5em; color:#fff;" tabindex="0">
+                    <span style="display:block; width:26px; height:22px; position:relative;">
+                        <span style="position:absolute; left:0; top:0; width:100%; height:3px; background:#ffffff; border-radius:2px;"></span>
+                        <span style="position:absolute; left:0; top:8px; width:100%; height:3px; background:#ffffff; border-radius:2px;"></span>
+                        <span style="position:absolute; left:0; top:16px; width:100%; height:3px; background:#ffffff; border-radius:2px;"></span>
+                    </span>
+                </button>
+            </div>
+            <div class="right-section">
+                <button class="btn-glass" id="depositBtn" style="margin-right:8px;">Deposit</button>
+                <button class="btn-glass" id="withdrawBtn" style="margin-right:12px;">Withdraw</button>
+                <div class="balance-section">
+                    <div class="balance-label">Your Balance</div>
+                    <div class="balance-amount">{BALANCE} chips</div>
+                </div>
+                <div class="profile-section" id="profileBtn" style="cursor:pointer;">
+                    <div class="profile-pic" id="profilePic">👤</div>
+                    <div class="user-info">
+                        <div class="username" id="username">Player</div>
+                        <div class="user-id">ID: {USER_ID}</div>
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -449,27 +488,17 @@
             webApp.BackButton.show();
             webApp.BackButton.onClick(() => goBack());
         }
-    </script>
-</body>
-</html>
-            const userId = user ? user.id : 1;
-            const response = await fetch('/api/game', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: userId, game_type: 'coinflip', action: 'play', bet_amount: bet, choice: side })
+        
+        const backBtn = document.getElementById('backBtn');
+        if (backBtn) {
+            backBtn.addEventListener('click', function() {
+                if (window.history.length > 1) {
+                    window.history.back();
+                } else {
+                    window.location.href = 'casino_webapp_new.html';
+                }
             });
-            const data = await response.json();
-            if (response.ok) {
-                resultDiv.innerHTML = `<div>Coin landed on: <b>${data.result}</b></div>` +
-                    `<div>${data.win ? '🎉 You Won!' : '😞 You Lost!'}</div>` +
-                    `<div style='color:#4ecdc4;'>New balance: ${data.new_balance} chips</div>`;
-            } else {
-                resultDiv.innerHTML = `<span style='color:#ff6b6b;'>${data.error || 'Game failed!'}</span>`;
-            }
-        } catch (e) {
-            resultDiv.innerHTML = '<span style="color:#ff6b6b;">Connection error!</span>';
         }
-    }
     </script>
 </body>
 </html>

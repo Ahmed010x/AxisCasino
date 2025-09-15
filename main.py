@@ -16,6 +16,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 import aiohttp
 import aiohttp.web
+from aiohttp import web, ClientSession, WSMsgType
 
 import aiosqlite
 from telegram import (
@@ -499,9 +500,6 @@ Choose your withdrawal method:
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
 # --- Health Check and Keep-Alive for Render ---
-from aiohttp import web, ClientSession
-import aiohttp.web
-
 async def health_check(request):
     """Health check endpoint for Render"""
     return web.json_response({
@@ -539,6 +537,26 @@ async def keep_alive_heartbeat():
                 logger.error(f"❌ Heartbeat error: {e}")
                 continue
 
+# --- Live Chat WebSocket State ---
+livechat_clients = set()
+
+async def websocket_chat_handler(request):
+    ws = web.WebSocketResponse()
+    await ws.prepare(request)
+    livechat_clients.add(ws)
+    try:
+        async for msg in ws:
+            if msg.type == WSMsgType.TEXT:
+                # Broadcast to all clients
+                for client in livechat_clients:
+                    if not client.closed:
+                        await client.send_str(msg.data)
+            elif msg.type == WSMsgType.ERROR:
+                print(f'WebSocket connection closed with exception {ws.exception()}')
+    finally:
+        livechat_clients.discard(ws)
+    return ws
+
 async def start_web_server():
     """Start web server for health checks and WebApp"""
     app = web.Application()
@@ -548,19 +566,16 @@ async def start_web_server():
     # --- API endpoints for balance sync ---
     app.router.add_get('/api/balance', api_get_balance)
     app.router.add_post('/api/update_balance', api_update_balance)
-    
+    # --- Live Chat WebSocket endpoint ---
+    app.router.add_get('/ws/chat', websocket_chat_handler)
     # Add routes for individual game pages
     app.router.add_get(r'/{game_file:game_[a-z_]+\.html}', serve_game_page)
-    
     # Static files
     app.router.add_static('/', path=os.path.join(os.path.dirname(__file__), 'static'), name='static')
-    
     runner = web.AppRunner(app)
     await runner.setup()
-    
     site = web.TCPSite(runner, '0.0.0.0', PORT)
     await site.start()
-    
     logger.info(f"✅ Health check server started on port {PORT}")
     return runner
 
@@ -1449,7 +1464,7 @@ async def show_leaderboard_callback(update: Update, context: ContextTypes.DEFAUL
     
     keyboard = [
         [InlineKeyboardButton("📊 My Stats", callback_data="show_stats"), InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre")],
-        [InlineKeyboardButton("🔙 Back to Main", callback_data="main_panel")]
+        [InlineKeyboardButton("🎁 Get Bonus", callback_data="bonus_centre"), InlineKeyboardButton("🔙 Back to Main", callback_data="main_panel")]
     ]
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)

@@ -713,26 +713,253 @@
             margin: 24px auto;
             max-width: 320px;
         }
+        
+        /* Modern header styles */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: rgba(26, 33, 62, 0.9);
+            border-bottom: 1px solid rgba(78, 205, 196, 0.2);
+            border-radius: 0 0 16px 16px;
+            position: relative;
+            z-index: 1000;
+        }
+        
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .logo-section img {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+        }
+        
+        .right-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .balance-section {
+            text-align: right;
+        }
+        
+        .balance-label {
+            font-size: 0.75em;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 4px;
+        }
+        
+        .balance-amount {
+            font-size: 1.1em;
+            font-weight: 700;
+            color: #4ecdc4;
+        }
+        
+        .profile-section {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        
+        .profile-pic {
+            width: 36px;
+            height: 36px;
+            background: #4ecdc4;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            color: #1a1f29;
+            position: relative;
+        }
+        
+        .profile-pic::after {
+            content: '';
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: #ffd700;
+            border-radius: 50%;
+            top: 2px;
+            right: 2px;
+            border: 2px solid #1a1f29;
+        }
+        
+        .user-info {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+        }
+        
+        .username {
+            font-size: 0.9em;
+            font-weight: 600;
+            color: #ffffff;
+        }
+        
+        .user-id {
+            font-size: 0.75em;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        /* Glassmorphism buttons */
+        .btn-glass {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 10px 16px;
+            color: #ffffff;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        .btn-glass:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
+        }
+        
+        /* Profile modal styles */
+        #profileModal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(15, 20, 25, 0.92);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #profileModal .modal-content {
+            background: #1a1f29;
+            border-radius: 16px;
+            padding: 32px 24px 24px 24px;
+            max-width: 340px;
+            margin: 40px auto;
+            border: 1px solid #2c3441;
+            position: relative;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+        }
+        
+        #profileModal .close-btn {
+            position: absolute;
+            top: 12px;
+            right: 16px;
+            background: none;
+            border: none;
+            color: #ffffff;
+            font-size: 1.8em;
+            cursor: pointer;
+        }
+        
+        #profileModal .profile-pic {
+            width: 64px;
+            height: 64px;
+            font-size: 2em;
+            border-width: 3px;
+        }
+        
+        #profileModal .username {
+            font-size: 1.2em;
+            font-weight: 700;
+            color: #fff;
+        }
+        
+        #profileModal .user-id {
+            font-size: 0.9em;
+            color: #4ecdc4;
+        }
+        
+        #profileModal .vip-level {
+            margin: 8px 0 0 0;
+            font-size: 1em;
+            font-weight: 600;
+            color: #ffd700;
+        }
+        
+        #profileModal .btn-glass {
+            width: 100%;
+            margin-top: 16px;
+        }
+        
+        /* Live chat button */
+        #liveChatFab {
+            position: fixed;
+            bottom: 90px;
+            right: 18px;
+            z-index: 1300;
+            background: linear-gradient(135deg,#4ecdc4,#45b7d1);
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 56px;
+            height: 56px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2em;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        /* General improvements */
+        .hidden {
+            display: none !important;
+        }
+        
+        .visible {
+            display: block !important;
+        }
     </style>
 </head>
 <body>
-    <div id="plinkoDebugOverlay" class="plinko-debug-overlay"></div>
-    <div class="game-container">
-        <div class="header">
-            <button class="back-btn" onclick="goBack()">←</button>
-            <div style="display:flex;align-items:center;gap:12px;">
-                <span style="font-size:1.2em;font-weight:700;letter-spacing:1px;">Plinko</span>
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-                    <input type="checkbox" id="plinkoDemoToggle" style="accent-color:#00d4aa;width:18px;height:18px;">
-                    <span style="font-size:0.95em;color:#00d4aa;font-weight:600;">Demo</span>
-                </label>
+    <!-- Modern header with sidebar, balance, profile, deposit/withdraw, back button -->
+    <div class="header">
+        <button id="backBtn" class="btn-glass" style="margin-right:12px;display:flex;align-items:center;gap:4px;">
+            <span style="font-size:1.2em;">←</span> Back
+        </button>
+        <div class="logo-section">
+            <button id="menuButton" class="back-btn" style="background:none; border:none; outline:none; cursor:pointer; padding:0 8px 0 0; display:flex; align-items:center; justify-content:center; height:32px; font-size:1.5em; color:#fff;" tabindex="0">
+                <span style="display:block; width:26px; height:22px; position:relative;">
+                    <span style="position:absolute; left:0; top:0; width:100%; height:3px; background:#ffffff; border-radius:2px;"></span>
+                    <span style="position:absolute; left:0; top:8px; width:100%; height:3px; background:#ffffff; border-radius:2px;"></span>
+                    <span style="position:absolute; left:0; top:16px; width:100%; height:3px; background:#ffffff; border-radius:2px;"></span>
+                </span>
+            </button>
+        </div>
+        <div class="right-section">
+            <button class="btn-glass" id="depositBtn" style="margin-right:8px;">Deposit</button>
+            <button class="btn-glass" id="withdrawBtn" style="margin-right:12px;">Withdraw</button>
+            <div class="balance-section">
+                <div class="balance-label">Your Balance</div>
+                <div class="balance-amount">{BALANCE} chips</div>
             </div>
-            <div class="balance-display">
-                <div class="balance-label">Balance</div>
-                <div class="balance-amount" id="balanceAmount">{BALANCE}</div>
+            <div class="profile-section" id="profileBtn" style="cursor:pointer;">
+                <div class="profile-pic" id="profilePic">👤</div>
+                <div class="user-info">
+                    <div class="username" id="username">Player</div>
+                    <div class="user-id">ID: {USER_ID}</div>
+                </div>
             </div>
         </div>
-        
+    </div>
+    
+    <div id="plinkoDebugOverlay" class="plinko-debug-overlay"></div>
+    <div class="game-container">
         <div class="game-board">
             <div class="plinko-board" id="plinkoBoard">
                 <div class="multiplier-slots" id="multiplierSlots"></div>
@@ -826,7 +1053,51 @@
         </div>
     </div>
     
+    <button id="liveChatFab" style="position:fixed; bottom:90px; right:18px; z-index:1300; background:linear-gradient(135deg,#4ecdc4,#45b7d1); color:#fff; border:none; border-radius:50%; width:56px; height:56px; box-shadow:0 4px 16px rgba(0,0,0,0.18); display:flex; align-items:center; justify-content:center; font-size:2em; cursor:pointer; transition:background 0.2s;">💬</button>
+    <div id="profileModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(15,20,25,0.92); z-index:3000; align-items:center; justify-content:center;">
+        <div style="background:#1a1f29; border-radius:16px; padding:32px 24px 24px 24px; max-width:340px; margin:40px auto; border:1px solid #2c3441; position:relative; box-shadow:0 8px 32px rgba(0,0,0,0.25);">
+            <button onclick="closeProfileModal()" style="position:absolute; top:12px; right:16px; background:none; border:none; color:#ffffff; font-size:1.8em; cursor:pointer;">&times;</button>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
+                <div class="profile-pic" id="modalProfilePic" style="width:64px; height:64px; font-size:2em; border-width:3px;"></div>
+                <div class="username" id="modalUsername" style="font-size:1.2em; font-weight:700; color:#fff;"></div>
+                <div class="user-id" id="modalUserId" style="font-size:0.9em; color:#4ecdc4;"></div>
+                <div id="modalVipLevel" style="margin:8px 0 0 0; font-size:1em; font-weight:600; color:#ffd700;">VIP: Standard</div>
+                <div style="margin:16px 0 0 0; display:flex; gap:12px;">
+                    <button class="btn-glass" onclick="openDeposit()">Deposit</button>
+                    <button class="btn-glass" onclick="openWithdraw()">Withdraw</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="balance_sync.js"></script>
     <script>
+    // Sidebar menu logic
+    const menuButton = document.getElementById('menuButton');
+    menuButton.addEventListener('click', function(e) {
+        e.stopPropagation();
+        // Open sidebar logic (implement as in mini app)
+    });
+    // Floating live chat button logic
+    const liveChatFab = document.getElementById('liveChatFab');
+    liveChatFab.addEventListener('click', function() {
+        // Open sidebar and scroll to live chat (implement as in mini app)
+    });
+    // Profile modal logic
+    const profileBtn = document.getElementById('profileBtn');
+    const profileModal = document.getElementById('profileModal');
+    profileBtn.addEventListener('click', function() {
+        // Fill modal with user info (implement as in mini app)
+        profileModal.style.display = 'flex';
+    });
+    function closeProfileModal() {
+        profileModal.style.display = 'none';
+    }
+    document.getElementById('depositBtn').onclick = openDeposit;
+    document.getElementById('withdrawBtn').onclick = openWithdraw;
+    function openDeposit() { alert('Deposit coming soon!'); closeProfileModal(); }
+    function openWithdraw() { alert('Withdraw coming soon!'); closeProfileModal(); }
+    
         // Global variables
         let gamesPlayed = 0;
         let totalWon = 0;
@@ -1574,169 +1845,16 @@
             return finalX;
         }
         
-        function showResult(message, isWin) {
-            const resultDiv = document.getElementById('result');
-            resultDiv.textContent = message;
-            resultDiv.className = 'result ' + (isWin ? 'win' : 'lose');
-            resultDiv.style.display = 'block';
-            
-            // Auto-hide after 5 seconds
-            setTimeout(() => {
-                resultDiv.style.display = 'none';
-            }, 5000);
-        }
-        
-        // Telegram Mini App integration
-        function goBack() {
-            try {
-                // Try to use Telegram WebApp back button first
-                if (window.Telegram && window.Telegram.WebApp) {
-                    window.Telegram.WebApp.close();
-                    return;
+                function showResult(message, isWin) {
+                    const resultDiv = document.getElementById('result');
+                    if (!resultDiv) return;
+                    resultDiv.textContent = message;
+                    resultDiv.className = 'result ' + (isWin ? 'win' : 'lose');
+                    resultDiv.style.display = 'block';
+                    setTimeout(() => {
+                        resultDiv.style.display = 'none';
+                    }, 3500);
                 }
-
-                // Fallback: navigate to return URL with updated balance
-                const params = new URLSearchParams();
-                params.set('user_id', userId || localStorage.getItem('user_id') || '');
-                params.set('userName', userName || 'Player');
-                // Use latest balance from localStorage (synced by balance_sync.js)
-                const latestBalance = localStorage.getItem('balance') || '0';
-                params.set('balance', latestBalance);
-
-                // Always go to main webapp page
-                const backUrl = `${returnUrl || 'casino_webapp_new.html'}?${params.toString()}`;
-                window.location.href = backUrl;
-            } catch (error) {
-                console.error('Error navigating back:', error);
-                // Final fallback: always go to main webapp
-                window.location.href = 'casino_webapp_new.html';
-            }
-        }
-        
-        // Initialize Telegram WebApp
-        function initTelegramWebApp() {
-            if (window.Telegram && window.Telegram.WebApp) {
-                const tg = window.Telegram.WebApp;
-                
-                // Configure WebApp
-                tg.expand();
-                tg.ready();
-                
-                // Set main button if needed
-                tg.MainButton.text = "Back to Casino";
-                tg.MainButton.onClick(() => goBack());
-                
-                // Handle back button
-                tg.BackButton.show();
-                tg.BackButton.onClick(() => goBack());
-                
-                // Get user data from Telegram
-                if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
-                    const user = tg.initDataUnsafe.user;
-                    userId = user.id.toString();
-                    userName = user.first_name || 'Player';
-                }
-                
-                console.log('Telegram WebApp initialized');
-            }
-        }
-        
-        // --- DEBUG OVERLAY ---
-        function showDebugOverlay(msg) {
-            const overlay = document.getElementById('plinkoDebugOverlay');
-            if (overlay) {
-                overlay.textContent = msg;
-                overlay.style.display = 'block';
-            }
-        }
-        function hideDebugOverlay() {
-            const overlay = document.getElementById('plinkoDebugOverlay');
-            if (overlay) overlay.style.display = 'none';
-                      }
-
-        // --- FALLBACK: Show error if board fails to render ---
-        function showBoardError(msg) {
-            let err = document.getElementById('plinkoBoardError');
-            if (!err) {
-                err = document.createElement('div');
-                err.id = 'plinkoBoardError';
-                err.className = 'plinko-board-error';
-                document.body.appendChild(err);
-            }
-            err.textContent = msg;
-            err.style.display = 'block';
-        }
-        function hideBoardError() {
-            const err = document.getElementById('plinkoBoardError');
-            if (err) err.style.display = 'none';
-        }
-
-        // Optimize board size for mobile devices (robust fallback)
-        function optimizeBoardSize() {
-            const gameBoard = document.querySelector('.plinko-board');
-            const gameContainer = document.querySelector('.game-container');
-            if (!gameBoard || !gameContainer) {
-                showBoardError('Plinko board failed to load. Please reload or contact support.');
-                showDebugOverlay('Missing .plinko-board or .game-container');
-                return;
-            }
-            // Calculate available height
-            const viewportHeight = window.innerHeight;
-            const containerPadding = 16; // 8px * 2
-            const headerHeight = document.querySelector('.header')?.offsetHeight || 60;
-            const controlsHeight = document.querySelector('.controls')?.offsetHeight || 200;
-            const statsHeight = document.querySelector('.stats')?.offsetHeight || 80;
-            const margins = 60; // Various margins and paddings
-            let availableHeight = viewportHeight - containerPadding - headerHeight - controlsHeight - statsHeight - margins;
-            // Fallback: If availableHeight is too small or negative, use a safe minimum
-            if (isNaN(availableHeight) || availableHeight < 120) {
-                availableHeight = Math.max(viewportHeight * 0.45, 180);
-                showDebugOverlay('Fallback: availableHeight too small, using ' + Math.round(availableHeight) + 'px');
-            } else {
-                hideDebugOverlay();
-            }
-            // Set minimum and maximum board heights
-            const minHeight = 180;
-            const maxHeight = 500;
-            let boardHeight = Math.max(minHeight, Math.min(maxHeight, availableHeight));
-            // Apply the calculated height
-            gameBoard.style.height = boardHeight + 'px';
-            // Hide error if board is visible
-            if (gameBoard.offsetHeight > 100) hideBoardError();
-            // Debug info
-            if (window.location.search.includes('debug=1') || localStorage.getItem('plinkoDebug') === '1') {
-                showDebugOverlay(`Viewport: ${viewportHeight}px, Board: ${boardHeight}px, Header: ${headerHeight}, Controls: ${controlsHeight}, Stats: ${statsHeight}`);
-            }
-        }
-        
-        // Call initialization functions on page load
-        document.addEventListener('DOMContentLoaded', async function() {
-            initTelegramWebApp();
-            initializeUserData();
-            // Always fetch and sync balance on load
-            await window.fetchBalance();
-            updateBalanceDisplay();
-            initGame();
-            // Show debug overlay if requested
-            if (window.location.search.includes('debug=1')) {
-                localStorage.setItem('plinkoDebug', '1');
-            }
-        });
-        
-        // Re-optimize board size on window resize/orientation change
-        window.addEventListener('resize', function() {
-            setTimeout(optimizeBoardSize, 100); // Small delay to ensure layout is settled
-        });
-        
-        // Re-optimize on orientation change (mobile)
-        window.addEventListener('orientationchange', function() {
-            setTimeout(optimizeBoardSize, 300); // Longer delay for orientation change
-        });
-        
-        // Listen for balance changes in other tabs
-        window.addEventListener('storage', function(e) {
-            if (e.key === 'balance') updateBalanceDisplay();
-        });
-    </script>
-</body>
-</html>
+            </script>
+        </body>
+        </html>

@@ -35,10 +35,97 @@
             border-radius: 0 0 18px 18px;
         }
         
-        .header-left {
+        .logo-section {
             display: flex;
             align-items: center;
             gap: 8px;
+        }
+
+        .right-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .btn-glass {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 0.8rem 1.2rem;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-glass:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .balance-section {
+            text-align: right;
+        }
+
+        .balance-label {
+            font-size: 0.8rem;
+            color: #b0b0b0;
+            margin-bottom: 4px;
+        }
+
+        .balance-amount {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #00d4aa;
+        }
+
+        .profile-section {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .profile-pic {
+            width: 36px;
+            height: 36px;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #4ecdc4;
+            border-radius: 50%;
+            color: #ffffff;
+            position: relative;
+        }
+
+        .profile-pic::after {
+            content: '';
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #28a745;
+            bottom: 4px;
+            right: 4px;
+            border: 2px solid #1a1f29;
+        }
+
+        .user-info {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+        }
+
+        .username {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #ffffff;
+        }
+
+        .user-id {
+            font-size: 0.8rem;
+            color: #4ecdc4;
         }
         
         .demo-toggle-container {
@@ -199,18 +286,32 @@
 </head>
 <body>
     <div class="header">
-        <div class="header-left">
-            <button class="back-btn" onclick="goBack()">&larr;</button>
-            <div class="game-title">Slots</div>
-        </div>
-        <div class="demo-toggle-container">
-            <label class="demo-toggle">
-                <input type="checkbox" id="demoModeToggle">
-                <span class="demo-slider">
-                    <span class="demo-slider-dot"></span>
+        <button id="backBtn" class="btn-glass" style="margin-right:12px;display:flex;align-items:center;gap:4px;">
+            <span style="font-size:1.2em;">←</span> Back
+        </button>
+        <div class="logo-section">
+            <button id="menuButton" class="back-btn" style="background:none; border:none; outline:none; cursor:pointer; padding:0 8px 0 0; display:flex; align-items:center; justify-content:center; height:32px; font-size:1.5em; color:#fff;" tabindex="0">
+                <span style="display:block; width:26px; height:22px; position:relative;">
+                    <span style="position:absolute; left:0; top:0; width:100%; height:3px; background:#ffffff; border-radius:2px;"></span>
+                    <span style="position:absolute; left:0; top:8px; width:100%; height:3px; background:#ffffff; border-radius:2px;"></span>
+                    <span style="position:absolute; left:0; top:16px; width:100%; height:3px; background:#ffffff; border-radius:2px;"></span>
                 </span>
-            </label>
-            <span id="demoModeLabel" style="color:#00d4aa; font-weight:600;">Real Mode</span>
+            </button>
+        </div>
+        <div class="right-section">
+            <button class="btn-glass" id="depositBtn" style="margin-right:8px;">Deposit</button>
+            <button class="btn-glass" id="withdrawBtn" style="margin-right:12px;">Withdraw</button>
+            <div class="balance-section">
+                <div class="balance-label">Your Balance</div>
+                <div class="balance-amount">{BALANCE} chips</div>
+            </div>
+            <div class="profile-section" id="profileBtn" style="cursor:pointer;">
+                <div class="profile-pic" id="profilePic">👤</div>
+                <div class="user-info">
+                    <div class="username" id="username">Player</div>
+                    <div class="user-id">ID: {USER_ID}</div>
+                </div>
+            </div>
         </div>
     </div>
     <div class="main-content">
@@ -269,6 +370,16 @@
             resultDiv.innerHTML = '<span style="color:#ff6b6b;">Connection error!</span>';
         }
     }
+    const backBtn = document.getElementById('backBtn');
+if (backBtn) {
+    backBtn.addEventListener('click', function() {
+        if (window.history.length > 1) {
+            window.history.back();
+        } else {
+            window.location.href = 'casino_webapp_new.html';
+        }
+    });
+}
     </script>
 </body>
 </html>

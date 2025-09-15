@@ -429,6 +429,190 @@
             stroke-width: 4 !important;
         }
 
+        /* Modern header styles */
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .right-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .btn-glass {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 0.8rem 1.2rem;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-glass:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .balance-section {
+            text-align: right;
+        }
+
+        .balance-label {
+            font-size: 0.8rem;
+            color: #b0b0b0;
+            margin-bottom: 4px;
+        }
+
+        .balance-amount {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #00d4aa;
+        }
+
+        .profile-section {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .profile-pic {
+            width: 36px;
+            height: 36px;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #4ecdc4;
+            border-radius: 50%;
+            color: #ffffff;
+            position: relative;
+        }
+
+        .profile-pic::after {
+            content: '';
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #28a745;
+            bottom: 4px;
+            right: 4px;
+            border: 2px solid #1a1f29;
+        }
+
+        .user-info {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+        }
+
+        .username {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #ffffff;
+        }
+
+        .user-id {
+            font-size: 0.8rem;
+            color: #4ecdc4;
+        }
+
+        /* Profile modal styles */
+        #profileModal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(15, 20, 25, 0.92);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #profileModal > div {
+            background: #1a1f29;
+            border-radius: 16px;
+            padding: 32px 24px 24px 24px;
+            max-width: 340px;
+            margin: 40px auto;
+            border: 1px solid #2c3441;
+            position: relative;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+        }
+
+        #profileModal button {
+            position: absolute;
+            top: 12px;
+            right: 16px;
+            background: none;
+            border: none;
+            color: #ffffff;
+            font-size: 1.8em;
+            cursor: pointer;
+        }
+
+        #profileModal .profile-pic {
+            width: 64px;
+            height: 64px;
+            font-size: 2em;
+            border-width: 3px;
+        }
+
+        #profileModal .username {
+            font-size: 1.2em;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        #profileModal .user-id {
+            font-size: 0.9em;
+            color: #4ecdc4;
+        }
+
+        #profileModal #modalVipLevel {
+            margin: 8px 0 0 0;
+            font-size: 1em;
+            font-weight: 600;
+            color: #ffd700;
+        }
+
+        #profileModal button.btn-glass {
+            width: 100%;
+            padding: 0.8rem;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        /* Floating live chat button */
+        #liveChatFab {
+            position: fixed;
+            bottom: 90px;
+            right: 18px;
+            z-index: 1300;
+            background: linear-gradient(135deg, #4ecdc4, #45b7d1);
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 56px;
+            height: 56px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2em;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
         @media (max-width: 480px) {
             .container {
                 padding: 1rem;
@@ -445,21 +629,35 @@
     </style>
 </head>
 <body>
+    <!-- Modern header with sidebar, balance, profile, deposit/withdraw, back button -->
     <div class="header">
-        <div class="header-left">
-            <button class="back-btn" onclick="goBack()">←</button>
-            <div class="demo-toggle-container">
-                <span style="font-size: 0.8em; color: #7782aa; font-weight: 500;">Demo</span>
-                <label class="demo-toggle">
-                    <input type="checkbox" id="demoModeToggle">
-                    <span class="demo-slider">
-                        <span class="demo-slider-dot"></span>
-                    </span>
-                </label>
+        <button id="backBtn" class="btn-glass" style="margin-right:12px;display:flex;align-items:center;gap:4px;">
+            <span style="font-size:1.2em;">←</span> Back
+        </button>
+        <div class="logo-section">
+            <button id="menuButton" class="back-btn" style="background:none; border:none; outline:none; cursor:pointer; padding:0 8px 0 0; display:flex; align-items:center; justify-content:center; height:32px; font-size:1.5em; color:#fff;" tabindex="0">
+                <span style="display:block; width:26px; height:22px; position:relative;">
+                    <span style="position:absolute; left:0; top:0; width:100%; height:3px; background:#ffffff; border-radius:2px;"></span>
+                    <span style="position:absolute; left:0; top:8px; width:100%; height:3px; background:#ffffff; border-radius:2px;"></span>
+                    <span style="position:absolute; left:0; top:16px; width:100%; height:3px; background:#ffffff; border-radius:2px;"></span>
+                </span>
+            </button>
+        </div>
+        <div class="right-section">
+            <button class="btn-glass" id="depositBtn" style="margin-right:8px;">Deposit</button>
+            <button class="btn-glass" id="withdrawBtn" style="margin-right:12px;">Withdraw</button>
+            <div class="balance-section">
+                <div class="balance-label">Your Balance</div>
+                <div class="balance-amount">{BALANCE} chips</div>
+            </div>
+            <div class="profile-section" id="profileBtn" style="cursor:pointer;">
+                <div class="profile-pic" id="profilePic">👤</div>
+                <div class="user-info">
+                    <div class="username" id="username">Player</div>
+                    <div class="user-id">ID: {USER_ID}</div>
+                </div>
             </div>
         </div>
-        <h1 class="game-title">Roulette</h1>
-        <div class="balance-display">Balance: <span id="balanceDisplay">1000.00</span> chips</div>
     </div>
 
     <div class="container">
@@ -550,6 +748,23 @@
             <div class="stat-item">
                 <span class="stat-value" id="biggestWin">0</span>
                 <span class="stat-label">Biggest Win</span>
+            </div>
+        </div>
+    </div>
+
+    <button id="liveChatFab" style="position:fixed; bottom:90px; right:18px; z-index:1300; background:linear-gradient(135deg,#4ecdc4,#45b7d1); color:#fff; border:none; border-radius:50%; width:56px; height:56px; box-shadow:0 4px 16px rgba(0,0,0,0.18); display:flex; align-items:center; justify-content:center; font-size:2em; cursor:pointer; transition:background 0.2s;">💬</button>
+    <div id="profileModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(15,20,25,0.92); z-index:3000; align-items:center; justify-content:center;">
+        <div style="background:#1a1f29; border-radius:16px; padding:32px 24px 24px 24px; max-width:340px; margin:40px auto; border:1px solid #2c3441; position:relative; box-shadow:0 8px 32px rgba(0,0,0,0.25);">
+            <button onclick="closeProfileModal()" style="position:absolute; top:12px; right:16px; background:none; border:none; color:#ffffff; font-size:1.8em; cursor:pointer;">&times;</button>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
+                <div class="profile-pic" id="modalProfilePic" style="width:64px; height:64px; font-size:2em; border-width:3px;"></div>
+                <div class="username" id="modalUsername" style="font-size:1.2em; font-weight:700; color:#fff;"></div>
+                <div class="user-id" id="modalUserId" style="font-size:0.9em; color:#4ecdc4;"></div>
+                <div id="modalVipLevel" style="margin:8px 0 0 0; font-size:1em; font-weight:600; color:#ffd700;">VIP: Standard</div>
+                <div style="margin:16px 0 0 0; display:flex; gap:12px;">
+                    <button class="btn-glass" onclick="openDeposit()">Deposit</button>
+                    <button class="btn-glass" onclick="openWithdraw()">Withdraw</button>
+                </div>
             </div>
         </div>
     </div>
@@ -1058,6 +1273,43 @@
         document.addEventListener('DOMContentLoaded', function() {
             createQuickNumberList();
         });
+
+        // Sidebar menu logic
+        const menuButton = document.getElementById('menuButton');
+        menuButton.addEventListener('click', function(e) {
+            e.stopPropagation();
+            // Open sidebar logic (implement as in mini app)
+        });
+        // Floating live chat button logic
+        const liveChatFab = document.getElementById('liveChatFab');
+        liveChatFab.addEventListener('click', function() {
+            // Open sidebar and scroll to live chat (implement as in mini app)
+        });
+        // Profile modal logic
+        const profileBtn = document.getElementById('profileBtn');
+        const profileModal = document.getElementById('profileModal');
+        profileBtn.addEventListener('click', function() {
+            // Fill modal with user info (implement as in mini app)
+            profileModal.style.display = 'flex';
+        });
+        function closeProfileModal() {
+            profileModal.style.display = 'none';
+        }
+        document.getElementById('depositBtn').onclick = openDeposit;
+        document.getElementById('withdrawBtn').onclick = openWithdraw;
+        function openDeposit() { alert('Deposit coming soon!'); closeProfileModal(); }
+        function openWithdraw() { alert('Withdraw coming soon!'); closeProfileModal(); }
+
+        const backBtn = document.getElementById('backBtn');
+        if (backBtn) {
+            backBtn.addEventListener('click', function() {
+                if (window.history.length > 1) {
+                    window.history.back();
+                } else {
+                    window.location.href = 'casino_webapp_new.html';
+                }
+            });
+        }
     </script>
 </body>
 </html>
