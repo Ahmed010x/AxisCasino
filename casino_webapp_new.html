@@ -1764,7 +1764,6 @@ window.$crisp=[];window.CRISP_WEBSITE_ID="YOUR_CRISP_WEBSITE_ID";
                 const gameRoutes = {
                     'Slots': 'game_slots.html',
                     'Blackjack': 'game_blackjack.html',
-                   
                     'Roulette': 'game_roulette.html',
                     'Dice': 'game_dice.html',
                     'Poker': 'game_poker.html',
@@ -1775,25 +1774,21 @@ window.$crisp=[];window.CRISP_WEBSITE_ID="YOUR_CRISP_WEBSITE_ID";
                     'Hi-Lo': 'game_hilo.html',
                     'Hilo': 'game_hilo.html'
                 };
-                
                 let route = gameRoutes[game];
                 if (!route && game) {
                     const normalized = game.replace(/[-\s]/g, '').toLowerCase();
                     if (normalized === 'hilo') route = 'game_hilo.html';
                 }
-                
                 if (route) {
                     const additionalParams = {};
                     if ((game === 'Roulette' || game === 'roulette') && rouletteNumber) {
                         additionalParams.number = rouletteNumber;
                     }
-                    
                     const url = window.BalanceSync.getNavigationUrl(route, additionalParams);
                     window.location.href = url;
                 }
                 return;
             }
-            
             // Fallback to original logic
             const gameRoutes = {
                 'Slots': 'game_slots.html',
@@ -1808,7 +1803,6 @@ window.$crisp=[];window.CRISP_WEBSITE_ID="YOUR_CRISP_WEBSITE_ID";
                 'Hi-Lo': 'game_hilo.html',
                 'Hilo': 'game_hilo.html'
             };
-            
             let route = gameRoutes[game];
             if (!route && game) {
                 const normalized = game.replace(/[-\s]/g, '').toLowerCase();
@@ -1818,11 +1812,9 @@ window.$crisp=[];window.CRISP_WEBSITE_ID="YOUR_CRISP_WEBSITE_ID";
                 const userId = getUserId();
                 const userName = getUserName();
                 const balance = getCurrentBalance();
-                const demo = localStorage.getItem('demoMode') === 'true' ? '1' : '0';
-                
+                // Demo mode removed: do not add demo param
                 localStorage.setItem('userBalance', balance);
-                
-                let url = `${route}?user_id=${encodeURIComponent(userId)}&user_name=${encodeURIComponent(userName)}&balance=${encodeURIComponent(balance)}&demo=${demo}`;
+                let url = `${route}?user_id=${encodeURIComponent(userId)}&user_name=${encodeURIComponent(userName)}&balance=${encodeURIComponent(balance)}`;
                 if ((game === 'Roulette' || game === 'roulette') && rouletteNumber) {
                     url += `&number=${encodeURIComponent(rouletteNumber)}`;
                 }
