@@ -1319,11 +1319,14 @@ async def deposit_method_callback(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     await query.answer()
     method = query.data.replace("deposit_", "")
+    if method == "litecoin":
+        # Direct to CryptoBot deposit flow
+        await deposit_crypto_start(update, context)
+        return
     text = f"""
-💳 **DEPOSIT - {method.upper().replace('_', ' ')}** 💳\n\n🚧 **Under Development** 🚧\n\nThis payment method is being implemented.\nFor now, you can:\n\n💰 **Free Daily Bonus** - Get chips every day\n🎮 **Play Games** - Earn chips by playing\n🏆 **Achievements** - Unlock bonus rewards\n\nComing soon:\n• Real payment processing\n• Multiple currencies\n• Instant deposits\n• Secure transactions\n\nThank you for your patience!
+💳 **DEPOSIT - {method.upper().replace('_', ' ')}** 💳\n\n
 """
     keyboard = [
-        [InlineKeyboardButton("🎁 Get Free Bonus", callback_data="bonus_centre")],
         [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
@@ -1333,10 +1336,9 @@ async def withdraw_method_callback(update: Update, context: ContextTypes.DEFAULT
     await query.answer()
     method = query.data.replace("withdraw_", "")
     text = f"""
-💸 **WITHDRAW - {method.upper().replace('_', ' ')}** 💸\n\n🚧 **Under Development** 🚧\n\nWithdrawal system is being implemented.\nCurrent features:\n\n📊 **Track Progress** - Monitor your balance\n🎯 **Set Goals** - Plan your gaming strategy\n🏆 **Earn More** - Play games to increase balance\n\nComing soon:\n• Real withdrawal processing\n• Multiple payout methods\n• Fast processing times\n• Secure transactions\n\nKeep playing and building your balance!
+💸 **WITHDRAW - {method.upper().replace('_', ' ')}** 💸\n\n
 """
     keyboard = [
-        [InlineKeyboardButton("🎮 Play More Games", callback_data="mini_app_centre")],
         [InlineKeyboardButton("🔙 Back to Withdraw", callback_data="withdraw")]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
