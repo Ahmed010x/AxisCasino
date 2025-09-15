@@ -1204,6 +1204,97 @@ async def api_update_balance(request):
         logger.error(f"/api/update_balance error: {e}")
         return web.json_response({'error': 'Internal server error'}, status=500)
 
+# --- Helper Functions ---
+def get_vip_level(balance: int) -> str:
+    if balance >= VIP_DIAMOND_REQUIRED:
+        return "Diamond"
+    elif balance >= VIP_GOLD_REQUIRED:
+        return "Gold"
+    elif balance >= VIP_SILVER_REQUIRED:
+        return "Silver"
+    else:
+        return "Standard"
+
+def get_vip_multiplier(vip_level: str) -> float:
+    if "Diamond" in vip_level:
+        return 2.0
+    elif "Gold" in vip_level:
+        return 1.5
+    elif "Silver" in vip_level:
+        return 1.2
+    else:
+        return 1.0
+
+def get_daily_bonus_amount(vip_level: str) -> int:
+    base_bonus = 50
+    multiplier = get_vip_multiplier(vip_level)
+    return int(base_bonus * multiplier)
+
+def get_performance_rating(user: dict) -> str:
+    try:
+        games_played = user.get('games_played', 0)
+        total_wagered = user.get('total_wagered', 0)
+        total_won = user.get('total_won', 0)
+        win_rate = (total_won / max(total_wagered, 1)) * 100
+        if games_played < 5:
+            return "Not enough data"
+        elif win_rate >= 120:
+            return "Legendary High Roller"
+        elif win_rate >= 100:
+            return "Pro Gambler"
+        elif win_rate >= 80:
+            return "Solid Player"
+        else:
+            return "Keep Practicing"
+    except Exception:
+        return "N/A"
+
+# --- Deposit/Withdraw/Bonus Callbacks ---
+async def deposit_method_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    method = query.data.replace("deposit_", "")
+    text = f"""
+💳 **DEPOSIT - {method.upper().replace('_', ' ')}** 💳\n\n🚧 **Under Development** 🚧\n\nThis payment method is being implemented.\nFor now, you can:\n\n💰 **Free Daily Bonus** - Get chips every day\n🎮 **Play Games** - Earn chips by playing\n🏆 **Achievements** - Unlock bonus rewards\n\nComing soon:\n• Real payment processing\n• Multiple currencies\n• Instant deposits\n• Secure transactions\n\nThank you for your patience!
+"""
+    keyboard = [
+        [InlineKeyboardButton("🎁 Get Free Bonus", callback_data="bonus_centre")],
+        [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
+    ]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+
+async def withdraw_method_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    method = query.data.replace("withdraw_", "")
+    text = f"""
+💸 **WITHDRAW - {method.upper().replace('_', ' ')}** 💸\n\n🚧 **Under Development** 🚧\n\nWithdrawal system is being implemented.\nCurrent features:\n\n📊 **Track Progress** - Monitor your balance\n🎯 **Set Goals** - Plan your gaming strategy\n🏆 **Earn More** - Play games to increase balance\n\nComing soon:\n• Real withdrawal processing\n• Multiple payout methods\n• Fast processing times\n• Secure transactions\n\nKeep playing and building your balance!
+"""
+    keyboard = [
+        [InlineKeyboardButton("🎮 Play More Games", callback_data="mini_app_centre")],
+        [InlineKeyboardButton("🔙 Back to Withdraw", callback_data="withdraw")]
+    ]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+
+async def claim_daily_bonus_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    user = await get_user(user_id)
+    vip_level = get_vip_level(user['balance'])
+    daily_bonus = get_daily_bonus_amount(vip_level)
+    # For demo: always allow claim (implement cooldown in production)
+    await update_balance(user_id, daily_bonus)
+    await query.edit_message_text(
+        f"🎁 **DAILY BONUS CLAIMED!** 🎁\n\nYou received {daily_bonus} chips.\n\n💰 New Balance: {user['balance'] + daily_bonus:,} chips",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Bonus Centre", callback_data="bonus_centre")]]),
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+async def bonus_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer("🚧 Bonus feature coming soon!", show_alert=True)
+
 # --- Main Callback Handler ---
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle all callback queries"""
@@ -1464,246 +1555,6 @@ Ready to claim your bonuses?
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
-# --- Telegram Animated Emoji Game Handlers ---
-async def dice_game_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Play a rigged dice game with betting against the bot"""
-    user_id = update.effective_user.id
-    user = await get_user(user_id)
-    
-    if not user:
-        await update.message.reply_text("❌ Please use /start first!")
-        return
-    
-    # Minimum bet for dice game
-    min_bet = 10
-    if user['balance'] < min_bet:
-        await update.message.reply_text(f"❌ Insufficient balance! Minimum bet: {min_bet} chips")
-        return
-    
-    import random
-    
-    # House edge configuration - bot wins more often
-    HOUSE_EDGE = DICE_HOUSE_EDGE  # Use global configuration
-    
-    # Player rolls first
-    await update.message.reply_text("🎲 You roll first...")
-    player_dice = await update.message.reply_dice(emoji="🎲")
-    
-    # Wait a moment for dramatic effect
-    await asyncio.sleep(3)
-    
-    # Bot's "rigged" logic
-    player_value = player_dice.dice.value  # This will be 1-6
-    
-    # Determine if bot should win based on house edge
-    bot_should_win = random.random() < HOUSE_EDGE
-    
-    if bot_should_win:
-        # Bot wins - choose a value higher than player (if possible)
-        if player_value < 6:
-            # Bot can win legitimately
-            possible_winning_values = [i for i in range(player_value + 1, 7)]
-            bot_target = random.choice(possible_winning_values)
-        else:
-            # Player rolled 6, bot needs to tie or "get lucky"
-            bot_target = 6 if random.random() < 0.5 else random.randint(1, 5)
-    else:
-        # Let player win - bot rolls lower
-        if player_value > 1:
-            possible_losing_values = [i for i in range(1, player_value)]
-            bot_target = random.choice(possible_losing_values)
-        else:
-            # Player rolled 1, bot will likely win anyway
-            bot_target = random.randint(2, 6)
-    
-    # Send bot's dice (this will be random, but we'll "interpret" the result)
-    await update.message.reply_text("🤖 Bot rolls...")
-    bot_dice = await update.message.reply_dice(emoji="🎲")
-    
-    # Wait for dice animation to finish
-    await asyncio.sleep(3)
-    
-    # "Rigged" result interpretation
-    actual_bot_value = bot_dice.dice.value
-    
-    # We'll use our predetermined target for the actual game logic
-    # but show the real dice value to the user (for appearance of fairness)
-    display_bot_value = actual_bot_value  # Show real dice
-    game_bot_value = bot_target  # Use rigged value for game logic
-    
-    bet_amount = min_bet
-    
-    # Determine winner based on rigged logic
-    if game_bot_value > player_value:
-        # Bot wins
-        result = "loss"
-        await deduct_balance(user_id, bet_amount)
-        await update.message.reply_text(
-            f"🎲 **DICE RESULT** 🎲\n\n"
-            f"👤 Your roll: **{player_value}**\n"
-            f"🤖 Bot roll: **{display_bot_value}**\n\n"
-            f"🤖 **Bot wins!**\n"
-            f"💸 You lost {bet_amount} chips\n\n"
-            f"💰 New balance: {user['balance'] - bet_amount:,} chips"
-        )
-        await log_game_session(user_id, "dice", bet_amount, 0, result)
-        
-    elif game_bot_value < player_value:
-        # Player wins
-        result = "win"
-        win_amount = bet_amount * 2  # 2x payout
-        await update_balance(user_id, win_amount)
-        await update.message.reply_text(
-            f"🎲 **DICE RESULT** 🎲\n\n"
-            f"👤 Your roll: **{player_value}**\n"
-            f"🤖 Bot roll: **{display_bot_value}**\n\n"
-            f"🎉 **You win!**\n"
-            f"💰 You won {win_amount} chips\n\n"
-            f"💎 New balance: {user['balance'] + win_amount:,} chips"
-        )
-        await log_game_session(user_id, "dice", bet_amount, win_amount, result)
-        
-    else:
-        # Tie
-        result = "tie"
-        await update.message.reply_text(
-            f"🎲 **DICE RESULT** 🎲\n\n"
-            f"👤 Your roll: **{player_value}**\n"
-            f"🤖 Bot roll: **{display_bot_value}**\n\n"
-            f"🤝 **It's a tie!**\n"
-            f"💰 No chips won or lost\n\n"
-            f"💎 Balance: {user['balance']:,} chips"
-        )
-        await log_game_session(user_id, "dice", 0, 0, result)
-
-async def basketball_game_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Play a basketball game with Telegram animated emoji"""
-    await update.message.reply_text("🏀 Shooting a basketball...")
-    basketball_message = await update.message.reply_dice(emoji="🏀")
-    # Optionally, add logic for multiplayer or bot challenge
-
-async def soccer_game_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Play a soccer goal game with Telegram animated emoji"""
-    await update.message.reply_text("⚽ Shooting a soccer goal...")
-    soccer_message = await update.message.reply_dice(emoji="⚽")
-    # Optionally, add logic for multiplayer or bot challenge
-
-# --- Helper Functions ---
-def get_vip_level(balance: int) -> str:
-    if balance >= VIP_DIAMOND_REQUIRED:
-        return "Diamond"
-    elif balance >= VIP_GOLD_REQUIRED:
-        return "Gold"
-    elif balance >= VIP_SILVER_REQUIRED:
-        return "Silver"
-    else:
-        return "Standard"
-
-def get_vip_multiplier(vip_level: str) -> float:
-    if "Diamond" in vip_level:
-        return 2.0
-    elif "Gold" in vip_level:
-        return 1.5
-    elif "Silver" in vip_level:
-        return 1.2
-    else:
-        return 1.0
-
-def get_daily_bonus_amount(vip_level: str) -> int:
-    base_bonus = 50
-    multiplier = get_vip_multiplier(vip_level)
-    return int(base_bonus * multiplier)
-
-def get_performance_rating(user: dict) -> str:
-    """Return a performance rating string based on user stats."""
-    try:
-        games_played = user.get('games_played', 0)
-        total_wagered = user.get('total_wagered', 0)
-        total_won = user.get('total_won', 0)
-        win_rate = (total_won / max(total_wagered, 1)) * 100
-        if games_played < 5:
-            return "🔹 New Player"
-        elif win_rate >= 120:
-            return "🌟 Casino Pro"
-        elif win_rate >= 100:
-            return "⭐ High Roller"
-        elif win_rate >= 80:
-            return "🎯 Consistent Winner"
-        else:
-            return "🎲 Keep Playing!"
-    except Exception:
-        return "🎲 Keep Playing!"
-
-async def deposit_method_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    method = query.data.replace("deposit_", "")
-    text = f"""
-💳 **DEPOSIT - {method.upper().replace('_', ' ')}** 💳\n\n🚧 **Under Development** 🚧\n\nThis payment method is being implemented.\nFor now, you can:\n\n💰 **Free Daily Bonus** - Get chips every day\n🎮 **Play Games** - Earn chips by playing\n🏆 **Achievements** - Unlock bonus rewards\n\nComing soon:\n• Real payment processing\n• Multiple currencies\n• Instant deposits\n• Secure transactions\n\nThank you for your patience!
-"""
-    keyboard = [
-        [InlineKeyboardButton("🎁 Get Free Bonus", callback_data="bonus_centre")],
-        [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
-    ]
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-async def withdraw_method_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    method = query.data.replace("withdraw_", "")
-    text = f"""
-💸 **WITHDRAW - {method.upper().replace('_', ' ')}** 💸\n\n🚧 **Under Development** 🚧\n\nWithdrawal system is being implemented.\nCurrent features:\n\n📊 **Track Progress** - Monitor your balance\n🎯 **Set Goals** - Plan your gaming strategy\n🏆 **Earn More** - Play games to increase balance\n\nComing soon:\n• Real withdrawal processing\n• Multiple payout methods\n• Fast processing times\n• Secure transactions\n\nKeep playing and building your balance!
-"""
-    keyboard = [
-        [InlineKeyboardButton("🎮 Play More Games", callback_data="mini_app_centre")],
-        [InlineKeyboardButton("🔙 Back to Withdraw", callback_data="withdraw")]
-    ]
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-async def claim_daily_bonus_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    user = await get_user(user_id)
-    vip_level = get_vip_level(user['balance'])
-    bonus_amount = get_daily_bonus_amount(vip_level)
-    bonus_amount += random.randint(-10, 20)
-    await update_balance(user_id, bonus_amount)
-    updated_user = await get_user(user_id)
-    text = f"""
-🎁 **DAILY BONUS CLAIMED!** 🎁\n\n💰 **Bonus Received:** +{bonus_amount} chips\n👑 **VIP Level:** {vip_level}\n💎 **New Balance:** {updated_user['balance']:,} chips\n\n🎊 **Bonus Details:**\n• Base Amount: 50 chips\n• VIP Multiplier: {get_vip_multiplier(vip_level)}x\n• Random Bonus: Included\n\n🎯 **Next Steps:**\nReady to put your bonus to good use?
-"""
-    keyboard = [
-        [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"), InlineKeyboardButton("📊 Check Stats", callback_data="show_stats")],
-        [InlineKeyboardButton("🎁 More Bonuses", callback_data="bonus_centre"), InlineKeyboardButton("🔙 Main Menu", callback_data="main_panel")]
-    ]
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-async def bonus_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-    if data == "get_referral":
-        text = f"""
-🔗 **REFERRAL SYSTEM** 🔗\n\n💰 **Earn 100 chips per friend!**\n\n📋 **How it works:**\n1. Share your referral link\n2. Friends join using your link\n3. You both get bonus chips!\n\n🎁 **Rewards:**\n• You: 100 chips per referral\n• Friend: 50 chips welcome bonus\n• Bonus when they play first game\n\n🔗 **Your Referral Link:**\n`https://t.me/{context.bot.username}?start=ref_{update.effective_user.id}`\n\n📊 **Referral Stats:**\n• Total Referrals: Coming soon\n• Bonus Earned: Coming soon\n• Active Referrals: Coming soon\n\nShare the link and start earning!
-"""
-    elif data == "show_achievements":
-        user = await get_user(update.effective_user.id)
-        text = f"""
-🏆 **ACHIEVEMENTS** 🏆\n\n📊 **Your Progress:**\n\n✅ **Completed:**\n• 🎮 First Game: +25 chips\n• 💰 First Deposit: +100 chips\n• 🎯 Regular Player: +50 chips\n\n🔄 **In Progress:**\n• 🎰 Play 10 Games: {user['games_played']}/10\n• 💎 Reach 1,000 chips: {user['balance']}/1,000\n• 🏆 High Roller: {user['balance']}/5,000\n\n🔒 **Locked:**\n• 🌟 VIP Diamond: Reach 10,000 chips\n• 🎪 Tournament Winner: Win a tournament\n• 💯 Perfect Week: 7-day win streak\n\nKeep playing to unlock more rewards!
-"""
-    elif data == "bonus_history":
-        text = f"""
-📊 **BONUS HISTORY** 📊\n\n📋 **Recent Bonuses:**\n\n🎁 Today: Daily Bonus - 50 chips\n🎮 Yesterday: Game Bonus - 25 chips\n🔗 Last Week: Referral - 100 chips\n🏆 Last Month: Achievement - 200 chips\n\n💰 **Total Earned:**\n• Daily Bonuses: 350 chips\n• Referral Bonuses: 100 chips\n• Achievement Bonuses: 200 chips\n• Game Bonuses: 125 chips\n\n📈 **Bonus Trends:**\n• This Week: 175 chips\n• This Month: 775 chips\n• All Time: 775 chips\n\nMore detailed tracking coming soon!
-"""
-    else:
-        text = "🚧 This bonus feature is coming soon! 🚧"
-    keyboard = [
-        [InlineKeyboardButton("🎁 Bonus Centre", callback_data="bonus_centre")],
-        [InlineKeyboardButton("🔙 Back to Main", callback_data="main_panel")]
-    ]
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
 # --- Admin Commands ---
 async def set_dice_rigging_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin command to control dice rigging level"""
@@ -1809,18 +1660,6 @@ async def main():
     application.add_handler(CommandHandler("webapp", webapp_command))
     application.add_handler(CommandHandler("casino", webapp_command))
     application.add_handler(CommandHandler("help", help_command))
-    
-    # Add animated emoji game handlers
-    application.add_handler(CommandHandler("dice", dice_game_command))
-    application.add_handler(CommandHandler("basketball", basketball_game_command))
-    application.add_handler(CommandHandler("soccer", soccer_game_command))
-    
-    # Add admin commands
-    application.add_handler(CommandHandler("setdice", set_dice_rigging_command))
-    application.add_handler(CommandHandler("dicestats", dice_stats_command))
-    application.add_handler(CommandHandler("dice", dice_game_command))
-    application.add_handler(CommandHandler("basketball", basketball_game_command))
-    application.add_handler(CommandHandler("soccer", soccer_game_command))
     
     # Add callback handler
     application.add_handler(CallbackQueryHandler(handle_callback))
