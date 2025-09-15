@@ -166,14 +166,14 @@ async def get_user(user_id: int):
         return None
 
 async def create_user(user_id: int, username: str):
-    """Create new user with 0.1 LTC starting balance"""
+    """Create new user with 0.00 LTC starting balance"""
     current_time = datetime.now().isoformat()
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
             INSERT OR IGNORE INTO users 
             (id, username, balance, created_at, last_active) 
             VALUES (?, ?, ?, ?, ?)
-        """, (user_id, username, 0.1, current_time, current_time))
+        """, (user_id, username, 0.0, current_time, current_time))
         await db.commit()
     return await get_user(user_id)
 
