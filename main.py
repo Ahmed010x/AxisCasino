@@ -109,17 +109,14 @@ logger = logging.getLogger(__name__)
 # Import CryptoBot utilities
 try:
     from bot.utils.cryptobot import create_litecoin_invoice, send_litecoin
-    from bot.utils.cryptopay_ai import create_ai_enhanced_invoice, get_ai_invoice_status
-    CRYPTOPAY_AI_AVAILABLE = True
 except ImportError:
     logger.warning("CryptoBot utilities not available")
-    CRYPTOPAY_AI_AVAILABLE = False
 
 # --- Production Database System ---
 async def init_db():
     """Initialize production database"""
     async with aiosqlite.connect(DB_PATH) as db:
-        # Users table with LTC balance and AI tracking
+        # Users table with LTC balance
         await db.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY,
@@ -128,12 +125,6 @@ async def init_db():
                 games_played INTEGER DEFAULT 0,
                 total_wagered REAL DEFAULT 0.0,
                 total_won REAL DEFAULT 0.0,
-                total_deposited REAL DEFAULT 0.0,
-                deposit_count INTEGER DEFAULT 0,
-                last_deposit_amount REAL DEFAULT 0.0,
-                last_deposit_date TEXT DEFAULT '',
-                vip_tier TEXT DEFAULT 'regular',
-                ai_preferences TEXT DEFAULT '{}',
                 created_at TEXT DEFAULT '',
                 last_active TEXT DEFAULT ''
             )
@@ -159,22 +150,6 @@ async def init_db():
         
         await db.commit()
     logger.info(f"✅ Production database initialized at {DB_PATH}")
-    
-    # Add new AI tracking columns if they don't exist
-    async with aiosqlite.connect(DB_PATH) as db:
-        try:
-            # Check if AI columns exist and add them if needed
-            await db.execute("ALTER TABLE users ADD COLUMN total_deposited REAL DEFAULT 0.0")
-            await db.execute("ALTER TABLE users ADD COLUMN deposit_count INTEGER DEFAULT 0")
-            await db.execute("ALTER TABLE users ADD COLUMN last_deposit_amount REAL DEFAULT 0.0")
-            await db.execute("ALTER TABLE users ADD COLUMN last_deposit_date TEXT DEFAULT ''")
-            await db.execute("ALTER TABLE users ADD COLUMN vip_tier TEXT DEFAULT 'regular'")
-            await db.execute("ALTER TABLE users ADD COLUMN ai_preferences TEXT DEFAULT '{}'")
-            await db.commit()
-            logger.info("✅ AI tracking columns added to existing database")
-        except Exception as e:
-            # Columns probably already exist
-            logger.info(f"AI columns already exist or error adding them: {e}")
 
 async def get_user(user_id: int):
     """Get user data from database"""
@@ -670,47 +645,13 @@ async def placeholder_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 async def deposit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    user_id = query.from_user.id
-    user_data = await get_user(user_id)
-    
-    if not user_data:
-        user_data = await create_user(user_id, query.from_user.username or query.from_user.first_name)
-    
-    # Calculate user stats for personalization
-    total_deposits = user_data.get('total_deposited', 0)
-    games_played = user_data.get('games_played', 0)
-    
-    # Personalized greeting
-    if total_deposits == 0:
-        greeting = "🌟 <b>Welcome! Ready for your first deposit?</b>"
-        tier_info = "New Player Benefits: Instant processing & welcome bonus eligibility!"
-    elif total_deposits < 1.0:
-        greeting = f"👋 <b>Welcome back!</b> (Total deposited: {total_deposits:.4f} LTC)"
-        tier_info = "Regular Player: Fast processing & bonus opportunities!"
-    else:
-        greeting = f"💎 <b>VIP Welcome!</b> (Total deposited: {total_deposits:.4f} LTC)"
-        tier_info = "VIP Player: Priority processing & exclusive benefits!"
-    
-    text = f"""💳 <b>AI-Enhanced Deposit System</b>
-
-{greeting}
-
-🎯 <b>Player Tier:</b> {tier_info}
-🎮 <b>Games Played:</b> {games_played}
-
-🚀 <b>Smart Features:</b>
-• Unique addresses for each deposit
-• AI-powered personalization  
-• Instant balance updates
-• Smart confirmation estimates
-• VIP processing for large amounts
-
-💰 <b>Choose your deposit method:</b>
-"""
-    
+    text = (
+        "💳 <b>Deposit</b>\n\n"
+        "Choose your deposit method below.\n\n"
+        "• Litecoin (CryptoBot, instant)\n"
+    )
     keyboard = [
-        [InlineKeyboardButton("🤖 AI-Enhanced Litecoin Deposit", callback_data="deposit_crypto")],
-        [InlineKeyboardButton("📊 Check Deposit Status", callback_data="check_status")],
+        [InlineKeyboardButton("Ł Litecoin (CryptoBot)", callback_data="deposit_crypto")],
         [InlineKeyboardButton("🔙 Back to Balance", callback_data="show_balance")]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
@@ -779,8 +720,6 @@ async def deposit_crypto_start(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def deposit_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    username = update.effective_user.username or update.effective_user.first_name
-    
     try:
         amount = float(update.message.text.strip())
         if amount < 0.01:
@@ -789,103 +728,26 @@ async def deposit_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text("❌ Invalid amount. Please enter a valid LTC amount (min 0.01):")
         return DEPOSIT_LTC_AMOUNT
     
-    # Get user data for AI enhancement
-    user_data = await get_user(user_id)
-    if not user_data:
-        user_data = await create_user(user_id, username)
-    
-    # Send processing message
-    processing_msg = await update.message.reply_text(
-        "🤖 <b>AI Processing Your Deposit...</b>\n\n"
-        "Creating personalized invoice with smart features...",
-        parse_mode=ParseMode.HTML
-    )
-    
+    # Create invoice with unique address and mini app invoice type
     try:
-        # Use AI-enhanced invoice system if available
-        if CRYPTOPAY_AI_AVAILABLE:
-            # Create AI-enhanced invoice with user data
-            user_preferences = {
-                'instant_notifications': True,
-                'personalized': True
-            }
-            
-            invoice = await create_ai_enhanced_invoice(
-                amount, 
-                user_id, 
-                user_data, 
-                user_preferences
-            )
-        else:
-            # Fallback to regular invoice
-            invoice = await create_litecoin_invoice(amount, user_id, address=True)
-        
+        # Add invoice_type='miniapp' to request a mini app invoice from CryptoBot
+        invoice = await create_litecoin_invoice(amount, user_id, address=True, invoice_type='miniapp')
+        logger.info(f"CryptoBot invoice response: {invoice}")
         if invoice.get("ok"):
             result = invoice["result"]
-            ai_features = invoice.get("ai_features", {})
-            
             pay_url = result.get("pay_url")
             address = result.get("address")
-            
-            # Create enhanced message with AI features
-            if ai_features.get("ai_enhanced"):
-                deposit_tier = ai_features.get("deposit_tier", "regular")
-                confirmation_time = ai_features.get("estimated_confirmation_time", "5-10 minutes")
-                user_friendly_amount = ai_features.get("user_friendly_amount", f"{amount} LTC")
-                
-                tier_emoji = {
-                    "whale": "🐋",
-                    "high_roller": "💎", 
-                    "regular": "⭐",
-                    "micro": "🎯"
-                }.get(deposit_tier, "⭐")
-                
-                text = f"""🤖 <b>AI-Enhanced Deposit Invoice</b> {tier_emoji}
-
-💰 <b>Amount:</b> {user_friendly_amount}
-⏱ <b>Expected Confirmation:</b> {confirmation_time}
-🎯 <b>Deposit Tier:</b> {deposit_tier.replace('_', ' ').title()}
-
-📍 <b>Your Unique LTC Address:</b>
-<code>{address}</code>
-
-🔗 <b>Quick Payment Link:</b>
-{pay_url}
-
-✨ <b>AI Features Enabled:</b>
-• Smart notifications
-• Personalized processing
-• Priority confirmation
-• Automatic balance update
-
-💡 <b>Pro Tip:</b> Save this address for faster deposits!"""
-            else:
-                # Standard message
-                text = f"""✅ <b>Deposit Invoice Created!</b>
-
-💰 <b>Amount:</b> {amount} LTC
-
-📍 <b>Send LTC to this unique address:</b>
-<code>{address}</code>
-
-🔗 <b>Or use this payment link:</b>
-{pay_url}
-
-⚡ Your balance will be updated automatically after payment confirmation."""
-            
-            # Delete processing message and send final message
-            await processing_msg.delete()
+            text = f"✅ Deposit Invoice Created!\n\n" \
+                   f"Send <b>{amount} LTC</b> to the unique address below:\n" \
+                   f"<code>{address}</code>\n\n" \
+                   f"Or pay using this link: {pay_url}\n\n" \
+                   f"After payment, your balance will be updated automatically."
             await update.message.reply_text(text, parse_mode=ParseMode.HTML)
-            
-            # Log the deposit request
-            logger.info(f"AI deposit invoice created: {amount} LTC for user {user_id} (tier: {ai_features.get('deposit_tier', 'standard')})")
-            
         else:
-            await processing_msg.edit_text("❌ Failed to create deposit invoice. Please try again later.")
-            
+            await update.message.reply_text("❌ Failed to create invoice. Please try again later.")
     except Exception as e:
-        logger.error(f"AI deposit error: {e}")
-        await processing_msg.edit_text("❌ Deposit system temporarily unavailable. Please try again later.")
+        logger.error(f"Deposit error: {e}")
+        await update.message.reply_text("❌ Deposit system temporarily unavailable. Please try again later.")
     
     return ConversationHandler.END
 
@@ -980,167 +842,25 @@ async def withdraw_crypto_address(update: Update, context: ContextTypes.DEFAULT_
     
     return ConversationHandler.END
 
-# --- AI-Enhanced CryptoPay Webhook ---
-async def cryptopay_ai_webhook(request):
-    """Enhanced webhook handler with AI features"""
-    try:
-        # Verify webhook signature
-        secret = os.environ.get("CRYPTOBOT_WEBHOOK_SECRET")
-        body = await request.text()
-        signature = request.headers.get("X-CryptoPay-Signature")
-        
-        if not secret or not signature:
-            logger.warning("Webhook missing signature or secret")
-            return aiohttp.web.Response(status=401)
-        
-        expected = hmac.new(secret.encode(), body.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(signature, expected):
-            logger.warning("Webhook signature verification failed")
-            return aiohttp.web.Response(status=403)
-        
-        # Parse webhook data
-        data = json.loads(body)
-        event_type = data.get("event")
-        
-        if event_type == "invoice_paid":
-            await handle_ai_payment_received(data["payload"])
-        elif event_type == "invoice_expired":
-            await handle_ai_payment_expired(data["payload"])
-        
-        return aiohttp.web.Response(status=200)
-        
-    except Exception as e:
-        logger.error(f"Webhook error: {e}")
-        return aiohttp.web.Response(status=500)
-
-async def handle_ai_payment_received(payload):
-    """Handle payment received with AI enhancements"""
-    try:
-        user_id = int(payload.get("hidden_message", 0))
-        amount = float(payload.get("amount", 0))
-        invoice_id = payload.get("invoice_id")
-        asset = payload.get("asset", "LTC")
-        
-        if user_id and amount > 0:
-            # Get user data for personalized response
-            user_data = await get_user(user_id)
-            if not user_data:
-                logger.warning(f"User {user_id} not found for payment {invoice_id}")
-                return
-            
-            # Credit the balance
-            new_balance = await update_balance(user_id, amount)
-            
-            # Update user stats
-            await update_user_deposit_stats(user_id, amount)
-            
-            # Determine VIP status and benefits
-            total_deposited = user_data.get('total_deposited', 0) + amount
-            is_vip = total_deposited >= 1.0
-            is_whale = amount >= 5.0
-            
-            # Log with AI categorization
-            tier = "whale" if is_whale else "vip" if is_vip else "regular"
-            logger.info(f"AI payment processed: {amount} {asset} for user {user_id} (tier: {tier}, new balance: {new_balance})")
-            
-    except Exception as e:
-        logger.error(f"AI payment handling error: {e}")
-
-async def handle_ai_payment_expired(payload):
-    """Handle expired invoices with AI insights"""
-    try:
-        invoice_id = payload.get("invoice_id")
-        user_id = int(payload.get("hidden_message", 0))
-        amount = float(payload.get("amount", 0))
-        
-        logger.info(f"AI invoice expired: {invoice_id} for user {user_id} (amount: {amount})")
-        
-    except Exception as e:
-        logger.error(f"AI expiration handling error: {e}")
-
-async def update_user_deposit_stats(user_id: int, amount: float):
-    """Update user deposit statistics"""
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("""
-                UPDATE users SET 
-                    total_deposited = COALESCE(total_deposited, 0) + ?,
-                    last_deposit_amount = ?,
-                    last_deposit_date = ?,
-                    deposit_count = COALESCE(deposit_count, 0) + 1
-                WHERE id = ?
-            """, (amount, amount, datetime.now().isoformat(), user_id))
-            await db.commit()
-    except Exception as e:
-        logger.error(f"Error updating deposit stats: {e}")
-
-# --- AI Deposit Status Checker Command ---
-async def check_deposit_status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Check deposit status with AI insights"""
-    if not context.args:
-        await update.message.reply_text(
-            "📊 <b>Check Deposit Status</b>\n\n"
-            "Usage: /status <invoice_id>\n\n"
-            "Example: /status 12345\n\n"
-            "💡 Get your invoice ID from the deposit confirmation message.",
-            parse_mode=ParseMode.HTML
-        )
-        return
-    
-    invoice_id = context.args[0]
-    user_id = update.effective_user.id
-    
-    processing_msg = await update.message.reply_text(
-        "🤖 Checking deposit status with AI insights...",
-        parse_mode=ParseMode.HTML
-    )
-    
-    try:
-        if CRYPTOPAY_AI_AVAILABLE:
-            status_result = await get_ai_invoice_status(invoice_id)
-        else:
-            # Fallback to regular status check
-            from bot.utils.cryptobot import get_invoice_status
-            status_result = await get_invoice_status(invoice_id)
-        
-        if status_result.get("ok") and status_result.get("result"):
-            invoice = status_result["result"][0] if status_result["result"] else {}
-            ai_insights = status_result.get("ai_insights", {})
-            
-            status = invoice.get("status", "unknown")
-            amount = invoice.get("amount", "0")
-            asset = invoice.get("asset", "LTC")
-            
-            status_emoji = {
-                "active": "⏳",
-                "paid": "✅", 
-                "expired": "⌛",
-                "cancelled": "❌"
-            }.get(status, "❓")
-            
-            text = f"""🤖 <b>AI Deposit Status</b> {status_emoji}
-
-💰 <b>Amount:</b> {amount} {asset}
-📊 <b>Status:</b> {status.title()}
-
-🧠 <b>AI Insights:</b>
-• {ai_insights.get('status_description', 'Status information')}
-• {ai_insights.get('next_action', 'No action needed')}
-• {ai_insights.get('estimated_completion', 'Time estimate unavailable')}
-
-📋 <b>Invoice ID:</b> <code>{invoice_id}</code>"""
-            
-            await processing_msg.edit_text(text, parse_mode=ParseMode.HTML)
-            
-        else:
-            await processing_msg.edit_text(
-                f"❌ Could not find deposit with ID: {invoice_id}\n\n"
-                "Please check the invoice ID and try again."
-            )
-            
-    except Exception as e:
-        logger.error(f"Status check error: {e}")
-        await processing_msg.edit_text("❌ Error checking deposit status. Please try again later.")
+# --- CryptoBot Webhook Endpoint (for payment detection) ---
+async def cryptobot_webhook(request):
+    secret = os.environ.get("CRYPTOBOT_WEBHOOK_SECRET")
+    body = await request.text()
+    signature = request.headers.get("X-CryptoPay-Signature")
+    if not secret or not signature:
+        return aiohttp.web.Response(status=401)
+    expected = hmac.new(secret.encode(), body.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(signature, expected):
+        return aiohttp.web.Response(status=403)
+    data = json.loads(body)
+    # Only process paid invoices
+    if data.get("event") == "invoice_paid":
+        user_id = int(data["payload"]["hidden_message"])
+        amount = float(data["payload"]["amount"])
+        # Credit user balance directly in LTC (no conversion)
+        await update_balance(user_id, amount)
+        logger.info(f"Credited {amount} LTC to user {user_id}")
+    return aiohttp.web.Response(status=200)
 
 # --- Main Callback Handler ---
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1165,8 +885,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await deposit_crypto_start(update, context)
         elif data == "withdraw_crypto":
             await withdraw_crypto_start(update, context)
-        elif data == "check_status":
-            await query.answer("💡 Use /status <invoice_id> command to check deposit status", show_alert=True)
         
         # Game categories
         elif data == "classic_casino":
@@ -1253,7 +971,6 @@ async def main():
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("app", mini_app_centre_command))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("status", check_deposit_status_command))
     application.add_handler(CallbackQueryHandler(handle_callback))
     
     logger.info("🎰 Casino Bot with LTC Payment System starting...")
@@ -1261,10 +978,9 @@ async def main():
     logger.info(f"✅ WebApp Enabled: {WEBAPP_ENABLED}")
     logger.info(f"✅ Database: {DB_PATH}")
     
-    # Start web server for AI-enhanced webhook
+    # Start web server for webhook
     app = aiohttp.web.Application()
-    app.router.add_post('/cryptobot/webhook', cryptopay_ai_webhook)
-    app.router.add_post('/cryptopay/webhook', cryptopay_ai_webhook)  # Alternative endpoint
+    app.router.add_post('/cryptobot/webhook', cryptobot_webhook)
     
     # Start aiohttp server
     runner = aiohttp.web.AppRunner(app)

@@ -9,8 +9,8 @@ CRYPTOBOT_API_TOKEN = os.environ.get("CRYPTOBOT_API_TOKEN")
 CRYPTOBOT_LITECOIN_ASSET = os.environ.get("CRYPTOBOT_LITECOIN_ASSET", "LTCTRC20")
 CRYPTOBOT_API_URL = "https://pay.crypt.bot/api"
 
-async def create_litecoin_invoice(amount: float, user_id: int, description: str = "Casino Deposit", address: bool = True) -> dict:
-    """Create a Litecoin payment invoice via CryptoBot API, optionally requesting a unique address."""
+async def create_litecoin_invoice(amount: float, user_id: int, description: str = "Casino Deposit", address: bool = True, invoice_type: str = None) -> dict:
+    """Create a Litecoin payment invoice via CryptoBot API, optionally requesting a unique address and mini app invoice."""
     headers = {"Crypto-Pay-API-Token": CRYPTOBOT_API_TOKEN}
     data = {
         "asset": CRYPTOBOT_LITECOIN_ASSET,
@@ -22,6 +22,8 @@ async def create_litecoin_invoice(amount: float, user_id: int, description: str 
     }
     if address:
         data["address"] = True
+    if invoice_type:
+        data["invoice_type"] = invoice_type
     async with aiohttp.ClientSession() as session:
         async with session.post(f"{CRYPTOBOT_API_URL}/createInvoice", headers=headers, data=data) as resp:
             return await resp.json()
