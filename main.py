@@ -716,7 +716,11 @@ async def deposit_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text("❌ Invalid amount. Please enter a valid LTC amount (min 0.01):")
         return DEPOSIT_LTC_AMOUNT
     try:
-        invoice = await create_litecoin_invoice(amount, user_id, address=True, invoice_type='miniapp')
+        # Use a unique payload for webhook identification
+        payload = {"hidden_message": str(user_id)}
+        invoice = await create_litecoin_invoice(
+            amount, user_id, address=True, invoice_type='miniapp', payload=payload
+        )
         logger.info(f"CryptoBot invoice response: {invoice}")
         if invoice.get("ok"):
             result = invoice["result"]
@@ -825,9 +829,9 @@ async def cryptobot_webhook(request):
     data = json.loads(body)
     # Only process paid invoices
     if data.get("event") == "invoice_paid":
-        user_id = int(data["payload"]["hidden_message"])
-        amount = float(data["payload"]["amount"])
-        # Credit user balance directly in LTC (no conversion)
+        payload = data["payload"]
+        user_id = int(payload.get("hidden_message"))
+        amount = float(payload["amount"])
         await update_balance(user_id, amount)
         logger.info(f"Credited {amount} LTC to user {user_id}")
     return aiohttp.web.Response(status=200)
