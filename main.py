@@ -27,6 +27,21 @@ from telegram import (
     User as TelegramUser
 )
 from telegram.constants import ParseMode
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+    ConversationHandler
+)
+from telegram.error import TelegramError, BadRequest, Forbidden
+
+import hmac
+import hashlib
+import json
+from bot.utils.cryptobot import create_litecoin_invoice
 
 # Initialize logging early
 logging.basicConfig(
@@ -54,15 +69,6 @@ except ImportError:
         def __init__(self, text, web_app):
             self.text = text
             self.web_app = web_app
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-    MessageHandler,
-    filters
-)
-from telegram.error import TelegramError, BadRequest, Forbidden
 
 # --- Config ---
 load_dotenv()
@@ -133,10 +139,10 @@ async def init_db():
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY,
                 username TEXT,
-                balance INTEGER DEFAULT 1000,
+                balance REAL DEFAULT 0.0,
                 games_played INTEGER DEFAULT 0,
-                total_wagered INTEGER DEFAULT 0,
-                total_won INTEGER DEFAULT 0,
+                total_wagered REAL DEFAULT 0.0,
+                total_won REAL DEFAULT 0.0,
                 created_at TEXT DEFAULT '',
                 last_active TEXT DEFAULT ''
             )
@@ -248,7 +254,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 {welcome_message}
 
-💰 **Balance: {user_data['balance']:,} chips**
+💰 **Balance: {user_data['balance']:.8f} LTC**
 🏆 **Games Played: {user_data['games_played']}**
 
 Choose an action below:
@@ -276,7 +282,7 @@ async def show_mini_app_centre(update: Update, context: ContextTypes.DEFAULT_TYP
 🎮 **CASINO MINI APP CENTRE** 🎮
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🎲 **{username}** | Balance: **{balance:,}** chips
+🎲 **{username}** | Balance: **{balance:.8f}** LTC
 🎯 **Games Played:** {total_games}
 
 � **WEBAPP CASINO**
@@ -351,15 +357,15 @@ async def show_balance_callback(update: Update, context: ContextTypes.DEFAULT_TY
     text = f"""
 💰 **BALANCE OVERVIEW** 💰
 
-💎 **Current Balance:** {user['balance']:,} chips
+💎 **Current Balance:** {user['balance']:.8f} LTC
 🎮 **Games Played:** {user['games_played']}
-💸 **Total Wagered:** {user['total_wagered']:,} chips
-💰 **Total Won:** {user['total_won']:,} chips
+💸 **Total Wagered:** {user['total_wagered']:.8f} LTC
+💰 **Total Won:** {user['total_won']:.8f} LTC
 
 📊 **Account Status:**
 • Account Type: Standard
-• Withdrawal Limit: 25,000 chips/day
-• Minimum Withdrawal: 1,000 chips
+• Withdrawal Limit: 25,000 LTC/day
+• Minimum Withdrawal: 1,000 LTC
 
 💳 **Financial Operations:**
 Manage your funds with secure deposit and withdrawal options.
@@ -407,119 +413,62 @@ async def deposit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = f"""
 💳 **DEPOSIT FUNDS** 💳
 
-💰 **Current Balance:** {user['balance']:,} chips
+💰 **Current Balance:** {user['balance']:.8f} LTC
 👤 **Player:** {user['username']}
 
 🏦 **Deposit Methods:**
 
-**💳 Credit/Debit Card**
-• Instant processing
-• Min: 100 chips
-• Max: 10,000 chips
-• Fee: 2.5%
-• Currently unavailable
-
-**🏦 Bank Transfer**
-• 1-3 business days
-• Min: 500 chips
-• Max: 50,000 chips
-• Fee: Free
-• Currently unavailable
-
-**₿ Litecoin (LTC)**
-• 10-60 min processing
-• Min: 50 chips (0.01 LTC)
-• Max: 50,000 chips (10 LTC)
-• Fee: Network fees only
-• Available now ✅
-
-**📱 E-Wallets**
-• PayPal, Skrill, Neteller
-• Instant processing
-• Min: 100 chips
-• Fee: 1.5%
-• Currently unavailable
+**Ł Litecoin (Only)**
+• Fast, low-fee crypto deposits
+• Min: 50 LTC
+• Max: 50,000 LTC
+• Fee: Network fee only
+• Address provided after amount selection
 
 Choose your deposit method:
 """
     keyboard = [
-        [InlineKeyboardButton("₿ Litecoin (LTC)", callback_data="deposit_crypto")],
-        [InlineKeyboardButton("💳 Credit Card (Soon)", callback_data="deposit_card"), InlineKeyboardButton("🏦 Bank Transfer (Soon)", callback_data="deposit_bank")],
-        [InlineKeyboardButton("📱 E-Wallet (Soon)", callback_data="deposit_ewallet")],
+        [InlineKeyboardButton("Ł Litecoin (Crypto)", callback_data="deposit_litecoin")],
         [InlineKeyboardButton("🔙 Back to Balance", callback_data="show_balance")]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
 # --- Litecoin Deposit Handler ---
 async def deposit_litecoin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle Litecoin deposit requests"""
+    query = update.callback_query
+    await query.answer()
+    # Example static address (replace with your real one or generate dynamically)
+    litecoin_address = os.environ.get("LITECOIN_ADDRESS", "ltc1qexampleaddress1234567890")
+    text = f"""
+Ł **Litecoin Deposit**
+
+Send your desired amount of Litecoin (LTC) to the address below:
+
+<code>{litecoin_address}</code>
+
+• Minimum: 50 LTC equivalent
+• Maximum: 50,000 LTC equivalent
+• Your balance will be credited after 1 network confirmation.
+• Contact support if you have any issues.
+"""
+    keyboard = [[InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+# --- CryptoBot Litecoin Deposit Handler ---
+async def deposit_crypto_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
-    
-    try:
-        from crypto_payment import generate_ltc_deposit_address
-        
-        # Generate unique deposit address for user
-        result = await generate_ltc_deposit_address(user_id)
-        
-        if result.get("success"):
-            address = result["address"]
-            network = result["network"]
-            min_amount = result["min_amount"]
-            rate = result["rate"]
-            
-            text = f"""
-₿ **LITECOIN DEPOSIT** ₿
-
-🏦 **Your Unique Deposit Address:**
-<code>{address}</code>
-
-📊 **Deposit Information:**
-• Network: {network.title()}
-• Minimum: {min_amount} LTC
-• Exchange Rate: {rate}
-• Confirmations: 1 required
-
-💡 **Instructions:**
-1. Send Litecoin to the address above
-2. Wait for 1 network confirmation
-3. Your chips will be credited automatically
-4. Contact support if you need help
-
-⚠️ **Important:**
-• Only send Litecoin (LTC) to this address
-• Sending other cryptocurrencies will result in loss
-• Save this address for future deposits
-"""
-        else:
-            text = f"""
-❌ **DEPOSIT ERROR** ❌
-
-Failed to generate deposit address: {result.get('error', 'Unknown error')}
-
-Please try again later or contact support.
-"""
-    except ImportError:
-        text = """
-🚧 **LITECOIN DEPOSITS** 🚧
-
-Litecoin payment system is currently being set up.
-
-**Coming Soon:**
-• Automatic LTC address generation
-• Real-time deposit tracking
-• Instant balance updates
-• Secure transaction processing
-
-Please check back soon or contact support for updates.
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("🔄 Generate New Address", callback_data="deposit_crypto")],
-        [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
-    ]
+    user = await get_user(user_id)
+    min_deposit = 0.01
+    text = (
+        f"₿ <b>Litecoin Deposit</b>\n\n"
+        f"Enter the amount of LTC you want to deposit (min {min_deposit} LTC).\n\n"
+        f"You will receive chips after payment confirmation."
+    )
+    keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="deposit")]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    # In production, use ConversationHandler or FSM to capture next message as amount
 
 # --- Withdraw Handler ---
 async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -532,18 +481,18 @@ async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Check minimum withdrawal amount
     min_withdrawal = 1000
     if user['balance'] < min_withdrawal:
-        await query.answer(f"❌ Minimum withdrawal: {min_withdrawal:,} chips", show_alert=True)
+        await query.answer(f"❌ Minimum withdrawal: {min_withdrawal:.8f} LTC", show_alert=True)
         return
     
     text = f"""
 💸 **WITHDRAW FUNDS** 💸
 
-💰 **Available Balance:** {user['balance']:,} chips
+💰 **Available Balance:** {user['balance']:.8f} LTC
 👤 **Player:** {user['username']}
 
 📋 **Withdrawal Requirements:**
-• Minimum: 1,000 chips
-• Maximum: 25,000 chips per day
+• Minimum: 1,000 LTC
+• Maximum: 25,000 LTC per day
 • Processing: 24-72 hours
 • Verification may be required
 
@@ -552,19 +501,19 @@ async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 **🏦 Bank Transfer**
 • 1-3 business days
 • Fee: Free
-• Min: 1,000 chips
+• Min: 1,000 LTC
 
-**₿ Litecoin (LTC)**
+**₿ Cryptocurrency**
+• Bitcoin, Ethereum, USDT
 • 10-60 min processing
-• Fee: Network fees (paid by casino)
-• Min: 10 chips (0.002 LTC)
-• Rate: 1 LTC = 5,000 chips
+• Fee: Network fees
+• Min: 500 LTC
 
 **📱 E-Wallets**
 • PayPal, Skrill, Neteller
 • 24-48 hours
 • Fee: 2%
-• Min: 1,000 chips
+• Min: 1,000 LTC
 
 Choose your withdrawal method:
 """
@@ -577,177 +526,22 @@ Choose your withdrawal method:
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
-# --- Litecoin Withdrawal Handler ---
-async def withdraw_litecoin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle Litecoin withdrawal requests"""
+# --- CryptoBot Litecoin Withdraw Handler ---
+async def withdraw_crypto_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
     user = await get_user(user_id)
-    
-    # Check minimum balance for withdrawal
-    min_balance_chips = int(0.002 * 5000)  # 0.002 LTC * 5000 chips/LTC = 10 chips minimum
-    if user['balance'] < min_balance_chips:
-        await query.answer(f"❌ Minimum withdrawal: {min_balance_chips} chips (0.002 LTC equivalent)", show_alert=True)
-        return
-    
-    text = f"""
-₿ **LITECOIN WITHDRAWAL** ₿
-
-💰 **Available Balance:** {user['balance']:,} chips
-💱 **Exchange Rate:** 1 LTC = 5,000 chips
-
-📋 **Withdrawal Information:**
-• Minimum: 0.002 LTC (10 chips)
-• Maximum: 2 LTC (10,000 chips) per day
-• Processing: 10-60 minutes
-• Network Fee: Paid by casino
-
-🏦 **How to Withdraw:**
-1. Enter your Litecoin address
-2. Specify withdrawal amount
-3. Confirm transaction details
-4. Receive LTC to your wallet
-
-⚠️ **Important:**
-• Only use valid Litecoin addresses
-• Double-check address before confirming
-• Withdrawals cannot be reversed
-• Contact support if needed
-
-To proceed, please send your withdrawal request in this format:
-<code>/withdraw_ltc [LTC_ADDRESS] [AMOUNT_LTC]</code>
-
-Example:
-<code>/withdraw_ltc LTC1qExampleAddress123 0.01</code>
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("📖 How to Get LTC Address", callback_data="ltc_help")],
-        [InlineKeyboardButton("🔙 Back to Withdraw", callback_data="withdraw")]
-    ]
-    
+    min_withdraw = 0.01
+    text = (
+        f"₿ <b>Litecoin Withdraw</b>\n\n"
+        f"Enter the amount of LTC you want to withdraw (min {min_withdraw} LTC) and your Litecoin address.\n\n"
+        f"Example: 0.05 ltc1q...\n\n"
+        f"Withdrawals are processed automatically."
+    )
+    keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="withdraw")]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-
-# --- LTC Help Handler ---
-async def ltc_help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show help for getting Litecoin address"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = """
-📖 **HOW TO GET LITECOIN ADDRESS** 📖
-
-📱 **Popular Litecoin Wallets:**
-
-**Mobile Wallets:**
-• Litewallet (iOS/Android)
-• Exodus (iOS/Android)
-• Trust Wallet (iOS/Android)
-• Coinbase Wallet (iOS/Android)
-
-**Desktop Wallets:**
-• Litecoin Core (Official)
-• Exodus Desktop
-• Electrum-LTC
-
-**Exchange Wallets:**
-• Coinbase
-• Binance
-• Kraken
-• Gemini
-
-🔐 **Security Tips:**
-• Always use your own wallet
-• Never share private keys
-• Double-check addresses
-• Test with small amounts first
-
-📝 **Address Format:**
-Litecoin addresses start with:
-• L or M (Legacy format)
-• ltc1 (Bech32 format)
-
-Example: <code>LTC1qExampleAddress123456789</code>
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("🔙 Back to Withdrawal", callback_data="withdraw_crypto")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-
-# --- LTC Withdrawal Command ---
-async def withdraw_ltc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /withdraw_ltc command"""
-    user_id = update.effective_user.id
-    
-    if not context.args or len(context.args) != 2:
-        await update.message.reply_text(
-            "❌ **Invalid format**\n\n"
-            "Usage: `/withdraw_ltc [LTC_ADDRESS] [AMOUNT_LTC]`\n\n"
-            "Example: `/withdraw_ltc LTC1qExample123 0.01`",
-            parse_mode=ParseMode.MARKDOWN
-        )
-        return
-    
-    ltc_address = context.args[0]
-    try:
-        amount_ltc = float(context.args[1])
-    except ValueError:
-        await update.message.reply_text("❌ Invalid amount. Please enter a valid number.")
-        return
-    
-    # Validate LTC address format (basic validation)
-    if not (ltc_address.startswith(('L', 'M', 'ltc1')) and len(ltc_address) >= 26):
-        await update.message.reply_text("❌ Invalid Litecoin address format.")
-        return
-    
-    # Validate amount
-    if amount_ltc < 0.002:
-        await update.message.reply_text("❌ Minimum withdrawal is 0.002 LTC")
-        return
-    
-    if amount_ltc > 2.0:
-        await update.message.reply_text("❌ Maximum withdrawal is 2.0 LTC per day")
-        return
-    
-    try:
-        from crypto_payment import create_ltc_withdrawal
-        
-        # Process withdrawal
-        result = await create_ltc_withdrawal(user_id, ltc_address, amount_ltc)
-        
-        if result.get("success"):
-            tx_hash = result.get("tx_hash")
-            chips_deducted = result.get("chips_deducted")
-            
-            text = f"""
-✅ **WITHDRAWAL SUCCESSFUL** ✅
-
-💸 **Amount:** {amount_ltc} LTC
-💎 **Chips Deducted:** {chips_deducted:,}
-🏦 **Address:** `{ltc_address}`
-🔗 **Transaction:** `{tx_hash}`
-
-⏰ **Processing Time:** 10-60 minutes
-📊 **Network:** Litecoin Mainnet
-
-Your Litecoin will arrive in your wallet once the transaction is confirmed on the network.
-"""
-        else:
-            text = f"❌ **Withdrawal Failed**\n\n{result.get('error', 'Unknown error')}"
-            
-    except ImportError:
-        text = """
-🚧 **LITECOIN WITHDRAWALS** 🚧
-
-Litecoin withdrawal system is currently being set up.
-
-Please check back soon or contact support for manual withdrawals.
-"""
-    
-    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    # In production, use ConversationHandler or FSM to capture next message as amount/address
 
 # --- Health Check and Keep-Alive for Render ---
 async def health_check(request):
@@ -1235,7 +1029,7 @@ async def casino_webapp(request):
         
         <div class="balance-section">
             <div class="balance-label">Your Balance</div>
-            <div class="balance-amount">{balance} chips</div>
+            <div class="balance-amount">{balance} LTC</div>
         </div>
         
         <div class="profile-section">
@@ -1369,6 +1163,7 @@ async def casino_webapp(request):
 """
     
     return web.Response(text=html, content_type='text/html')
+
 async def setup_webapp_menu_button(application):
     """Set up the WebApp menu button for the bot"""
     if WEBAPP_ENABLED and WEBAPP_IMPORTS_AVAILABLE:
@@ -1412,7 +1207,7 @@ async def webapp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 🎮 **Full Casino Experience in Your Browser!**
 
-💰 **Your Balance:** {user['balance']:,} chips
+💰 **Your Balance:** {user['balance']:.8f} LTC
 👤 **User ID:** {user_id}
 
 🎯 **WebApp Features:**
@@ -1468,6 +1263,39 @@ async def api_update_balance(request):
     except Exception as e:
         logger.error(f"/api/update_balance error: {e}")
         return web.json_response({'error': 'Internal server error'}, status=500)
+
+# --- Stats, Leaderboard, Help, Bonus Centre Callbacks ---
+async def show_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    user = await get_user(user_id)
+    # Example stats text
+    text = f"""
+📊 <b>Player Stats</b>\n\nBalance: <b>{user['balance']:.8f} LTC</b>\nGames Played: <b>{user['games_played']}</b>\nTotal Wagered: <b>{user['total_wagered']:.8f} LTC</b>\nTotal Won: <b>{user['total_won']:.8f} LTC</b>\n"""
+    await query.edit_message_text(text, parse_mode=ParseMode.HTML)
+
+async def show_leaderboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    # Example leaderboard text
+    text = "🏆 <b>Leaderboard</b>\n\n1. Player1 - 10,000\n2. Player2 - 8,000\n3. Player3 - 7,500"
+    await query.edit_message_text(text, parse_mode=ParseMode.HTML)
+
+async def show_help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    text = "❓ <b>Help</b>\n\nUse the menu to play games, deposit, withdraw, and view your stats. For support, contact @casino_support."
+    await query.edit_message_text(text, parse_mode=ParseMode.HTML)
+
+async def bonus_centre_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    text = "🎁 <b>Bonus Centre</b>\n\nClaim your daily bonus and referral rewards here!"
+    await query.edit_message_text(text, parse_mode=ParseMode.HTML)
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("❓ <b>Help</b>\n\nUse the menu to play games, deposit, withdraw, and view your stats. For support, contact @casino_support.", parse_mode=ParseMode.HTML)
 
 # --- Helper Functions ---
 def get_vip_level(balance: int) -> str:
@@ -1532,31 +1360,8 @@ async def withdraw_method_callback(update: Update, context: ContextTypes.DEFAULT
     query = update.callback_query
     await query.answer()
     method = query.data.replace("withdraw_", "")
-    
-    # Handle Litecoin withdrawal specifically
-    if method == "crypto":
-        await withdraw_litecoin_callback(update, context)
-        return
-    
     text = f"""
-💸 **WITHDRAW - {method.upper().replace('_', ' ')}** 💸
-
-🚧 **Under Development** 🚧
-
-Withdrawal system is being implemented.
-Current features:
-
-📊 **Track Progress** - Monitor your balance
-🎯 **Set Goals** - Plan your gaming strategy
-🏆 **Earn More** - Play games to increase balance
-
-Coming soon:
-• Real withdrawal processing
-• Multiple payout methods
-• Fast processing times
-• Secure transactions
-
-Keep playing and building your balance!
+💸 **WITHDRAW - {method.upper().replace('_', ' ')}** 💸\n\n🚧 **Under Development** 🚧\n\nWithdrawal system is being implemented.\nCurrent features:\n\n📊 **Track Progress** - Monitor your balance\n🎯 **Set Goals** - Plan your gaming strategy\n🏆 **Earn More** - Play games to increase balance\n\nComing soon:\n• Real withdrawal processing\n• Multiple payout methods\n• Fast processing times\n• Secure transactions\n\nKeep playing and building your balance!
 """
     keyboard = [
         [InlineKeyboardButton("🎮 Play More Games", callback_data="mini_app_centre")],
@@ -1574,7 +1379,7 @@ async def claim_daily_bonus_callback(update: Update, context: ContextTypes.DEFAU
     # For demo: always allow claim (implement cooldown in production)
     await update_balance(user_id, daily_bonus)
     await query.edit_message_text(
-        f"🎁 **DAILY BONUS CLAIMED!** 🎁\n\nYou received {daily_bonus} chips.\n\n💰 New Balance: {user['balance'] + daily_bonus:,} chips",
+        f"🎁 **DAILY BONUS CLAIMED!** 🎁\n\nYou received {daily_bonus} chips.\n\n💰 New Balance: {user['balance'] + daily_bonus:.8f} LTC",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Bonus Centre", callback_data="bonus_centre")]]),
         parse_mode=ParseMode.MARKDOWN
     )
@@ -1616,7 +1421,7 @@ async def monkey_stacks_bet_prompt(update: Update, context: ContextTypes.DEFAULT
     text = (
         f"🐒 <b>Monkey Stacks - {difficulty.title()} Mode</b>\n\n"
         f"Enter your bet amount (min {min_bet}, max {max_bet}):\n\n"
-        f"Current Balance: <b>{user['balance']:,} chips</b>"
+        f"Current Balance: <b>{user['balance']:.8f} LTC</b>"
     )
     keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="monkey_stacks_menu")]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
@@ -1652,14 +1457,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await deposit_callback(update, context)
         elif data == "withdraw":
             await withdraw_callback(update, context)
-        elif data.startswith("deposit_") and data != "deposit_crypto":
+        elif data.startswith("deposit_"):
             await deposit_method_callback(update, context)
-        elif data == "deposit_crypto":
-            await deposit_litecoin_callback(update, context)
         elif data.startswith("withdraw_"):
             await withdraw_method_callback(update, context)
-        elif data == "ltc_help":
-            await ltc_help_callback(update, context)
+        elif data == "deposit_litecoin":
+            await deposit_litecoin_callback(update, context)
+        elif data == "withdraw_crypto":
+            await withdraw_crypto_callback(update, context)
         
         # Bonus operations
         elif data == "claim_daily_bonus":
@@ -1683,305 +1488,72 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error handling callback {data}: {e}")
         await query.answer("❌ An error occurred. Please try again.", show_alert=True)
 
-# --- Bot Commands ---
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show help"""
-    webapp_status = "✅ Yes" if WEBAPP_ENABLED and WEBAPP_IMPORTS_AVAILABLE else "⚠️ Limited" if WEBAPP_ENABLED else "❌ No"
-    menu_button_status = "✅ Active" if WEBAPP_ENABLED and WEBAPP_IMPORTS_AVAILABLE else "❌ Disabled"
-    
-    help_text = f"""
-🎰 **CASINO BOT HELP** 🎰
+# --- Deposit Crypto Conversation States ---
+DEPOSIT_LTC_AMOUNT = 1001
 
-**Commands:**
-/start - Main panel
-/app - Mini App Centre  
-/webapp - Open Casino WebApp
-/casino - Open Casino WebApp
-/help - This help
-
-**Features:**
-🚀 **WebApp Integration** - Full casino experience in browser
-💰 **Balance System** - Earn and spend chips
-� **Bonus System** - Daily rewards and promotions
-� **Statistics** - Track your gaming progress
-
-**WebApp Status:**
-• URL: {WEBAPP_URL}
-• Enabled: {webapp_status}
-• Menu Button: {menu_button_status}
-• Compatibility: {'✅ Full' if WEBAPP_IMPORTS_AVAILABLE else '⚠️ URL fallback'}
-
-**How to Use WebApp:**
-1. Click the "🚀 PLAY IN WEBAPP" button in Mini App Centre
-2. Use /webapp command for direct access
-3. Check your menu button (if enabled)
-
-Ready to play? Use /start or /webapp!
-"""
-    await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN)
-
-# --- Additional Callback Handlers ---
-async def show_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle stats callback"""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    user = await get_user(user_id)
-    # Get user rank
-    async with aiosqlite.connect(DB_PATH) as db:
-        cur = await db.execute("SELECT COUNT(*) FROM users WHERE balance > ?", (user['balance'],))
-        rank = (await cur.fetchone())[0] + 1
-    text = f"""
-📊 **PLAYER STATISTICS** 📊
-
-👤 **Player:** {user['username']}
-💰 **Balance:** {user['balance']:,} chips
-🏆 **Global Rank:** #{rank}
-
-🎮 **Gaming Stats:**
-• Games Played: {user['games_played']}
-• Total Wagered: {user['total_wagered']:,} chips
-• Total Won: {user['total_won']:,} chips
-• Win Rate: {((user['total_won'] / max(user['total_wagered'], 1)) * 100):.1f}%
-
-🏅 **Achievements:**
-• First Deposit: {'✅' if user['balance'] > 0 else '❌'}
-• High Roller: {'✅' if user['balance'] >= 1000 else '❌'}
-• VIP Status: {'✅' if user['balance'] >= VIP_SILVER_REQUIRED else '❌'}
-
-🎯 **Performance Rating:**
-{get_performance_rating(user)}
-
-Ready to improve your stats?
-"""
-    keyboard = [
-        [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"), InlineKeyboardButton("🏆 View Leaderboard", callback_data="show_leaderboard")],
-        [InlineKeyboardButton("🎁 Get Bonus", callback_data="bonus_centre"), InlineKeyboardButton("🔙 Back to Main", callback_data="main_panel")]
-    ]
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-async def show_leaderboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle leaderboard callback"""
-    query = update.callback_query
-    await query.answer()
-    
-    # Get top 10 players
-    async with aiosqlite.connect(DB_PATH) as db:
-        cur = await db.execute("""
-            SELECT username, balance 
-            FROM users 
-            ORDER BY balance DESC 
-            LIMIT 10
-        """)
-        rows = await cur.fetchall()
-    
-    text = "🏆 **GLOBAL LEADERBOARD** 🏆\n\n"
-    
-    if not rows:
-        text += "📋 No players yet. Be the first to play!"
-    else:
-        text += "🎯 *Top 10 Players:*\n\n"
-        
-        for i, (username, balance) in enumerate(rows, 1):
-            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
-            display_name = username if username else f"Player_{i}"
-            text += f"{medal} *{display_name}*: {balance:,} chips\n"
-    
-    keyboard = [
-        [InlineKeyboardButton("📊 My Stats", callback_data="show_stats"), InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre")],
-        [InlineKeyboardButton("🎁 Get Bonus", callback_data="bonus_centre"), InlineKeyboardButton("🔙 Back to Main", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-async def show_help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle help callback"""
-    query = update.callback_query
-    await query.answer()
-    
-    webapp_status = "✅ Available" if WEBAPP_ENABLED and WEBAPP_IMPORTS_AVAILABLE else "⚠️ Limited" if WEBAPP_ENABLED else "❌ Disabled"
-    
-    text = f"""
-❓ **CASINO BOT HELP** ❓
-
-🎰 **How to Play:**
-1. Click "🎮 Mini App Centre" to access games
-2. Use the WebApp for the best experience
-3. Manage your balance with deposit/withdraw
-4. Check stats and leaderboard regularly
-
-🚀 **WebApp Features:**
-• Full casino in your browser
-• Real-time balance updates
-• Mobile-optimized interface
-• Smooth gaming experience
-
-📋 **Commands:**
-/start - Main menu
-/app - Mini App Centre
-/webapp - Direct WebApp access
-/help - This help
-
-🔧 **System Status:**
-• WebApp: {webapp_status}
-• Bot Version: {BOT_VERSION}
-• Server: Online ✅
-
-🎯 **Getting Started:**
-1. Start with the daily bonus
-2. Try small bets first
-3. Learn the games in WebApp
-4. Track your progress in stats
-
-Need more help? Contact support!
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("🎮 Start Playing", callback_data="mini_app_centre"), InlineKeyboardButton("🎁 Get Bonus", callback_data="bonus_centre")],
-        [InlineKeyboardButton("🔙 Back to Main", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-async def bonus_centre_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle bonus centre callback"""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    user = await get_user(user_id)
-    
-    # Calculate VIP status
-    vip_level = get_vip_level(user['balance'])
-    daily_bonus = get_daily_bonus_amount(vip_level)
-    
-    text = f"""
-🎁 **BONUS CENTRE** 🎁
-
-👤 **Player:** {user['username']}
-💰 **Balance:** {user['balance']:,} chips
-👑 **VIP Level:** {vip_level}
-
-🎊 **Available Bonuses:**
-
-💝 **Daily Bonus**
-• Amount: {daily_bonus} chips
-• VIP Multiplier: {get_vip_multiplier(vip_level)}x
-• Cooldown: 24 hours
-
-🔗 **Referral Bonus**
-• Invite friends: 100 chips each
-• Friend bonus: 50 chips
-• Unlimited referrals!
-
-🏆 **Achievement Bonuses**
-• First game: 25 chips ✅
-• 10 games: 100 chips
-• High roller: 500 chips
-• VIP status: 1,000 chips
-
-🎯 **Weekly Bonus**
-• 5% of total weekly bets
-• Paid every Monday
-• VIP multipliers apply
-
-Ready to claim your bonuses?
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("🎁 Claim Daily Bonus", callback_data="claim_daily_bonus"), InlineKeyboardButton("🔗 Referral Link", callback_data="get_referral")],
-        [InlineKeyboardButton("🏆 View Achievements", callback_data="show_achievements"), InlineKeyboardButton("📊 Bonus History", callback_data="bonus_history")],
-        [InlineKeyboardButton("🔙 Back to Main", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-# --- Admin Commands ---
-async def set_dice_rigging_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin command to control dice rigging level"""
-    global DICE_HOUSE_EDGE
-    
+async def deposit_crypto_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    
-    # Check if user is admin
-    if user_id not in ADMIN_USER_IDS:
-        await update.message.reply_text("❌ Admin access required!")
-        return
-    
-    if not context.args:
-        await update.message.reply_text(
-            f"🎯 **DICE RIGGING CONTROL** 🎯\n\n"
-            f"Current house edge: {DICE_HOUSE_EDGE:.0%}\n\n"
-            f"**Usage:** `/setdice <percentage>`\n"
-            f"**Examples:**\n"
-            f"• `/setdice 50` - Fair game (50% each)\n"
-            f"• `/setdice 65` - Moderate rigging (65% bot wins)\n"
-            f"• `/setdice 80` - Heavy rigging (80% bot wins)\n"
-            f"• `/setdice 20` - Player favored (20% bot wins)\n\n"
-            f"Range: 10-90%"
-        )
-        return
-    
-    try:
-        new_edge = float(context.args[0]) / 100
-        
-        if new_edge < 0.1 or new_edge > 0.9:
-            await update.message.reply_text("❌ House edge must be between 10% and 90%")
-            return
-        
-        DICE_HOUSE_EDGE = new_edge
-        
-        await update.message.reply_text(
-            f"✅ **DICE RIGGING UPDATED** ✅\n\n"
-            f"🎯 **New house edge:** {DICE_HOUSE_EDGE:.0%}\n"
-            f"🤖 **Bot win chance:** {DICE_HOUSE_EDGE:.0%}\n"
-            f"👤 **Player win chance:** {(1-DICE_HOUSE_EDGE):.0%}\n\n"
-            f"💡 Changes apply to all new dice games"
-        )
-        
-        logger.info(f"Admin {user_id} set dice house edge to {DICE_HOUSE_EDGE:.0%}")
-        
-    except ValueError:
-        await update.message.reply_text("❌ Invalid percentage. Use a number between 10-90")
-
-async def dice_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show dice game statistics"""
-    user_id = update.effective_user.id
-    
-    # Get user's dice game stats
-    async with aiosqlite.connect(DB_PATH) as db:
-        cur = await db.execute("""
-            SELECT 
-                COUNT(*) as total_games,
-                SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END) as wins,
-                SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END) as losses,
-                SUM(CASE WHEN result = 'tie' THEN 1 ELSE 0 END) as ties,
-                SUM(bet_amount) as total_bet,
-                SUM(win_amount) as total_won
-            FROM game_sessions 
-            WHERE user_id = ? AND game_type = 'dice'
-        """, (user_id,))
-        stats = await cur.fetchone()
-    
-    if not stats or stats[0] == 0:
-        await update.message.reply_text("🎲 No dice games played yet! Use /dice to start playing.")
-        return
-    
-    total_games, wins, losses, ties, total_bet, total_won = stats
-    win_rate = (wins / total_games) * 100 if total_games > 0 else 0
-    net_result = total_won - total_bet
-    
-    await update.message.reply_text(
-        f"🎲 **YOUR DICE STATISTICS** 🎲\n\n"
-        f"🎮 **Games Played:** {total_games}\n"
-        f"🏆 **Wins:** {wins} ({win_rate:.1f}%)\n"
-        f"💀 **Losses:** {losses}\n"
-        f"🤝 **Ties:** {ties}\n\n"
-        f"💰 **Total Bet:** {total_bet:,} chips\n"
-        f"💎 **Total Won:** {total_won:,} chips\n"
-        f"📊 **Net Result:** {net_result:+,} chips\n\n"
-        f"🎯 **Current House Edge:** {DICE_HOUSE_EDGE:.0%}\n"
-        f"🎲 Ready for another roll?"
+    min_deposit = 0.01
+    text = (
+        f"₿ <b>Litecoin Deposit</b>\n\n"
+        f"Enter the amount of LTC you want to deposit (min {min_deposit} LTC):"
     )
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+    return DEPOSIT_LTC_AMOUNT
+
+async def deposit_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    try:
+        amount = float(update.message.text.strip())
+        if amount < 0.01:
+            raise ValueError
+    except Exception:
+        await update.message.reply_text("❌ Invalid amount. Please enter a valid LTC amount (min 0.01):")
+        return DEPOSIT_LTC_AMOUNT
+    # Create invoice
+    invoice = await create_litecoin_invoice(amount, user_id)
+    if invoice.get("ok"):
+        pay_url = invoice["result"]["pay_url"]
+        await update.message.reply_text(
+            f"✅ Invoice created!\n\nPay <b>{amount} LTC</b> using the link below:\n{pay_url}\n\nAfter payment, your balance will be updated automatically.",
+            parse_mode=ParseMode.HTML
+        )
+    else:
+        await update.message.reply_text("❌ Failed to create invoice. Please try again later.")
+    return ConversationHandler.END
+
+# --- CryptoBot Webhook Endpoint (for payment detection) ---
+async def cryptobot_webhook(request):
+    secret = os.environ.get("CRYPTOBOT_WEBHOOK_SECRET")
+    body = await request.text()
+    signature = request.headers.get("X-CryptoPay-Signature")
+    if not secret or not signature:
+        return web.Response(status=401)
+    expected = hmac.new(secret.encode(), body.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(signature, expected):
+        return web.Response(status=403)
+    data = json.loads(body)
+    # Only process paid invoices
+    if data.get("event") == "invoice_paid":
+        user_id = int(data["payload"]["hidden_message"])
+        amount = float(data["payload"]["amount"])
+        # Credit user balance
+        await update_balance(user_id, int(amount * 1000))  # Example: 1 LTC = 1000 chips
+        # Optionally notify user
+    return web.Response(status=200)
+
+# --- Register ConversationHandler and webhook route in main() ---
+# ...existing code...
+    application.add_handler(ConversationHandler(
+        entry_points=[CallbackQueryHandler(deposit_crypto_start, pattern="^deposit_crypto$")],
+        states={
+            DEPOSIT_LTC_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, deposit_crypto_amount)]
+        },
+        fallbacks=[]
+    ))
+    # Add webhook route to aiohttp web server
+    app.router.add_post('/cryptobot/webhook', cryptobot_webhook)
+# ...existing code...
 
 # --- Main Bot Application ---
 async def main():
@@ -1998,11 +1570,6 @@ async def main():
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("app", mini_app_centre_command))
     application.add_handler(CommandHandler("webapp", webapp_command))
-    application.add_handler(CommandHandler("casino", webapp_command))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("withdraw_ltc", withdraw_ltc_command))
-    application.add_handler(CommandHandler("setdice", set_dice_rigging_command))
-    application.add_handler(CommandHandler("dicestats", dice_stats_command))
     application.add_handler(CommandHandler("casino", webapp_command))
     application.add_handler(CommandHandler("help", help_command))
     
