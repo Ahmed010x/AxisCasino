@@ -1705,8 +1705,9 @@ window.$crisp=[];window.CRISP_WEBSITE_ID="YOUR_CRISP_WEBSITE_ID";
             }
             // Apply house edge (2%)
             multiplier *= 0.98;
-            // Cap the multiplier for UI safety
-            if (multiplier > 9999) multiplier = 9999;
+            // Cap the multiplier for UI safety and fairness
+            const MAX_MINES_MULTIPLIER = 100;
+            if (multiplier > MAX_MINES_MULTIPLIER) multiplier = MAX_MINES_MULTIPLIER;
             return multiplier;
         }
         // Update multiplier display with 3 decimals
