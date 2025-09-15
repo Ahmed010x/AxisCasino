@@ -314,6 +314,10 @@ Launch the WebApp to start playing:
         # Fallback for older telegram versions - show URL button
         keyboard.append([InlineKeyboardButton("🚀 OPEN WEBAPP", url=f"{WEBAPP_URL}?user_id={user_id}&balance={balance}")])
     
+    # Add Telegram Monkey Stacks game button
+    keyboard.append([
+        InlineKeyboardButton("🐒 Monkey Stacks (Telegram)", callback_data="monkey_stacks_menu")
+    ])
     # Add regular game category buttons (games removed - only navigation)
     keyboard.extend([
         [InlineKeyboardButton("🎁 BONUSES", callback_data="bonus_centre"), InlineKeyboardButton("📊 STATISTICS", callback_data="show_stats")],
@@ -413,35 +417,109 @@ async def deposit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Min: 100 chips
 • Max: 10,000 chips
 • Fee: 2.5%
+• Currently unavailable
 
 **🏦 Bank Transfer**
 • 1-3 business days
 • Min: 500 chips
 • Max: 50,000 chips
 • Fee: Free
+• Currently unavailable
 
-**₿ Cryptocurrency**
-• Bitcoin, Ethereum, USDT
+**₿ Litecoin (LTC)**
 • 10-60 min processing
-• Min: 50 chips
+• Min: 50 chips (0.01 LTC)
+• Max: 50,000 chips (10 LTC)
 • Fee: Network fees only
+• Available now ✅
 
 **📱 E-Wallets**
 • PayPal, Skrill, Neteller
 • Instant processing
 • Min: 100 chips
 • Fee: 1.5%
+• Currently unavailable
 
 Choose your deposit method:
 """
-    
     keyboard = [
-        [InlineKeyboardButton("💳 Credit Card", callback_data="deposit_card"), InlineKeyboardButton("🏦 Bank Transfer", callback_data="deposit_bank")],
-        [InlineKeyboardButton("₿ Crypto", callback_data="deposit_crypto"), InlineKeyboardButton("📱 E-Wallet", callback_data="deposit_ewallet")],
+        [InlineKeyboardButton("₿ Litecoin (LTC)", callback_data="deposit_crypto")],
+        [InlineKeyboardButton("💳 Credit Card (Soon)", callback_data="deposit_card"), InlineKeyboardButton("🏦 Bank Transfer (Soon)", callback_data="deposit_bank")],
+        [InlineKeyboardButton("📱 E-Wallet (Soon)", callback_data="deposit_ewallet")],
         [InlineKeyboardButton("🔙 Back to Balance", callback_data="show_balance")]
     ]
-    
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+
+# --- Litecoin Deposit Handler ---
+async def deposit_litecoin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle Litecoin deposit requests"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    try:
+        from crypto_payment import generate_ltc_deposit_address
+        
+        # Generate unique deposit address for user
+        result = await generate_ltc_deposit_address(user_id)
+        
+        if result.get("success"):
+            address = result["address"]
+            network = result["network"]
+            min_amount = result["min_amount"]
+            rate = result["rate"]
+            
+            text = f"""
+₿ **LITECOIN DEPOSIT** ₿
+
+🏦 **Your Unique Deposit Address:**
+<code>{address}</code>
+
+📊 **Deposit Information:**
+• Network: {network.title()}
+• Minimum: {min_amount} LTC
+• Exchange Rate: {rate}
+• Confirmations: 1 required
+
+💡 **Instructions:**
+1. Send Litecoin to the address above
+2. Wait for 1 network confirmation
+3. Your chips will be credited automatically
+4. Contact support if you need help
+
+⚠️ **Important:**
+• Only send Litecoin (LTC) to this address
+• Sending other cryptocurrencies will result in loss
+• Save this address for future deposits
+"""
+        else:
+            text = f"""
+❌ **DEPOSIT ERROR** ❌
+
+Failed to generate deposit address: {result.get('error', 'Unknown error')}
+
+Please try again later or contact support.
+"""
+    except ImportError:
+        text = """
+🚧 **LITECOIN DEPOSITS** 🚧
+
+Litecoin payment system is currently being set up.
+
+**Coming Soon:**
+• Automatic LTC address generation
+• Real-time deposit tracking
+• Instant balance updates
+• Secure transaction processing
+
+Please check back soon or contact support for updates.
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔄 Generate New Address", callback_data="deposit_crypto")],
+        [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
+    ]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
 # --- Withdraw Handler ---
 async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -476,11 +554,11 @@ async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Fee: Free
 • Min: 1,000 chips
 
-**₿ Cryptocurrency**
-• Bitcoin, Ethereum, USDT
+**₿ Litecoin (LTC)**
 • 10-60 min processing
-• Fee: Network fees
-• Min: 500 chips
+• Fee: Network fees (paid by casino)
+• Min: 10 chips (0.002 LTC)
+• Rate: 1 LTC = 5,000 chips
 
 **📱 E-Wallets**
 • PayPal, Skrill, Neteller
@@ -498,6 +576,178 @@ Choose your withdrawal method:
     ]
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+
+# --- Litecoin Withdrawal Handler ---
+async def withdraw_litecoin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle Litecoin withdrawal requests"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    user = await get_user(user_id)
+    
+    # Check minimum balance for withdrawal
+    min_balance_chips = int(0.002 * 5000)  # 0.002 LTC * 5000 chips/LTC = 10 chips minimum
+    if user['balance'] < min_balance_chips:
+        await query.answer(f"❌ Minimum withdrawal: {min_balance_chips} chips (0.002 LTC equivalent)", show_alert=True)
+        return
+    
+    text = f"""
+₿ **LITECOIN WITHDRAWAL** ₿
+
+💰 **Available Balance:** {user['balance']:,} chips
+💱 **Exchange Rate:** 1 LTC = 5,000 chips
+
+📋 **Withdrawal Information:**
+• Minimum: 0.002 LTC (10 chips)
+• Maximum: 2 LTC (10,000 chips) per day
+• Processing: 10-60 minutes
+• Network Fee: Paid by casino
+
+🏦 **How to Withdraw:**
+1. Enter your Litecoin address
+2. Specify withdrawal amount
+3. Confirm transaction details
+4. Receive LTC to your wallet
+
+⚠️ **Important:**
+• Only use valid Litecoin addresses
+• Double-check address before confirming
+• Withdrawals cannot be reversed
+• Contact support if needed
+
+To proceed, please send your withdrawal request in this format:
+<code>/withdraw_ltc [LTC_ADDRESS] [AMOUNT_LTC]</code>
+
+Example:
+<code>/withdraw_ltc LTC1qExampleAddress123 0.01</code>
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("📖 How to Get LTC Address", callback_data="ltc_help")],
+        [InlineKeyboardButton("🔙 Back to Withdraw", callback_data="withdraw")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+# --- LTC Help Handler ---
+async def ltc_help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show help for getting Litecoin address"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = """
+📖 **HOW TO GET LITECOIN ADDRESS** 📖
+
+📱 **Popular Litecoin Wallets:**
+
+**Mobile Wallets:**
+• Litewallet (iOS/Android)
+• Exodus (iOS/Android)
+• Trust Wallet (iOS/Android)
+• Coinbase Wallet (iOS/Android)
+
+**Desktop Wallets:**
+• Litecoin Core (Official)
+• Exodus Desktop
+• Electrum-LTC
+
+**Exchange Wallets:**
+• Coinbase
+• Binance
+• Kraken
+• Gemini
+
+🔐 **Security Tips:**
+• Always use your own wallet
+• Never share private keys
+• Double-check addresses
+• Test with small amounts first
+
+📝 **Address Format:**
+Litecoin addresses start with:
+• L or M (Legacy format)
+• ltc1 (Bech32 format)
+
+Example: <code>LTC1qExampleAddress123456789</code>
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back to Withdrawal", callback_data="withdraw_crypto")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+# --- LTC Withdrawal Command ---
+async def withdraw_ltc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /withdraw_ltc command"""
+    user_id = update.effective_user.id
+    
+    if not context.args or len(context.args) != 2:
+        await update.message.reply_text(
+            "❌ **Invalid format**\n\n"
+            "Usage: `/withdraw_ltc [LTC_ADDRESS] [AMOUNT_LTC]`\n\n"
+            "Example: `/withdraw_ltc LTC1qExample123 0.01`",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+    
+    ltc_address = context.args[0]
+    try:
+        amount_ltc = float(context.args[1])
+    except ValueError:
+        await update.message.reply_text("❌ Invalid amount. Please enter a valid number.")
+        return
+    
+    # Validate LTC address format (basic validation)
+    if not (ltc_address.startswith(('L', 'M', 'ltc1')) and len(ltc_address) >= 26):
+        await update.message.reply_text("❌ Invalid Litecoin address format.")
+        return
+    
+    # Validate amount
+    if amount_ltc < 0.002:
+        await update.message.reply_text("❌ Minimum withdrawal is 0.002 LTC")
+        return
+    
+    if amount_ltc > 2.0:
+        await update.message.reply_text("❌ Maximum withdrawal is 2.0 LTC per day")
+        return
+    
+    try:
+        from crypto_payment import create_ltc_withdrawal
+        
+        # Process withdrawal
+        result = await create_ltc_withdrawal(user_id, ltc_address, amount_ltc)
+        
+        if result.get("success"):
+            tx_hash = result.get("tx_hash")
+            chips_deducted = result.get("chips_deducted")
+            
+            text = f"""
+✅ **WITHDRAWAL SUCCESSFUL** ✅
+
+💸 **Amount:** {amount_ltc} LTC
+💎 **Chips Deducted:** {chips_deducted:,}
+🏦 **Address:** `{ltc_address}`
+🔗 **Transaction:** `{tx_hash}`
+
+⏰ **Processing Time:** 10-60 minutes
+📊 **Network:** Litecoin Mainnet
+
+Your Litecoin will arrive in your wallet once the transaction is confirmed on the network.
+"""
+        else:
+            text = f"❌ **Withdrawal Failed**\n\n{result.get('error', 'Unknown error')}"
+            
+    except ImportError:
+        text = """
+🚧 **LITECOIN WITHDRAWALS** 🚧
+
+Litecoin withdrawal system is currently being set up.
+
+Please check back soon or contact support for manual withdrawals.
+"""
+    
+    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
 # --- Health Check and Keep-Alive for Render ---
 async def health_check(request):
@@ -1282,8 +1532,31 @@ async def withdraw_method_callback(update: Update, context: ContextTypes.DEFAULT
     query = update.callback_query
     await query.answer()
     method = query.data.replace("withdraw_", "")
+    
+    # Handle Litecoin withdrawal specifically
+    if method == "crypto":
+        await withdraw_litecoin_callback(update, context)
+        return
+    
     text = f"""
-💸 **WITHDRAW - {method.upper().replace('_', ' ')}** 💸\n\n🚧 **Under Development** 🚧\n\nWithdrawal system is being implemented.\nCurrent features:\n\n📊 **Track Progress** - Monitor your balance\n🎯 **Set Goals** - Plan your gaming strategy\n🏆 **Earn More** - Play games to increase balance\n\nComing soon:\n• Real withdrawal processing\n• Multiple payout methods\n• Fast processing times\n• Secure transactions\n\nKeep playing and building your balance!
+💸 **WITHDRAW - {method.upper().replace('_', ' ')}** 💸
+
+🚧 **Under Development** 🚧
+
+Withdrawal system is being implemented.
+Current features:
+
+📊 **Track Progress** - Monitor your balance
+🎯 **Set Goals** - Plan your gaming strategy
+🏆 **Earn More** - Play games to increase balance
+
+Coming soon:
+• Real withdrawal processing
+• Multiple payout methods
+• Fast processing times
+• Secure transactions
+
+Keep playing and building your balance!
 """
     keyboard = [
         [InlineKeyboardButton("🎮 Play More Games", callback_data="mini_app_centre")],
@@ -1309,6 +1582,46 @@ async def claim_daily_bonus_callback(update: Update, context: ContextTypes.DEFAU
 async def bonus_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer("🚧 Bonus feature coming soon!", show_alert=True)
+
+# --- Monkey Stacks Menu Callback ---
+async def monkey_stacks_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show difficulty selection for Monkey Stacks"""
+    query = update.callback_query
+    await query.answer()
+    keyboard = [
+        [InlineKeyboardButton("🍌 Easy (2x)", callback_data="monkey_stacks_easy")],
+        [InlineKeyboardButton("🐵 Medium (3.5x)", callback_data="monkey_stacks_medium")],
+        [InlineKeyboardButton("🔥 Hard (6x)", callback_data="monkey_stacks_hard")],
+        [InlineKeyboardButton("🔙 Back to Game Centre", callback_data="mini_app_centre")]
+    ]
+    text = (
+        "🐒 <b>Monkey Stacks</b> (Telegram Game)\n\n"
+        "Stack as many monkeys as you can!\n"
+        "Choose a difficulty to play.\n\n"
+        "<b>Easy:</b> 5 levels, 80% win chance per level, 2x payout\n"
+        "<b>Medium:</b> 7 levels, 60% win chance per level, 3.5x payout\n"
+        "<b>Hard:</b> 10 levels, 40% win chance per level, 6x payout\n\n"
+        "Bet is deducted before play. Win the top level for max payout!"
+    )
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+# --- Monkey Stacks Bet Prompt ---
+async def monkey_stacks_bet_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE, difficulty: str):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    user = await get_user(user_id)
+    min_bet = 10
+    max_bet = min(user['balance'], 1000)
+    text = (
+        f"🐒 <b>Monkey Stacks - {difficulty.title()} Mode</b>\n\n"
+        f"Enter your bet amount (min {min_bet}, max {max_bet}):\n\n"
+        f"Current Balance: <b>{user['balance']:,} chips</b>"
+    )
+    keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="monkey_stacks_menu")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    # Set state for next message (not implemented here)
+    # In production, use ConversationHandler or FSM for bet input
 
 # --- Main Callback Handler ---
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1339,16 +1652,28 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await deposit_callback(update, context)
         elif data == "withdraw":
             await withdraw_callback(update, context)
-        elif data.startswith("deposit_"):
+        elif data.startswith("deposit_") and data != "deposit_crypto":
             await deposit_method_callback(update, context)
+        elif data == "deposit_crypto":
+            await deposit_litecoin_callback(update, context)
         elif data.startswith("withdraw_"):
             await withdraw_method_callback(update, context)
+        elif data == "ltc_help":
+            await ltc_help_callback(update, context)
         
         # Bonus operations
         elif data == "claim_daily_bonus":
             await claim_daily_bonus_callback(update, context)
         elif data.startswith("bonus_") or data in ["get_referral", "show_achievements", "bonus_history"]:
             await bonus_action_callback(update, context)
+        elif data == "monkey_stacks_menu":
+            await monkey_stacks_menu_callback(update, context)
+        elif data == "monkey_stacks_easy":
+            await monkey_stacks_bet_prompt(update, context, "easy")
+        elif data == "monkey_stacks_medium":
+            await monkey_stacks_bet_prompt(update, context, "medium")
+        elif data == "monkey_stacks_hard":
+            await monkey_stacks_bet_prompt(update, context, "hard")
         
         # All other callbacks redirect to placeholder
         else:
@@ -1673,6 +1998,11 @@ async def main():
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("app", mini_app_centre_command))
     application.add_handler(CommandHandler("webapp", webapp_command))
+    application.add_handler(CommandHandler("casino", webapp_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("withdraw_ltc", withdraw_ltc_command))
+    application.add_handler(CommandHandler("setdice", set_dice_rigging_command))
+    application.add_handler(CommandHandler("dicestats", dice_stats_command))
     application.add_handler(CommandHandler("casino", webapp_command))
     application.add_handler(CommandHandler("help", help_command))
     
