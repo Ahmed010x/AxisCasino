@@ -336,7 +336,7 @@ async def show_mini_app_centre(update: Update, context: ContextTypes.DEFAULT_TYP
 🎮 <b>CASINO MINI APP CENTRE</b> 🎮
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-👤 <b>{username}</b> | Balance: <b>{balance:,}</b> chips
+👤 <b>{username}</b> | Balance: <b>{await format_usd(balance)}</b>
 🎯 <b>Games Played:</b> {total_games}
 
 Welcome to the Casino! Access all games below:
@@ -371,7 +371,7 @@ async def classic_casino_callback(update: Update, context: ContextTypes.DEFAULT_
     text = f"""
 🎰 **CLASSIC CASINO GAMES** 🎰
 
-💰 **Your Balance:** {balance:,} chips
+💰 **Your Balance:** {await format_usd(balance)}
 👤 **Player:** {username}
 
 🎮 **Traditional Casino Favorites:**
@@ -437,7 +437,7 @@ async def inline_games_callback(update: Update, context: ContextTypes.DEFAULT_TY
     text = f"""
 🎮 **INLINE MINI GAMES** 🎮
 
-💰 **Your Balance:** {balance:,} chips
+💰 **Your Balance:** {await format_usd(balance)}
 👤 **Player:** {username}
 
 ⚡ **Quick Play Games:**
@@ -484,9 +484,7 @@ Choose your quick game:
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
-# --- Simple Game Implementations ---
-
-# Slots Game
+# --- Slots Game ---
 async def play_slots_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle slots game"""
     query = update.callback_query
@@ -495,7 +493,7 @@ async def play_slots_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     text = f"""
 🎰 **SLOT MACHINES** 🎰
 
-💰 Choose your bet amount:
+💰 Choose your bet amount (in USD):
 
 🎯 **Game Info:**
 • 3-reel classic slots
@@ -507,8 +505,8 @@ Select your bet:
 """
     
     keyboard = [
-        [InlineKeyboardButton("🎰 Bet 10 chips", callback_data="slots_bet_10"), InlineKeyboardButton("🎰 Bet 25 chips", callback_data="slots_bet_25")],
-        [InlineKeyboardButton("🎰 Bet 50 chips", callback_data="slots_bet_50"), InlineKeyboardButton("🎰 Bet 100 chips", callback_data="slots_bet_100")],
+        [InlineKeyboardButton("🎰 Bet $10", callback_data="slots_bet_10"), InlineKeyboardButton("🎰 Bet $25", callback_data="slots_bet_25")],
+        [InlineKeyboardButton("🎰 Bet $50", callback_data="slots_bet_50"), InlineKeyboardButton("🎰 Bet $100", callback_data="slots_bet_100")],
         [InlineKeyboardButton("🔙 Back to Classic", callback_data="classic_casino")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
@@ -532,7 +530,7 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = await deduct_balance(user_id, bet)
     
     if result is False:
-        await query.answer("❌ Not enough chips", show_alert=True)
+        await query.answer("❌ Not enough balance", show_alert=True)
         return
 
     # Simple slots simulation
@@ -544,9 +542,9 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         multiplier = {"🍒": 10, "🍋": 20, "🍊": 30, "🔔": 50, "💎": 100}.get(reel[0], 10)
         win_amount = bet * multiplier
         await update_balance(user_id, win_amount)
-        text = f"🎰 {' '.join(reel)}\n\n🎉 **JACKPOT!** You won **{win_amount:,} chips** (x{multiplier})!"
+        text = f"🎰 {' '.join(reel)}\n\n🎉 **JACKPOT!** You won **${win_amount:,}** (x{multiplier})!"
     else:
-        text = f"🎰 {' '.join(reel)}\n\n😢 No match. You lost **{bet:,} chips**."
+        text = f"🎰 {' '.join(reel)}\n\n😢 No match. You lost **${bet:,}**."
 
     user_after = await get_user(user_id)
     keyboard = [
@@ -554,7 +552,7 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
-    text += f"\n\n💰 **Balance:** {user_after['balance']:,} chips"
+    text += f"\n\n💰 **Balance:** {await format_usd(user_after['balance'])}"
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
 # Coin Flip Game
@@ -568,7 +566,7 @@ async def coin_flip_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     text = f"""
 🪙 **COIN FLIP** 🪙
 
-💰 **Your Balance:** {user['balance']:,} chips
+💰 **Your Balance:** {await format_usd(user['balance'])}
 
 ⚡ **Quick & Simple:**
 • Choose Heads or Tails
@@ -577,13 +575,13 @@ async def coin_flip_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 • 2x payout on win
 
 🎯 **Betting Options:**
-Choose your bet amount and side:
+Choose your bet amount (in USD) and side:
 """
     
     keyboard = [
-        [InlineKeyboardButton("🟡 Heads - 10 chips", callback_data="coinflip_heads_10"), InlineKeyboardButton("⚫ Tails - 10 chips", callback_data="coinflip_tails_10")],
-        [InlineKeyboardButton("🟡 Heads - 25 chips", callback_data="coinflip_heads_25"), InlineKeyboardButton("⚫ Tails - 25 chips", callback_data="coinflip_tails_25")],
-        [InlineKeyboardButton("🟡 Heads - 50 chips", callback_data="coinflip_heads_50"), InlineKeyboardButton("⚫ Tails - 50 chips", callback_data="coinflip_tails_50")],
+        [InlineKeyboardButton("🟡 Heads - $10", callback_data="coinflip_heads_10"), InlineKeyboardButton("⚫ Tails - $10", callback_data="coinflip_tails_10")],
+        [InlineKeyboardButton("🟡 Heads - $25", callback_data="coinflip_heads_25"), InlineKeyboardButton("⚫ Tails - $25", callback_data="coinflip_tails_25")],
+        [InlineKeyboardButton("🟡 Heads - $50", callback_data="coinflip_heads_50"), InlineKeyboardButton("⚫ Tails - $50", callback_data="coinflip_tails_50")],
         [InlineKeyboardButton("🔙 Back to Inline Games", callback_data="inline_games")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
@@ -609,7 +607,7 @@ async def handle_coinflip_bet(update: Update, context: ContextTypes.DEFAULT_TYPE
     result = await deduct_balance(user_id, bet)
     
     if result is False:
-        await query.answer("❌ Not enough chips", show_alert=True)
+        await query.answer("❌ Not enough balance", show_alert=True)
         return
     
     # Flip coin
@@ -621,9 +619,9 @@ async def handle_coinflip_bet(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Win - 2x payout
         win_amount = bet * 2
         await update_balance(user_id, win_amount)
-        outcome = f"🎉 **YOU WIN!**\n\n{coin_emoji} Coin landed on **{coin_result.upper()}**\n{choice_emoji} You chose **{choice.upper()}**\n\n💰 Won: **{win_amount:,} chips**"
+        outcome = f"🎉 **YOU WIN!**\n\n{coin_emoji} Coin landed on **{coin_result.upper()}**\n{choice_emoji} You chose **{choice.upper()}**\n\n💰 Won: **${win_amount:,}**"
     else:
-        outcome = f"😢 **YOU LOSE!**\n\n{coin_emoji} Coin landed on **{coin_result.upper()}**\n{choice_emoji} You chose **{choice.upper()}**\n\n💸 Lost: **{bet:,} chips**"
+        outcome = f"😢 **YOU LOSE!**\n\n{coin_emoji} Coin landed on **{coin_result.upper()}**\n{choice_emoji} You chose **{choice.upper()}**\n\n💸 Lost: **${bet:,}**"
     
     user_after = await get_user(user_id)
     
@@ -632,7 +630,7 @@ async def handle_coinflip_bet(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 {outcome}
 
-💰 **New Balance:** {user_after['balance']:,} chips
+💰 **New Balance:** {await format_usd(user_after['balance'])}
 
 Play again or try another game:
 """
@@ -1398,7 +1396,7 @@ async def all_games_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     balance = user['balance']
     username = user['username']
     text = f"""
-🎮 <b>ALL GAMES</b> 🎮\n\n👤 <b>{username}</b> | Balance: <b>{balance:,}</b> chips\n\nSelect a game to play:\n"""
+🎮 <b>ALL GAMES</b> 🎮\n\n👤 <b>{username}</b> | Balance: <b>{await format_usd(balance)}</b>\n\nSelect a game to play:\n"""
     keyboard = [
         [InlineKeyboardButton("🎰 Slots", callback_data="play_slots"), InlineKeyboardButton("🃏 Blackjack", callback_data="play_blackjack")],
         [InlineKeyboardButton("🎡 Roulette", callback_data="play_roulette"), InlineKeyboardButton("🎲 Dice", callback_data="play_dice")],
