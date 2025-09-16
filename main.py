@@ -78,6 +78,15 @@ ADMIN_USER_IDS = list(map(int, os.environ.get("ADMIN_USER_IDS", "").split(",")))
 SUPPORT_CHANNEL = os.environ.get("SUPPORT_CHANNEL", "@casino_support")
 BOT_VERSION = "2.0.1"
 
+# Debug: Print admin configuration
+print("🔧 Admin Configuration:")
+print(f"✅ Admin User IDs: {ADMIN_USER_IDS}")
+print(f"✅ Raw Admin Env: {os.environ.get('ADMIN_USER_IDS', 'NOT SET')}")
+if ADMIN_USER_IDS:
+    print(f"✅ Admin features enabled for {len(ADMIN_USER_IDS)} user(s)")
+else:
+    print("⚠️ No admin users configured")
+
 # WebApp Configuration
 WEBAPP_URL = os.environ.get("WEBAPP_URL", "https://your-casino-webapp.vercel.app")
 WEBAPP_ENABLED = os.environ.get("WEBAPP_ENABLED", "true").lower() == "true"
@@ -138,6 +147,18 @@ async def format_usd(ltc_amount: float) -> str:
         return f"~${ltc_amount:.2f} USD (rate unavailable)"
     usd = ltc_amount * rate
     return f"${usd:.2f} USD"
+
+# --- Admin Helper Functions ---
+def is_admin(user_id: int) -> bool:
+    """Check if user is an admin/owner with logging"""
+    is_admin_user = user_id in ADMIN_USER_IDS
+    if is_admin_user:
+        logger.info(f"🔑 Admin access granted for user {user_id}")
+    return is_admin_user
+
+def log_admin_action(user_id: int, action: str):
+    """Log admin actions for debugging"""
+    logger.info(f"🔧 Admin action by {user_id}: {action}")
 
 # --- Production Database System ---
 async def init_db():
@@ -462,7 +483,8 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = await get_user(user_id)
     # TRUE ADMIN TEST MODE: allow all admins/owners to play with zero balance, always win, no deduction
-    if user_id in ADMIN_USER_IDS:
+    if is_admin(user_id):
+        log_admin_action(user_id, f"Playing slots in test mode with ${bet} bet")
         symbols = ["💎", "💎", "💎"]
         multiplier = 100
         win_amount = bet * multiplier
@@ -486,7 +508,8 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
         return
     # Allow owner/admins to play even with zero balance
-    if user['balance'] < bet and user_id in ADMIN_USER_IDS:
+    if user['balance'] < bet and is_admin(user_id):
+        log_admin_action(user_id, f"Playing slots with insufficient balance (admin override)")
         # Do NOT deduct balance for owner/admins, just proceed
         pass
     elif user['balance'] < bet:
@@ -581,7 +604,8 @@ async def handle_coinflip_bet(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     user = await get_user(user_id)
     # TRUE ADMIN TEST MODE: allow all admins/owners to play with zero balance, always win, no deduction
-    if user_id in ADMIN_USER_IDS:
+    if is_admin(user_id):
+        log_admin_action(user_id, f"Playing coin flip in test mode with ${bet} bet")
         coin_result = choice
         win_amount = bet * 1.92
         text = f"🪙 <b>COIN FLIP RESULT</b> 🪙\n\n🧪 <b>TEST MODE (ADMIN/OWNER)</b>\n🎉 <b>YOU WIN!</b>\n\n{'🟡' if choice == 'heads' else '⚫'} Coin landed on <b>{choice.upper()}</b>\n{'🟡' if choice == 'heads' else '⚫'} You chose <b>{choice.upper()}</b>\n\n💰 Won: <b>${win_amount:.2f}</b>\n\n💰 <b>New Balance:</b> {await format_usd(user['balance'])}\n\nPlay again or try another game:"
@@ -692,7 +716,8 @@ async def dice_prediction_bet_amount(update: Update, context: ContextTypes.DEFAU
     ltc_usd_rate = await get_ltc_usd_rate()
     bet_ltc = bet_usd / ltc_usd_rate if ltc_usd_rate > 0 else 0
     # TRUE ADMIN TEST MODE: allow all admins/owners to play with zero balance, always win, no deduction
-    if user_id in ADMIN_USER_IDS:
+    if is_admin(user_id):
+        log_admin_action(user_id, f"Playing dice in test mode with ${bet_usd} bet")
         prediction = context.user_data.get('dice_prediction')
         roll = int(prediction) if prediction in [str(i) for i in range(1, 7)] else 2
         payout = bet_ltc * 6 if prediction in [str(i) for i in range(1, 7)] else bet_ltc * 2
@@ -1421,12 +1446,39 @@ async def demo_mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global DEMO_MODE
     user_id = update.effective_user.id
     # Only allow admins to toggle demo mode
-    if user_id not in ADMIN_USER_IDS:
+    if not is_admin(user_id):
         await update.message.reply_text("❌ Only admins can toggle demo mode.")
         return
+    
+    log_admin_action(user_id, f"Toggling demo mode from {DEMO_MODE}")
     DEMO_MODE = not DEMO_MODE
     status = "ON" if DEMO_MODE else "OFF"
     await update.message.reply_text(f"🧪 Demo mode is now <b>{status}</b> for all users.", parse_mode=ParseMode.HTML)
+    logger.info(f"Demo mode toggled to {status} by admin {user_id}")
+
+# --- ADMIN TEST COMMAND ---
+async def admin_test_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Test command to verify admin status"""
+    user_id = update.effective_user.id
+    if is_admin(user_id):
+        log_admin_action(user_id, "Testing admin status")
+        await update.message.reply_text(
+            f"✅ <b>Admin Status Confirmed</b>\n\n"
+            f"👤 User ID: <code>{user_id}</code>\n"
+            f"🔑 Admin Features: Enabled\n"
+            f"🧪 Test Mode: Available in games\n"
+            f"🎮 Demo Toggle: Available\n\n"
+            f"All admin features are working correctly!",
+            parse_mode=ParseMode.HTML
+        )
+    else:
+        await update.message.reply_text(
+            f"❌ <b>Not an Admin</b>\n\n"
+            f"👤 User ID: <code>{user_id}</code>\n"
+            f"🔑 Admin Status: Not authorized\n\n"
+            f"Contact the bot owner if you should have admin access.",
+            parse_mode=ParseMode.HTML
+        )
 
 # --- Register /demo command in the bot setup ---
 # --- Main Callback Handler ---
@@ -1526,6 +1578,7 @@ async def main():
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CallbackQueryHandler(handle_callback))
     application.add_handler(CommandHandler("demo", demo_mode_command))
+    application.add_handler(CommandHandler("admin", admin_test_command))
     
    
     
