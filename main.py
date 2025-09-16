@@ -721,6 +721,29 @@ async def deposit_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text("❌ Invalid amount. Please enter a valid LTC amount (min 0.01):")
         return DEPOSIT_LTC_AMOUNT
     try:
+        # Check required env vars before proceeding
+        missing_env = []
+        if not CRYPTOBOT_API_TOKEN:
+            missing_env.append("CRYPTOBOT_API_TOKEN")
+        if not CRYPTOBOT_LITECOIN_ASSET:
+            missing_env.append("CRYPTOBOT_LITECOIN_ASSET")
+        if not CRYPTOBOT_WEBHOOK_SECRET:
+            missing_env.append("CRYPTOBOT_WEBHOOK_SECRET")
+        if missing_env:
+            logger.error(f"Missing required env vars: {missing_env}")
+            await update.message.reply_text(
+                "❌ Deposit system misconfigured. Please contact support. [Missing env vars]"
+            )
+            # Optionally notify admins
+            for admin_id in ADMIN_USER_IDS:
+                try:
+                    await context.bot.send_message(
+                        admin_id,
+                        f"[ALERT] Deposit failed for user {user_id}. Missing env vars: {missing_env}"
+                    )
+                except Exception:
+                    pass
+            return ConversationHandler.END
         # Use a unique payload for webhook identification
         payload = {"hidden_message": str(user_id)}
         invoice = await create_litecoin_invoice(
@@ -747,10 +770,31 @@ async def deposit_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TY
             text += "\n\nAfter payment, your balance will be updated automatically."
             await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons) if buttons else None)
         else:
+            logger.error(f"CryptoBot API error: {invoice}")
             await update.message.reply_text("❌ Failed to create invoice. Please try again later.")
+            # Notify admins
+            for admin_id in ADMIN_USER_IDS:
+                try:
+                    await context.bot.send_message(
+                        admin_id,
+                        f"[ALERT] Deposit failed for user {user_id}. API response: {invoice}"
+                    )
+                except Exception:
+                    pass
     except Exception as e:
-        logger.error(f"Deposit error: {e}")
+        import traceback
+        tb = traceback.format_exc()
+        logger.error(f"Deposit error: {e}\n{tb}")
         await update.message.reply_text("❌ Deposit system temporarily unavailable. Please try again later.")
+        # Notify admins
+        for admin_id in ADMIN_USER_IDS:
+            try:
+                await context.bot.send_message(
+                    admin_id,
+                    f"[ALERT] Deposit exception for user {user_id}: {e}\n{tb}"
+                )
+            except Exception:
+                pass
     return ConversationHandler.END
 
 # --- Withdraw Conversation Handlers ---
