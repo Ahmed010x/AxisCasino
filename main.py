@@ -1477,7 +1477,58 @@ async def demo_mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"🧪 Demo mode is now <b>{status}</b> for all users.", parse_mode=ParseMode.HTML)
 
 # --- Register /demo command in the bot setup ---
-# (Add this to your ApplicationBuilder setup, e.g. application.add_handler(CommandHandler("demo", demo_mode_command)))
+# --- Main Callback Handler ---
+async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Main router for all callback queries from inline keyboards."""
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    try:
+        # Main navigation
+        if data == "main_panel":
+            await main_panel_callback(update, context)
+        elif data == "mini_app_centre":
+            await show_mini_app_centre(update, context)
+        elif data == "show_balance":
+            await show_balance_callback(update, context)
+        elif data == "all_games":
+            await all_games_callback(update, context)
+        elif data == "classic_casino":
+            await classic_casino_callback(update, context)
+        elif data == "deposit":
+            await deposit_callback(update, context)
+        elif data == "withdraw":
+            await withdraw_callback(update, context)
+        elif data == "withdrawal_history":
+            await withdrawal_history_callback(update, context)
+        elif data == "redeem_panel":
+            await redeem_panel_callback(update, context)
+        elif data == "redeem_start":
+            await redeem_start_callback(update, context)
+        elif data == "show_stats":
+            await show_stats_callback(update, context)
+        elif data == "show_help":
+            await help_command(update, context)
+        # Game callbacks
+        elif data == "play_slots":
+            await play_slots_callback(update, context)
+        elif data.startswith("slots_bet_"):
+            await handle_slots_bet(update, context)
+        elif data == "coin_flip":
+            await coin_flip_callback(update, context)
+        elif data.startswith("coinflip_"):
+            await handle_coinflip_bet(update, context)
+        elif data == "play_dice":
+            await play_dice_callback(update, context)
+        elif data.startswith("dice_predict_"):
+            await dice_prediction_choose(update, context)
+        # Add more game and feature callbacks as needed
+        else:
+            await query.answer("❌ Feature coming soon!", show_alert=True)
+    except Exception as e:
+        logger.error(f"Error handling callback {data}: {e}")
+        await query.answer("❌ An error occurred. Please try again.", show_alert=True)
+
 # --- Main Application ---
 async def main():
     """Start the bot"""
@@ -1604,55 +1655,3 @@ async def update_withdrawal_limits(user_id: int, usd_amount: float):
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Stub: Help command handler."""
     await update.message.reply_text("Help is not implemented yet.")
-
-# --- Main Callback Handler ---
-async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Main router for all callback queries from inline keyboards."""
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-    try:
-        # Main navigation
-        if data == "main_panel":
-            await main_panel_callback(update, context)
-        elif data == "mini_app_centre":
-            await show_mini_app_centre(update, context)
-        elif data == "show_balance":
-            await show_balance_callback(update, context)
-        elif data == "all_games":
-            await all_games_callback(update, context)
-        elif data == "classic_casino":
-            await classic_casino_callback(update, context)
-        elif data == "deposit":
-            await deposit_callback(update, context)
-        elif data == "withdraw":
-            await withdraw_callback(update, context)
-        elif data == "withdrawal_history":
-            await withdrawal_history_callback(update, context)
-        elif data == "redeem_panel":
-            await redeem_panel_callback(update, context)
-        elif data == "redeem_start":
-            await redeem_start_callback(update, context)
-        elif data == "show_stats":
-            await show_stats_callback(update, context)
-        elif data == "show_help":
-            await help_command(update, context)
-        # Game callbacks
-        elif data == "play_slots":
-            await play_slots_callback(update, context)
-        elif data.startswith("slots_bet_"):
-            await handle_slots_bet(update, context)
-        elif data == "coin_flip":
-            await coin_flip_callback(update, context)
-        elif data.startswith("coinflip_"):
-            await handle_coinflip_bet(update, context)
-        elif data == "play_dice":
-            await play_dice_callback(update, context)
-        elif data.startswith("dice_predict_"):
-            await dice_prediction_choose(update, context)
-        # Add more game and feature callbacks as needed
-        else:
-            await query.answer("❌ Feature coming soon!", show_alert=True)
-    except Exception as e:
-        logger.error(f"Error handling callback {data}: {e}")
-        await query.answer("❌ An error occurred. Please try again.", show_alert=True)
