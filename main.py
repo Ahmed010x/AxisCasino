@@ -99,6 +99,12 @@ WEEKLY_BONUS_RATE = float(os.environ.get("WEEKLY_BONUS_RATE", "0.05"))  # 5% of 
 MIN_SLOTS_BET = int(os.environ.get("MIN_SLOTS_BET", "10"))
 MIN_BLACKJACK_BET = int(os.environ.get("MIN_BLACKJACK_BET", "20"))
 
+# Withdrawal Configuration
+MIN_WITHDRAWAL_USD = float(os.environ.get("MIN_WITHDRAWAL_USD", "1.00"))
+MAX_WITHDRAWAL_USD_DAILY = float(os.environ.get("MAX_WITHDRAWAL_USD_DAILY", "10000.00"))
+WITHDRAWAL_FEE_PERCENT = float(os.environ.get("WITHDRAWAL_FEE_PERCENT", "0.02"))  # 2% withdrawal fee
+WITHDRAWAL_COOLDOWN_SECONDS = int(os.environ.get("WITHDRAWAL_COOLDOWN_SECONDS", "300"))  # 5 minutes between withdrawals
+
 # Logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -161,6 +167,37 @@ async def init_db():
                 win_amount REAL DEFAULT 0,
                 result TEXT NOT NULL,
                 timestamp TEXT DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        """)
+        
+        # Withdrawals table for tracking and security
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS withdrawals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                amount_ltc REAL NOT NULL,
+                amount_usd REAL NOT NULL,
+                fee_ltc REAL NOT NULL,
+                fee_usd REAL NOT NULL,
+                to_address TEXT NOT NULL,
+                status TEXT DEFAULT 'pending',
+                transaction_id TEXT DEFAULT '',
+                created_at TEXT DEFAULT '',
+                processed_at TEXT DEFAULT '',
+                error_message TEXT DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        """)
+        
+        # Daily withdrawal limits tracking
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS daily_withdrawal_limits (
+                user_id INTEGER PRIMARY KEY,
+                date TEXT NOT NULL,
+                total_withdrawn_usd REAL DEFAULT 0.0,
+                withdrawal_count INTEGER DEFAULT 0,
+                last_withdrawal_time TEXT DEFAULT '',
                 FOREIGN KEY (user_id) REFERENCES users (id)
             )
         """)
@@ -699,22 +736,42 @@ async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = await get_user(user_id)
     
     # Check minimum withdrawal amount
-    min_withdrawal = 0.01
-    if user['balance'] < min_withdrawal:
-        await query.answer(f"❌ Minimum withdrawal: {min_withdrawal} LTC", show_alert=True)
+    if user['balance'] < MIN_WITHDRAWAL_USD / await get_ltc_usd_rate():
+        await query.answer(f"❌ Minimum withdrawal: ${MIN_WITHDRAWAL_USD:.2f}", show_alert=True)
         return
+    
+    # Get withdrawal history
+    recent_withdrawals = await get_user_withdrawals(user_id, 3)
+    pending_withdrawals = [w for w in recent_withdrawals if w['status'] == 'pending']
+    
+    # Check for pending withdrawals
+    if pending_withdrawals:
+        await query.answer("❌ You have pending withdrawals. Please wait for them to complete.", show_alert=True)
+        return
+    
+    balance_usd = await format_usd(user['balance'])
+    
+    # Show recent withdrawals if any
+    withdrawal_history = ""
+    if recent_withdrawals:
+        withdrawal_history = "\n📊 **Recent Withdrawals:**\n"
+        for w in recent_withdrawals[:3]:
+            status_emoji = {"completed": "✅", "pending": "⏳", "failed": "❌"}.get(w['status'], "❓")
+            date = w['created_at'][:10] if w['created_at'] else "Unknown"
+            withdrawal_history += f"• {status_emoji} ${w['amount_usd']:.2f} - {date}\n"
     
     text = f"""
 💸 **WITHDRAW FUNDS** 💸
 
-💰 **Available Balance:** {user['balance']:.8f} LTC
+💰 **Available Balance:** {balance_usd}
 👤 **Player:** {user['username']}
 
 📋 **Withdrawal Requirements:**
-• Minimum: {min_withdrawal} LTC
-• Maximum: 100 LTC per day
+• Minimum: ${MIN_WITHDRAWAL_USD:.2f}
+• Daily Limit: ${MAX_WITHDRAWAL_USD_DAILY:.2f}
+• Fee: {WITHDRAWAL_FEE_PERCENT}% of amount
 • Processing: Instant via CryptoBot
-• Network fees may apply
+• Cooldown: {WITHDRAWAL_COOLDOWN_SECONDS//60} minutes between withdrawals
 
 🏦 **Withdrawal Methods:**
 
@@ -722,13 +779,66 @@ async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Instant processing
 • Direct to your LTC address
 • Low network fees
-• Min: {min_withdrawal} LTC
-
+• Secure and reliable
+{withdrawal_history}
 Choose your withdrawal method:
 """
     
     keyboard = [
         [InlineKeyboardButton("₿ Litecoin Withdraw", callback_data="withdraw_crypto")],
+        [InlineKeyboardButton("📊 Withdrawal History", callback_data="withdrawal_history")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+
+# --- Withdrawal History Handler ---
+async def withdrawal_history_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show user's withdrawal history"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    withdrawals = await get_user_withdrawals(user_id, 10)
+    
+    if not withdrawals:
+        text = """
+📊 **WITHDRAWAL HISTORY** 📊
+
+No withdrawals found.
+        """
+    else:
+        text = "📊 **WITHDRAWAL HISTORY** 📊\n\n"
+        
+        total_withdrawn = sum(w['amount_usd'] for w in withdrawals if w['status'] == 'completed')
+        total_fees = sum(w['fee_usd'] for w in withdrawals if w['status'] == 'completed')
+        
+        text += f"📈 **Summary:**\n"
+        text += f"• Total Withdrawn: ${total_withdrawn:.2f}\n"
+        text += f"• Total Fees Paid: ${total_fees:.2f}\n"
+        text += f"• Total Transactions: {len(withdrawals)}\n\n"
+        
+        text += "📋 **Recent Withdrawals:**\n"
+        
+        for i, w in enumerate(withdrawals[:8], 1):
+            status_emoji = {
+                "completed": "✅",
+                "pending": "⏳", 
+                "failed": "❌"
+            }.get(w['status'], "❓")
+            
+            date = w['created_at'][:16].replace('T', ' ') if w['created_at'] else "Unknown"
+            amount_display = f"${w['amount_usd']:.2f}"
+            fee_display = f"${w['fee_usd']:.4f}" if w['fee_usd'] > 0 else "Free"
+            
+            text += f"{i}. {status_emoji} {amount_display} (Fee: {fee_display})\n"
+            text += f"   📅 {date}\n"
+            if w['status'] == 'failed' and w['error_message']:
+                text += f"   ❌ {w['error_message'][:30]}...\n"
+            text += "\n"
+    
+    keyboard = [
+        [InlineKeyboardButton("💸 New Withdrawal", callback_data="withdraw_crypto")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
@@ -838,11 +948,32 @@ async def deposit_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TY
 async def withdraw_crypto_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = await get_user(user_id)
-    min_withdraw_usd = 0.01
+    
+    # Check withdrawal limits first
+    limits_check = await check_withdrawal_limits(user_id, MIN_WITHDRAWAL_USD)
+    if not limits_check['allowed']:
+        await update.message.reply_text(f"❌ {limits_check['reason']}")
+        return ConversationHandler.END
+    
+    balance_usd = await format_usd(user['balance'])
+    ltc_rate = await get_ltc_usd_rate()
+    max_withdraw_ltc = user['balance']
+    max_withdraw_usd = max_withdraw_ltc * ltc_rate
+    
+    # Calculate fees for display
+    example_fee_ltc = calculate_withdrawal_fee(0.1)  # Example with 0.1 LTC
+    example_fee_usd = example_fee_ltc * ltc_rate
+    
     text = (
-        f"💵 Litecoin Withdraw\n\n"
-        f"Available Balance: {await format_usd(user['balance'])}\n\n"
-        f"Enter the amount in <b>USD</b> you want to withdraw (min ${min_withdraw_usd:.2f}):"
+        f"💵 **Litecoin Withdrawal**\n\n"
+        f"💰 **Available Balance:** {balance_usd}\n"
+        f"📊 **Current LTC Rate:** ${ltc_rate:.2f}\n\n"
+        f"📋 **Withdrawal Details:**\n"
+        f"• Minimum: ${MIN_WITHDRAWAL_USD:.2f}\n"
+        f"• Maximum: ${min(max_withdraw_usd, MAX_WITHDRAWAL_USD_DAILY):.2f}\n"
+        f"• Fee: {WITHDRAWAL_FEE_PERCENT}% (Example: ${example_fee_usd:.4f})\n\n"
+        f"💡 **Note:** Fee is deducted from withdrawal amount\n\n"
+        f"Enter the amount in <b>USD</b> you want to withdraw:"
     )
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
     return WITHDRAW_LTC_AMOUNT
@@ -850,27 +981,73 @@ async def withdraw_crypto_start(update: Update, context: ContextTypes.DEFAULT_TY
 async def withdraw_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = await get_user(user_id)
+    
     try:
         usd_amount = float(update.message.text.strip())
-        if usd_amount < 0.01:
-            raise ValueError("Amount too small")
+        
+        # Validate minimum amount
+        if usd_amount < MIN_WITHDRAWAL_USD:
+            raise ValueError(f"Amount below minimum ${MIN_WITHDRAWAL_USD:.2f}")
+        
+        # Check withdrawal limits
+        limits_check = await check_withdrawal_limits(user_id, usd_amount)
+        if not limits_check['allowed']:
+            await update.message.reply_text(f"❌ {limits_check['reason']}")
+            return WITHDRAW_LTC_AMOUNT
+        
         # Convert USD to LTC
         ltc_usd_rate = await get_ltc_usd_rate()
         if ltc_usd_rate == 0.0:
             await update.message.reply_text("❌ Unable to fetch LTC/USD rate. Please try again later.")
             return WITHDRAW_LTC_AMOUNT
+        
         ltc_amount = usd_amount / ltc_usd_rate
+        
+        # Check if user has sufficient balance
         if ltc_amount > user['balance']:
-            raise ValueError("Insufficient balance")
-    except Exception:
-        await update.message.reply_text("❌ Invalid amount. Please enter a valid USD amount (min $0.01) within your balance:")
+            max_usd = user['balance'] * ltc_usd_rate
+            await update.message.reply_text(f"❌ Insufficient balance. Maximum available: ${max_usd:.2f}")
+            return WITHDRAW_LTC_AMOUNT
+        
+        # Calculate fees
+        fee_ltc = calculate_withdrawal_fee(ltc_amount)
+        fee_usd = fee_ltc * ltc_usd_rate
+        net_ltc = ltc_amount - fee_ltc
+        net_usd = net_ltc * ltc_usd_rate
+        
+        # Validate that after fees, user still gets meaningful amount
+        if net_ltc <= 0:
+            await update.message.reply_text("❌ Amount too small after fees. Please enter a larger amount.")
+            return WITHDRAW_LTC_AMOUNT
+        
+    except ValueError as e:
+        await update.message.reply_text(f"❌ Invalid amount. {str(e)}\nPlease enter a valid USD amount:")
         return WITHDRAW_LTC_AMOUNT
-    context.user_data['withdraw_amount'] = ltc_amount
-    context.user_data['withdraw_usd'] = usd_amount
+    except Exception as e:
+        await update.message.reply_text("❌ Error processing amount. Please try again:")
+        return WITHDRAW_LTC_AMOUNT
+    
+    # Store withdrawal details
+    context.user_data['withdraw_amount_ltc'] = ltc_amount
+    context.user_data['withdraw_amount_usd'] = usd_amount
+    context.user_data['withdraw_fee_ltc'] = fee_ltc
+    context.user_data['withdraw_fee_usd'] = fee_usd
+    context.user_data['withdraw_net_ltc'] = net_ltc
+    context.user_data['withdraw_net_usd'] = net_usd
+    
     text = (
-        f"💵 Litecoin Withdraw\n\n"
-        f"Amount: <b>{ltc_amount:.8f} LTC</b> (≈ ${usd_amount:.2f} USD)\n\n"
-        f"Now enter your Litecoin address:\n(Example: ltc1q... or M... )"
+        f"💵 **Withdrawal Summary**\n\n"
+        f"📊 **Amount Details:**\n"
+        f"• Requested: <b>${usd_amount:.2f}</b> (≈ {ltc_amount:.8f} LTC)\n"
+        f"• Fee ({WITHDRAWAL_FEE_PERCENT}%): <b>${fee_usd:.4f}</b> (≈ {fee_ltc:.8f} LTC)\n"
+        f"• You'll receive: <b>${net_usd:.2f}</b> (≈ {net_ltc:.8f} LTC)\n\n"
+        f"📍 **Next Step:**\n"
+        f"Enter your Litecoin address:\n\n"
+        f"💡 **Supported formats:**\n"
+        f"• Legacy: L... or M...\n"
+        f"• SegWit: 3...\n"
+        f"• Bech32: ltc1...\n\n"
+        f"⚠️ **Warning:** Double-check your address!"
     )
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
     return WITHDRAW_LTC_ADDRESS
@@ -879,37 +1056,213 @@ async def withdraw_crypto_address(update: Update, context: ContextTypes.DEFAULT_
     user_id = update.effective_user.id
     user = await get_user(user_id)
     address = update.message.text.strip()
-    ltc_amount = context.user_data.get('withdraw_amount')
-    usd_amount = context.user_data.get('withdraw_usd')
-    if not ltc_amount or not usd_amount:
+    
+    # Get withdrawal details from context
+    ltc_amount = context.user_data.get('withdraw_amount_ltc')
+    usd_amount = context.user_data.get('withdraw_amount_usd')
+    fee_ltc = context.user_data.get('withdraw_fee_ltc')
+    fee_usd = context.user_data.get('withdraw_fee_usd')
+    net_ltc = context.user_data.get('withdraw_net_ltc')
+    net_usd = context.user_data.get('withdraw_net_usd')
+    
+    if not all([ltc_amount, usd_amount, fee_ltc, fee_usd, net_ltc, net_usd]):
         await update.message.reply_text("❌ Session expired. Please start withdrawal again.")
         return ConversationHandler.END
-    if not (address.startswith(('ltc1', 'L', 'M', '3')) and len(address) >= 26):
-        await update.message.reply_text("❌ Invalid Litecoin address format. Please enter a valid address:")
+    
+    # Validate Litecoin address
+    if not validate_ltc_address(address):
+        await update.message.reply_text(
+            "❌ Invalid Litecoin address format.\n\n"
+            "Please enter a valid address:\n"
+            "• Legacy: L... or M...\n"
+            "• SegWit: 3...\n"
+            "• Bech32: ltc1..."
+        )
         return WITHDRAW_LTC_ADDRESS
+    
+    # Final validation: Check balance and limits again
+    if user['balance'] < ltc_amount:
+        await update.message.reply_text("❌ Insufficient balance.")
+        return ConversationHandler.END
+    
+    limits_check = await check_withdrawal_limits(user_id, usd_amount)
+    if not limits_check['allowed']:
+        await update.message.reply_text(f"❌ {limits_check['reason']}")
+        return ConversationHandler.END
+    
+    # Log withdrawal attempt
+    withdrawal_id = await log_withdrawal(
+        user_id, ltc_amount, usd_amount, fee_ltc, fee_usd, address
+    )
+    
     try:
-        if user['balance'] < ltc_amount:
-            await update.message.reply_text("❌ Insufficient balance.")
-            return ConversationHandler.END
+        # Deduct full amount from balance (including fees)
         if not await deduct_balance(user_id, ltc_amount):
-            await update.message.reply_text("❌ Failed to process withdrawal.")
+            await update_withdrawal_status(withdrawal_id, 'failed', '', 'Failed to deduct balance')
+            await update.message.reply_text("❌ Failed to process withdrawal. Please try again.")
             return ConversationHandler.END
-        result = await send_litecoin(address, ltc_amount, f"Withdrawal for user {user_id}")
+        
+        # Send Litecoin via CryptoBot (send net amount after fees)
+        result = await send_litecoin(address, net_ltc, f"Withdrawal for user {user_id}")
+        
         if result.get("ok"):
-            await update.message.reply_text(
-                f"✅ Withdrawal Successful!\n\nAmount: <b>{ltc_amount:.8f} LTC</b> (≈ ${usd_amount:.2f} USD)\nAddress: <code>{address}</code>\n\nTransaction has been processed via CryptoBot.",
-                parse_mode=ParseMode.HTML
+            # Successful withdrawal
+            transaction_id = result.get("result", {}).get("transfer_id", "unknown")
+            await update_withdrawal_status(withdrawal_id, 'completed', str(transaction_id))
+            await update_withdrawal_limits(user_id, usd_amount)
+            
+            success_text = (
+                f"✅ **Withdrawal Successful!**\n\n"
+                f"💰 **Amount:** ${net_usd:.2f} (≈ {net_ltc:.8f} LTC)\n"
+                f"💸 **Fee:** ${fee_usd:.4f} (≈ {fee_ltc:.8f} LTC)\n"
+                f"📍 **Address:** <code>{address}</code>\n"
+                f"🆔 **Transaction ID:** <code>{transaction_id}</code>\n\n"
+                f"💡 **Processing:** Your withdrawal has been processed via CryptoBot.\n"
+                f"🔍 **Confirmation:** Check your wallet in a few minutes."
             )
-            logger.info(f"Withdrawal processed: {ltc_amount} LTC to {address} for user {user_id}")
+            
+            await update.message.reply_text(success_text, parse_mode=ParseMode.HTML)
+            logger.info(f"Withdrawal completed: {net_ltc} LTC to {address} for user {user_id}, TX: {transaction_id}")
+            
         else:
-            await update_balance(user_id, ltc_amount)
-            await update.message.reply_text("❌ Withdrawal failed. Your balance has been refunded. Please try again later.")
+            # Failed withdrawal - refund user
+            await update_balance(user_id, ltc_amount)  # Refund full amount
+            error_msg = result.get("error", {}).get("name", "Unknown error")
+            await update_withdrawal_status(withdrawal_id, 'failed', '', error_msg)
+            
+            await update.message.reply_text(
+                f"❌ **Withdrawal Failed**\n\n"
+                f"Your balance has been refunded.\n"
+                f"Error: {error_msg}\n\n"
+                f"Please try again later or contact support."
+            )
             logger.error(f"CryptoBot withdrawal failed for user {user_id}: {result}")
+            
     except Exception as e:
-        await update_balance(user_id, ltc_amount)
-        await update.message.reply_text("❌ Withdrawal failed. Your balance has been refunded. Please try again later.")
-        logger.error(f"Withdrawal error for user {user_id}: {e}")
+        # Exception occurred - refund user
+        await update_balance(user_id, ltc_amount)  # Refund full amount
+        await update_withdrawal_status(withdrawal_id, 'failed', '', str(e))
+        
+        await update.message.reply_text(
+            "❌ **Withdrawal Failed**\n\n"
+            "Your balance has been refunded.\n"
+            "Please try again later or contact support."
+        )
+        logger.error(f"Withdrawal exception for user {user_id}: {e}")
+    
     return ConversationHandler.END
+
+# --- Withdrawal Security Functions ---
+
+async def check_withdrawal_limits(user_id: int, usd_amount: float) -> dict:
+    """Check if user can withdraw the requested amount within daily limits"""
+    today = datetime.now().strftime('%Y-%m-%d')
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("""
+            SELECT * FROM daily_withdrawal_limits 
+            WHERE user_id = ? AND date = ?
+        """, (user_id, today))
+        limit_data = await cur.fetchone()
+        
+        if limit_data:
+            total_withdrawn = limit_data['total_withdrawn_usd']
+            withdrawal_count = limit_data['withdrawal_count']
+            last_withdrawal = limit_data['last_withdrawal_time']
+            
+            # Check daily amount limit
+            if total_withdrawn + usd_amount > MAX_WITHDRAWAL_USD_DAILY:
+                return {
+                    'allowed': False,
+                    'reason': f'Daily limit exceeded. Remaining: ${MAX_WITHDRAWAL_USD_DAILY - total_withdrawn:.2f}'
+                }
+            
+            # Check cooldown period
+            if last_withdrawal:
+                last_time = datetime.fromisoformat(last_withdrawal)
+                if (datetime.now() - last_time).total_seconds() < WITHDRAWAL_COOLDOWN_SECONDS:
+                    remaining = WITHDRAWAL_COOLDOWN_SECONDS - (datetime.now() - last_time).total_seconds()
+                    return {
+                        'allowed': False,
+                        'reason': f'Cooldown active. Wait {int(remaining/60)} minutes.'
+                    }
+        
+        return {'allowed': True, 'reason': 'OK'}
+
+async def update_withdrawal_limits(user_id: int, usd_amount: float):
+    """Update daily withdrawal tracking"""
+    today = datetime.now().strftime('%Y-%m-%d')
+    current_time = datetime.now().isoformat()
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT OR REPLACE INTO daily_withdrawal_limits 
+            (user_id, date, total_withdrawn_usd, withdrawal_count, last_withdrawal_time)
+            VALUES (
+                ?, ?, 
+                COALESCE((SELECT total_withdrawn_usd FROM daily_withdrawal_limits WHERE user_id = ? AND date = ?), 0) + ?,
+                COALESCE((SELECT withdrawal_count FROM daily_withdrawal_limits WHERE user_id = ? AND date = ?), 0) + 1,
+                ?
+            )
+        """, (user_id, today, user_id, today, usd_amount, user_id, today, current_time))
+        await db.commit()
+
+async def log_withdrawal(user_id: int, amount_ltc: float, amount_usd: float, fee_ltc: float, fee_usd: float, to_address: str, status: str = 'pending', transaction_id: str = '', error_message: str = '') -> int:
+    """Log withdrawal attempt to database"""
+    current_time = datetime.now().isoformat()
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            INSERT INTO withdrawals 
+            (user_id, amount_ltc, amount_usd, fee_ltc, fee_usd, to_address, status, transaction_id, created_at, error_message)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, amount_ltc, amount_usd, fee_ltc, fee_usd, to_address, status, transaction_id, current_time, error_message))
+        await db.commit()
+        return cur.lastrowid
+
+async def update_withdrawal_status(withdrawal_id: int, status: str, transaction_id: str = '', error_message: str = ''):
+    """Update withdrawal status"""
+    current_time = datetime.now().isoformat()
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            UPDATE withdrawals 
+            SET status = ?, transaction_id = ?, processed_at = ?, error_message = ?
+            WHERE id = ?
+        """, (status, transaction_id, current_time, error_message, withdrawal_id))
+        await db.commit()
+
+async def get_user_withdrawals(user_id: int, limit: int = 10) -> list:
+    """Get user's recent withdrawals"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("""
+            SELECT * FROM withdrawals 
+            WHERE user_id = ? 
+            ORDER BY created_at DESC 
+            LIMIT ?
+        """, (user_id, limit))
+        rows = await cur.fetchall()
+        return [dict(row) for row in rows]
+
+def validate_ltc_address(address: str) -> bool:
+    """Validate Litecoin address format"""
+    if not address or len(address) < 26 or len(address) > 35:
+        return False
+    
+    # Check for valid Litecoin address prefixes
+    valid_prefixes = ['ltc1', 'L', 'M', '3']  # Bech32, P2PKH, P2SH, SegWit
+    
+    for prefix in valid_prefixes:
+        if address.startswith(prefix):
+            return True
+    
+    return False
+
+def calculate_withdrawal_fee(amount_ltc: float) -> float:
+    """Calculate withdrawal fee in LTC"""
+    return amount_ltc * (WITHDRAWAL_FEE_PERCENT / 100)
 
 # --- CryptoBot Webhook Endpoint (for payment detection) ---
 async def cryptobot_webhook(request):
@@ -976,6 +1329,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await deposit_callback(update, context)
         elif data == "withdraw":
             await withdraw_callback(update, context)
+        elif data == "withdrawal_history":
+            await withdrawal_history_callback(update, context)
         
         # Placeholder handlers
         else:
