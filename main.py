@@ -654,7 +654,7 @@ async def play_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"🎲 <b>DICE PREDICTION</b> 🎲\n\n"
         f"💰 <b>Your Balance:</b> {balance}\n\n"
         "Predict the outcome of a 6-sided dice roll.\n"
-        "Choose your prediction and bet amount (in USD):\n\n"
+        "Choose your prediction below, then enter your bet amount in USD.\n\n"
         "<b>Payouts:</b>\n"
         "• Correct Number (1-6): 6x\n"
         "• Even/Odd: 2x\n"
@@ -668,23 +668,43 @@ async def play_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    # Store state for next step
+    context.user_data['dice_prediction'] = None
+    context.user_data['dice_bet_stage'] = 'choose_prediction'
 
-async def handle_dice_prediction(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def dice_prediction_choose(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
-    user_id = query.from_user.id
+    prediction = data.replace("dice_predict_", "")
+    context.user_data['dice_prediction'] = prediction
+    context.user_data['dice_bet_stage'] = 'enter_bet'
+    text = (
+        f"🎲 <b>DICE PREDICTION</b> 🎲\n\n"
+        f"You chose: <b>{prediction.title()}</b>\n\n"
+        "Enter your bet amount in USD (e.g. 5):"
+    )
+    await query.edit_message_text(text, parse_mode=ParseMode.HTML)
+    return 'dice_bet_amount'
+
+async def dice_prediction_bet_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
     user = await get_user(user_id)
-    # For simplicity, fixed bet of $10 for now
-    bet_usd = 10
+    try:
+        bet_usd = float(update.message.text.strip())
+        if bet_usd <= 0:
+            raise ValueError
+    except Exception:
+        await update.message.reply_text("❌ Invalid amount. Enter a positive USD amount:")
+        return 'dice_bet_amount'
     ltc_usd_rate = await get_ltc_usd_rate()
     bet_ltc = bet_usd / ltc_usd_rate if ltc_usd_rate > 0 else 0
     if user['balance'] < bet_ltc:
-        await query.answer("❌ Not enough balance", show_alert=True)
-        return
+        await update.message.reply_text("❌ Not enough balance. Enter a smaller amount:")
+        return 'dice_bet_amount'
     await deduct_balance(user_id, bet_ltc)
+    prediction = context.user_data.get('dice_prediction')
     roll = random.randint(1, 6)
-    prediction = data.replace("dice_predict_", "")
     win = False
     payout = 0
     if prediction in [str(i) for i in range(1, 7)]:
@@ -722,7 +742,8 @@ async def handle_dice_prediction(update: Update, context: ContextTypes.DEFAULT_T
         [InlineKeyboardButton("🔄 Play Again", callback_data="play_dice")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    return ConversationHandler.END
 
 # --- Simple Placeholder Handlers ---
 
@@ -1536,7 +1557,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif data == "play_dice":
             await play_dice_callback(update, context)
         elif data.startswith("dice_predict_"):
-            await handle_dice_prediction(update, context)
+            await dice_prediction_choose(update, context)
         # Add more game callbacks as needed
         else:
             await placeholder_callback(update, context)
