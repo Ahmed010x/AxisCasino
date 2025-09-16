@@ -358,6 +358,7 @@ async def mini_app_centre_command(update: Update, context: ContextTypes.DEFAULT_
     await show_mini_app_centre(update, context)
 
 # --- Classic Casino Handler ---
+# Remove references to unwanted games (Poker, Turbo Spin, Memory Game, Daily Challenge, Bonus Hunt)
 async def classic_casino_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle classic casino games callback"""
     query = update.callback_query
@@ -403,82 +404,12 @@ async def classic_casino_callback(update: Update, context: ContextTypes.DEFAULT_
 • High/low bets
 • Quick gameplay
 • RTP: 98%
-
-**🃄 POKER**
-*Coming soon - Texas Hold'em*
-• Tournament play
-• Cash games
-• Multi-table action
-
-Select your classic game:
 """
     
     keyboard = [
         [InlineKeyboardButton("🎰 SLOTS", callback_data="play_slots"), InlineKeyboardButton("🃏 BLACKJACK", callback_data="play_blackjack")],
         [InlineKeyboardButton("🎡 ROULETTE", callback_data="play_roulette"), InlineKeyboardButton("🎲 DICE", callback_data="play_dice")],
-        [InlineKeyboardButton("🃄 POKER", callback_data="play_poker"), InlineKeyboardButton("🎯 ALL GAMES", callback_data="all_classic_games")],
         [InlineKeyboardButton("🔙 Back to App Centre", callback_data="mini_app_centre")],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-# --- Inline Games Handler ---
-async def inline_games_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle inline games callback"""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    user = await get_user(user_id)
-    
-    balance = user['balance']
-    username = user['username']
-    
-    text = f"""
-🎮 **INLINE MINI GAMES** 🎮
-
-💰 **Your Balance:** {await format_usd(balance)}
-👤 **Player:** {username}
-
-⚡ **Quick Play Games:**
-*Fast, fun, and instant results!*
-
-**🎯 QUICK SHOTS**
-*Instant win/lose games*
-• Coin flip - 50/50 odds
-• Lucky number - Pick 1-10
-• Color guess - Red/Blue
-• Instant results
-
-**🎪 MINI CHALLENGES**
-*Skill-based quick games*
-• Memory match
-• Number sequence
-• Pattern recognition
-• Reaction time
-
-**🎊 BONUS ROUNDS**
-*Special event games*
-• Daily challenges
-• Hourly bonuses
-• Achievement unlocks
-• Streak rewards
-
-**⚡ TURBO MODE**
-*Ultra-fast gameplay*
-• Auto-bet options
-• Quick spins
-• Rapid fire games
-• Time challenges
-
-Choose your quick game:
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("🪙 COIN FLIP", callback_data="coin_flip"), InlineKeyboardButton("🎯 LUCKY NUMBER", callback_data="lucky_number")],
-        [InlineKeyboardButton("🌈 COLOR GUESS", callback_data="color_guess"), InlineKeyboardButton("🧠 MEMORY GAME", callback_data="memory_game")],
-        [InlineKeyboardButton("⚡ TURBO SPIN", callback_data="turbo_spin"), InlineKeyboardButton("🎁 BONUS HUNT", callback_data="bonus_hunt")],
-        [InlineKeyboardButton("🎪 DAILY CHALLENGE", callback_data="daily_challenge"), InlineKeyboardButton("🔙 Back to App Centre", callback_data="mini_app_centre")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
@@ -489,6 +420,19 @@ async def play_slots_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Handle slots game"""
     query = update.callback_query
     await query.answer()
+    
+    user_id = query.from_user.id
+    user = await get_user(user_id)
+    # Allow owner(s) to play with zero balance
+    if user['balance'] <= 0 and user_id not in ADMIN_USER_IDS:
+        await query.edit_message_text(
+            "❌ You have no funds to play. Please deposit to continue.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+            ])
+        )
+        return
     
     text = f"""
 🎰 **SLOT MACHINES** 🎰
@@ -527,8 +471,8 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user = await get_user(user_id)
+    # Deduct the bet amount before playing
     result = await deduct_balance(user_id, bet)
-    
     if result is False:
         await query.answer("❌ Not enough balance", show_alert=True)
         return
@@ -562,6 +506,15 @@ async def coin_flip_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.answer()
     user_id = query.from_user.id
     user = await get_user(user_id)
+    if user['balance'] <= 0 and user_id not in ADMIN_USER_IDS:
+        await query.edit_message_text(
+            "❌ You have no funds to play. Please deposit to continue.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+            ])
+        )
+        return
     
     text = f"""
 🪙 **COIN FLIP** 🪙
@@ -604,8 +557,8 @@ async def handle_coinflip_bet(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     user = await get_user(user_id)
+    # Deduct the bet amount before playing
     result = await deduct_balance(user_id, bet)
-    
     if result is False:
         await query.answer("❌ Not enough balance", show_alert=True)
         return
@@ -616,10 +569,10 @@ async def handle_coinflip_bet(update: Update, context: ContextTypes.DEFAULT_TYPE
     choice_emoji = "🟡" if choice == "heads" else "⚫"
     
     if choice == coin_result:
-        # Win - 2x payout
-        win_amount = bet * 2
+        # Win - 1.92x payout (not 2x)
+        win_amount = bet * 1.92
         await update_balance(user_id, win_amount)
-        outcome = f"🎉 **YOU WIN!**\n\n{coin_emoji} Coin landed on **{coin_result.upper()}**\n{choice_emoji} You chose **{choice.upper()}**\n\n💰 Won: **${win_amount:,}**"
+        outcome = f"🎉 **YOU WIN!**\n\n{coin_emoji} Coin landed on **{coin_result.upper()}**\n{choice_emoji} You chose **{choice.upper()}**\n\n💰 Won: **${win_amount:.2f}**"
     else:
         outcome = f"😢 **YOU LOSE!**\n\n{coin_emoji} Coin landed on **{coin_result.upper()}**\n{choice_emoji} You chose **{choice.upper()}**\n\n💸 Lost: **${bet:,}**"
     
@@ -649,6 +602,16 @@ async def play_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.answer()
     user_id = query.from_user.id
     user = await get_user(user_id)
+    if user['balance'] <= 0 and user_id not in ADMIN_USER_IDS:
+        await query.edit_message_text(
+            "❌ You have no funds to play. Please deposit to continue.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+            ])
+        )
+        return
+    
     balance = await format_usd(user['balance'])
     text = (
         f"🎲 <b>DICE PREDICTION</b> 🎲\n\n"
@@ -702,6 +665,7 @@ async def dice_prediction_bet_amount(update: Update, context: ContextTypes.DEFAU
     if user['balance'] < bet_ltc:
         await update.message.reply_text("❌ Not enough balance. Enter a smaller amount:")
         return 'dice_bet_amount'
+    # Deduct the bet amount before playing
     await deduct_balance(user_id, bet_ltc)
     prediction = context.user_data.get('dice_prediction')
     roll = random.randint(1, 6)
@@ -807,10 +771,16 @@ async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     user_id = query.from_user.id
     user = await get_user(user_id)
-    
+
     # Check minimum withdrawal amount
     if user['balance'] < MIN_WITHDRAWAL_USD / await get_ltc_usd_rate():
-        await query.answer(f"❌ Minimum withdrawal: ${MIN_WITHDRAWAL_USD:.2f}", show_alert=True)
+        await query.edit_message_text(
+            f"❌ Minimum withdrawal: ${MIN_WITHDRAWAL_USD:.2f}",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+            ])
+        )
         return
     
     # Get withdrawal history
@@ -1035,7 +1005,7 @@ async def withdraw_crypto_start(update: Update, context: ContextTypes.DEFAULT_TY
     max_withdraw_usd = max_withdraw_ltc * ltc_rate
     
     # Calculate fees for display
-    example_fee_ltc = calculate_withdrawal_fee(0.1)  # Example with 0.1 LTC
+    example_fee_ltc = calculate_withdrawal_fee(0.1) # Example with 0.1 LTC
     example_fee_usd = example_fee_ltc * ltc_rate
     
     text = (
@@ -1055,47 +1025,38 @@ async def withdraw_crypto_start(update: Update, context: ContextTypes.DEFAULT_TY
 async def withdraw_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = await get_user(user_id)
-    
     try:
         usd_amount = float(update.message.text.strip())
-        
         # Validate minimum amount
         if usd_amount < MIN_WITHDRAWAL_USD:
-            raise ValueError(f"Amount below minimum ${MIN_WITHDRAWAL_USD:.2f}")
-        
+            await update.message.reply_text(f"❌ Minimum withdrawal is ${MIN_WITHDRAWAL_USD:.2f}.")
+            return WITHDRAW_LTC_AMOUNT
         # Check withdrawal limits
         limits_check = await check_withdrawal_limits(user_id, usd_amount)
         if not limits_check['allowed']:
             await update.message.reply_text(f"❌ {limits_check['reason']}")
             return WITHDRAW_LTC_AMOUNT
-        
         # Convert USD to LTC
         ltc_usd_rate = await get_ltc_usd_rate()
         if ltc_usd_rate == 0.0:
             await update.message.reply_text("❌ Unable to fetch LTC/USD rate. Please try again later.")
             return WITHDRAW_LTC_AMOUNT
-        
         ltc_amount = usd_amount / ltc_usd_rate
-        
         # Check if user has sufficient balance
         if ltc_amount > user['balance']:
-            max_usd = user['balance'] * ltc_usd_rate
-            await update.message.reply_text(f"❌ Insufficient balance. Maximum available: ${max_usd:.2f}")
+            await update.message.reply_text("❌ No funds to withdraw.")
             return WITHDRAW_LTC_AMOUNT
-        
         # Calculate fees
         fee_ltc = calculate_withdrawal_fee(ltc_amount)
         fee_usd = fee_ltc * ltc_usd_rate
         net_ltc = ltc_amount - fee_ltc
         net_usd = net_ltc * ltc_usd_rate
-        
         # Validate that after fees, user still gets meaningful amount
         if net_ltc <= 0:
             await update.message.reply_text("❌ Amount too small after fees. Please enter a larger amount.")
             return WITHDRAW_LTC_AMOUNT
-        
     except ValueError as e:
-        await update.message.reply_text(f"❌ Invalid amount. {str(e)}\nPlease enter a valid USD amount:")
+        await update.message.reply_text(f"❌ Invalid amount. Please enter a valid USD amount:")
         return WITHDRAW_LTC_AMOUNT
     except Exception as e:
         await update.message.reply_text("❌ Error processing amount. Please try again:")
@@ -1503,10 +1464,8 @@ async def all_games_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     keyboard = [
         [InlineKeyboardButton("🎰 Slots", callback_data="play_slots"), InlineKeyboardButton("🃏 Blackjack", callback_data="play_blackjack")],
         [InlineKeyboardButton("🎡 Roulette", callback_data="play_roulette"), InlineKeyboardButton("🎲 Dice", callback_data="play_dice")],
-        [InlineKeyboardButton("🪙 Coin Flip", callback_data="coin_flip"), InlineKeyboardButton("🧠 Memory Game", callback_data="memory_game")],
+        [InlineKeyboardButton("🪙 Coin Flip", callback_data="coin_flip")],
         [InlineKeyboardButton("🎯 Lucky Number", callback_data="lucky_number"), InlineKeyboardButton("🌈 Color Guess", callback_data="color_guess")],
-        [InlineKeyboardButton("⚡ Turbo Spin", callback_data="turbo_spin"), InlineKeyboardButton("🎁 Bonus Hunt", callback_data="bonus_hunt")],
-        [InlineKeyboardButton("🎪 Daily Challenge", callback_data="daily_challenge"), InlineKeyboardButton("🃄 Poker", callback_data="play_poker")],
         [InlineKeyboardButton("💣 Mines", callback_data="play_mines"), InlineKeyboardButton("📈 Crash", callback_data="play_crash")],
         [InlineKeyboardButton("📉 Limbo", callback_data="play_limbo"), InlineKeyboardButton("🔼 HiLo", callback_data="play_hilo")],
         [InlineKeyboardButton("🎱 Plinko", callback_data="play_plinko")],
@@ -1558,7 +1517,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await play_dice_callback(update, context)
         elif data.startswith("dice_predict_"):
             await dice_prediction_choose(update, context)
-        # Add more game callbacks as needed
+        # Removed callbacks for turbo_spin, memory_game, daily_challenge, play_poker, bonus_hunt
+        # ...existing code...
         else:
             await placeholder_callback(update, context)
     except Exception as e:
@@ -1628,11 +1588,14 @@ async def main():
         fallbacks=[]
     ))
     
+       
     # Add command handlers
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("app", mini_app_centre_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CallbackQueryHandler(handle_callback))
+    
+   
     
     logger.info("🎰 Casino Bot with LTC Payment System starting...")
     logger.info(f"✅ WebApp URL: {WEBAPP_URL}")
