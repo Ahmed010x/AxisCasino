@@ -5,6 +5,11 @@ CryptoBot API integration for Litecoin and USD payments (deposit/withdraw)
 import os
 import aiohttp
 import json
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+load_dotenv("env.litecoin")
 
 CRYPTOBOT_API_TOKEN = os.environ.get("CRYPTOBOT_API_TOKEN")
 CRYPTOBOT_LITECOIN_ASSET = os.environ.get("CRYPTOBOT_LITECOIN_ASSET", "LTC")
@@ -18,12 +23,10 @@ async def create_litecoin_invoice(amount: float, user_id: int, description: str 
         "asset": CRYPTOBOT_LITECOIN_ASSET,
         "amount": str(amount),
         "description": description,
-        "hidden_message": str(user_id),
-        "paid_btn_name": "openChannel",
-        "paid_btn_url": "https://t.me/your_channel_here"
+        "hidden_message": str(user_id)
     }
     if address:
-        data["address"] = True
+        data["address"] = "true"
     if invoice_type:
         data["invoice_type"] = invoice_type
     if payload:

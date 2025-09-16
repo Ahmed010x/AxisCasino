@@ -254,12 +254,24 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💳 Deposit", callback_data="deposit"), InlineKeyboardButton("💸 Withdraw", callback_data="withdraw")],
         [InlineKeyboardButton("ℹ️ Help", callback_data="show_help")]
     ]
-    # Robustly get the message object for reply
-    message = getattr(update, 'message', None) or getattr(getattr(update, 'callback_query', None), 'message', None)
-    if message:
-        await message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    # Edit the message if possible, otherwise send a new one
+    if hasattr(update, 'callback_query') and update.callback_query:
+        try:
+            await update.callback_query.edit_message_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        except Exception as e:
+            logger.error(f"Failed to edit message in start_command: {e}")
+            message = getattr(update, 'message', None) or getattr(getattr(update, 'callback_query', None), 'message', None)
+            if message:
+                await message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     else:
-        logger.error("No message object found in update for start_command")
+        message = getattr(update, 'message', None) or getattr(getattr(update, 'callback_query', None), 'message', None)
+        if message:
+            await message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+        else:
+            logger.error("No message object found in update for start_command")
 
 # --- Mini App Centre ---
 async def show_mini_app_centre(update: Update, context: ContextTypes.DEFAULT_TYPE):
