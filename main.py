@@ -461,6 +461,18 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user = await get_user(user_id)
+    # TRUE ADMIN TEST MODE: allow all admins/owners to play with zero balance, always win, no deduction
+    if user_id in ADMIN_USER_IDS:
+        symbols = ["💎", "💎", "💎"]
+        multiplier = 100
+        win_amount = bet * multiplier
+        text = f"🎰 {' '.join(symbols)}\n\n🧪 <b>TEST MODE (ADMIN/OWNER)</b>\n🎉 <b>JACKPOT!</b> You won <b>${win_amount:,}</b> (x{multiplier})!\n\n💰 <b>Balance:</b> {await format_usd(user['balance'])}"
+        keyboard = [
+            [InlineKeyboardButton("🔄 Play Again", callback_data="play_slots"), InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        return
     # DEMO MODE: allow all users to play with zero balance, always win, no deduction
     if DEMO_MODE and user['balance'] < bet:
         symbols = ["💎", "💎", "💎"]
@@ -568,6 +580,17 @@ async def handle_coinflip_bet(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     user = await get_user(user_id)
+    # TRUE ADMIN TEST MODE: allow all admins/owners to play with zero balance, always win, no deduction
+    if user_id in ADMIN_USER_IDS:
+        coin_result = choice
+        win_amount = bet * 1.92
+        text = f"🪙 <b>COIN FLIP RESULT</b> 🪙\n\n🧪 <b>TEST MODE (ADMIN/OWNER)</b>\n🎉 <b>YOU WIN!</b>\n\n{'🟡' if choice == 'heads' else '⚫'} Coin landed on <b>{choice.upper()}</b>\n{'🟡' if choice == 'heads' else '⚫'} You chose <b>{choice.upper()}</b>\n\n💰 Won: <b>${win_amount:.2f}</b>\n\n💰 <b>New Balance:</b> {await format_usd(user['balance'])}\n\nPlay again or try another game:"
+        keyboard = [
+            [InlineKeyboardButton("🔄 Flip Again", callback_data="coin_flip"), InlineKeyboardButton("🎮 Other Games", callback_data="inline_games")],
+            [InlineKeyboardButton("🎰 Slots", callback_data="play_slots"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        return
     # DEMO MODE: allow all users to play with zero balance, always win, no deduction
     if DEMO_MODE and user['balance'] < bet:
         coin_result = choice = "heads"
@@ -579,30 +602,6 @@ async def handle_coinflip_bet(update: Update, context: ContextTypes.DEFAULT_TYPE
         ]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
         return
-    # Allow owner/admins to play even with zero balance
-    if user['balance'] < bet and user_id in ADMIN_USER_IDS:
-        # Do NOT deduct balance for owner/admins, just proceed
-        pass
-    elif user['balance'] < bet:
-        await query.edit_message_text(
-            "❌ You have no funds to play. Please deposit to continue.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
-                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-            ])
-        )
-        return
-    else:
-        result = await deduct_balance(user_id, bet)
-        if result is False:
-            await query.edit_message_text(
-                "❌ You have no funds to play. Please deposit to continue.",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
-                    [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-                ])
-            )
-            return
     # Flip coin
     coin_result = random.choice(["heads", "tails"])
     coin_emoji = "🟡" if coin_result == "heads" else "⚫"
@@ -633,7 +632,7 @@ Play again or try another game:
         [InlineKeyboardButton("🎰 Slots", callback_data="play_slots"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
 # --- Dice Prediction Game ---
 async def play_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -692,6 +691,24 @@ async def dice_prediction_bet_amount(update: Update, context: ContextTypes.DEFAU
         return 'dice_bet_amount'
     ltc_usd_rate = await get_ltc_usd_rate()
     bet_ltc = bet_usd / ltc_usd_rate if ltc_usd_rate > 0 else 0
+    # TRUE ADMIN TEST MODE: allow all admins/owners to play with zero balance, always win, no deduction
+    if user_id in ADMIN_USER_IDS:
+        prediction = context.user_data.get('dice_prediction')
+        roll = int(prediction) if prediction in [str(i) for i in range(1, 7)] else 2
+        payout = bet_ltc * 6 if prediction in [str(i) for i in range(1, 7)] else bet_ltc * 2
+        result_text = f"🧪 <b>TEST MODE (ADMIN/OWNER)</b>\n🎉 <b>You WON!</b>\nDice rolled: <b>{roll}</b>\nPayout: <b>${bet_usd * (payout / bet_ltc) if bet_ltc else bet_usd * 2:.2f}</b>"
+        balance = await format_usd(user['balance'])
+        text = (
+            f"🎲 <b>DICE RESULT</b> 🎲\n\n"
+            f"{result_text}\n\n"
+            f"💰 <b>New Balance:</b> {balance}"
+        )
+        keyboard = [
+            [InlineKeyboardButton("🔄 Play Again", callback_data="play_dice")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        return ConversationHandler.END
     # DEMO MODE: allow all users to play with zero balance, always win, no deduction
     if DEMO_MODE and user['balance'] < bet_ltc:
         prediction = context.user_data.get('dice_prediction')
@@ -710,72 +727,7 @@ async def dice_prediction_bet_amount(update: Update, context: ContextTypes.DEFAU
         ]
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
         return ConversationHandler.END
-    # Allow owner/admins to play even with zero balance
-    if user['balance'] < bet_ltc and user_id in ADMIN_USER_IDS:
-        # Do NOT deduct balance for owner/admins, just proceed
-        pass
-    elif user['balance'] < bet_ltc:
-        await update.message.reply_text(
-            "❌ You have no funds to play. Please deposit to continue.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
-                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-            ])
-        )
-        return ConversationHandler.END
-    else:
-        result = await deduct_balance(user_id, bet_ltc)
-        if result is False:
-            await update.message.reply_text(
-                "❌ You have no funds to play. Please deposit to continue.",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
-                    [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-                ])
-            )
-            return ConversationHandler.END
-    prediction = context.user_data.get('dice_prediction')
-    roll = random.randint(1, 6)
-    win = False
-    payout = 0
-    if prediction in [str(i) for i in range(1, 7)]:
-        if int(prediction) == roll:
-            win = True
-            payout = bet_ltc * 6
-    elif prediction == "even":
-        if roll % 2 == 0:
-            win = True
-            payout = bet_ltc * 2
-    elif prediction == "odd":
-        if roll % 2 == 1:
-            win = True
-            payout = bet_ltc * 2
-    elif prediction == "high":
-        if roll >= 4:
-            win = True
-            payout = bet_ltc * 2
-    elif prediction == "low":
-        if roll <= 3:
-            win = True
-            payout = bet_ltc * 2
-    if win:
-        await update_balance(user_id, payout)
-        result_text = f"🎉 <b>You WON!</b>\nDice rolled: <b>{roll}</b>\nPayout: <b>${bet_usd * (payout / bet_ltc):.2f}</b>"
-    else:
-        result_text = f"😢 <b>You lost.</b>\nDice rolled: <b>{roll}</b>"
-    balance = await format_usd((await get_user(user_id))['balance'])
-    text = (
-        f"🎲 <b>DICE RESULT</b> 🎲\n\n"
-        f"{result_text}\n\n"
-        f"💰 <b>New Balance:</b> {balance}"
-    )
-    keyboard = [
-        [InlineKeyboardButton("🔄 Play Again", callback_data="play_dice")],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-    return ConversationHandler.END
-
+    # ...existing code...
 # --- Simple Placeholder Handlers ---
 
 async def show_balance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
