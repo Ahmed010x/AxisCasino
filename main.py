@@ -642,54 +642,85 @@ Play again or try another game:
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
-# --- Rigged Dice Game ---
+# --- Dice Prediction Game ---
 async def play_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle rigged dice game (always rolls a 1 for the user)"""
+    """Handle dice prediction game"""
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
     user = await get_user(user_id)
+    balance = await format_usd(user['balance'])
     text = (
-        f"🎲 <b>RIGGED DICE</b> 🎲\n\n"
-        f"💰 <b>Your Balance:</b> {await format_usd(user['balance'])}\n\n"
-        f"This is a <b>rigged</b> dice game. No matter what, you always roll a <b>1</b>!\n\n"
-        f"Choose your bet amount (in USD):"
+        f"🎲 <b>DICE PREDICTION</b> 🎲\n\n"
+        f"💰 <b>Your Balance:</b> {balance}\n\n"
+        "Predict the outcome of a 6-sided dice roll.\n"
+        "Choose your prediction and bet amount (in USD):\n\n"
+        "<b>Payouts:</b>\n"
+        "• Correct Number (1-6): 6x\n"
+        "• Even/Odd: 2x\n"
+        "• High (4-6)/Low (1-3): 2x\n"
     )
     keyboard = [
-        [InlineKeyboardButton("🎲 Bet $5", callback_data="dice_bet_5"), InlineKeyboardButton("🎲 Bet $10", callback_data="dice_bet_10")],
-        [InlineKeyboardButton("🎲 Bet $20", callback_data="dice_bet_20"), InlineKeyboardButton("🎲 Bet $50", callback_data="dice_bet_50")],
+        [InlineKeyboardButton("1️⃣", callback_data="dice_predict_1"), InlineKeyboardButton("2️⃣", callback_data="dice_predict_2"), InlineKeyboardButton("3️⃣", callback_data="dice_predict_3")],
+        [InlineKeyboardButton("4️⃣", callback_data="dice_predict_4"), InlineKeyboardButton("5️⃣", callback_data="dice_predict_5"), InlineKeyboardButton("6️⃣", callback_data="dice_predict_6")],
+        [InlineKeyboardButton("Even", callback_data="dice_predict_even"), InlineKeyboardButton("Odd", callback_data="dice_predict_odd")],
+        [InlineKeyboardButton("High (4-6)", callback_data="dice_predict_high"), InlineKeyboardButton("Low (1-3)", callback_data="dice_predict_low")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
-async def handle_dice_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle rigged dice bet (user always loses)"""
+async def handle_dice_prediction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
     user_id = query.from_user.id
-    try:
-        bet = int(data.split("_")[-1])
-    except Exception:
-        await query.answer("Invalid bet", show_alert=True)
-        return
     user = await get_user(user_id)
-    if user['balance'] < bet:
+    # For simplicity, fixed bet of $10 for now
+    bet_usd = 10
+    ltc_usd_rate = await get_ltc_usd_rate()
+    bet_ltc = bet_usd / ltc_usd_rate if ltc_usd_rate > 0 else 0
+    if user['balance'] < bet_ltc:
         await query.answer("❌ Not enough balance", show_alert=True)
         return
-    await deduct_balance(user_id, bet)
-    # Rigged: user always rolls a 1
-    user_roll = 1
-    bot_roll = random.randint(2, 6)
+    await deduct_balance(user_id, bet_ltc)
+    roll = random.randint(1, 6)
+    prediction = data.replace("dice_predict_", "")
+    win = False
+    payout = 0
+    if prediction in [str(i) for i in range(1, 7)]:
+        if int(prediction) == roll:
+            win = True
+            payout = bet_ltc * 6
+    elif prediction == "even":
+        if roll % 2 == 0:
+            win = True
+            payout = bet_ltc * 2
+    elif prediction == "odd":
+        if roll % 2 == 1:
+            win = True
+            payout = bet_ltc * 2
+    elif prediction == "high":
+        if roll >= 4:
+            win = True
+            payout = bet_ltc * 2
+    elif prediction == "low":
+        if roll <= 3:
+            win = True
+            payout = bet_ltc * 2
+    if win:
+        await update_balance(user_id, payout)
+        result_text = f"🎉 <b>You WON!</b>\nDice rolled: <b>{roll}</b>\nPayout: <b>${bet_usd * (payout / bet_ltc):.2f}</b>"
+    else:
+        result_text = f"😢 <b>You lost.</b>\nDice rolled: <b>{roll}</b>"
+    balance = await format_usd((await get_user(user_id))['balance'])
     text = (
-        f"🎲 <b>RIGGED DICE RESULT</b> 🎲\n\n"
-        f"You rolled: <b>{user_roll}</b>\n"
-        f"Bot rolled: <b>{bot_roll}</b>\n\n"
-        f"😢 <b>You lose!</b> Lost <b>${bet}</b>.\n\n"
-        f"💰 <b>New Balance:</b> {await format_usd((await get_user(user_id))['balance'])}"
+        f"🎲 <b>DICE RESULT</b> 🎲\n\n"
+        f"{result_text}\n\n"
+        f"💰 <b>New Balance:</b> {balance}"
     )
     keyboard = [
-        [InlineKeyboardButton("🎲 Play Again", callback_data="play_dice"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        [InlineKeyboardButton("🔄 Play Again", callback_data="play_dice")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
@@ -1496,44 +1527,17 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await coin_flip_callback(update, context)
         elif data.startswith("coinflip_"):
             await handle_coinflip_bet(update, context)
-        elif data == "play_dice":
-            await play_dice_callback(update, context)
-        elif data.startswith("dice_bet_"):
-            await handle_dice_bet(update, context)
-        elif data == "play_blackjack":
-            await placeholder_callback(update, context)
-        elif data == "play_roulette":
-            await placeholder_callback(update, context)
-        elif data == "play_poker":
-            await placeholder_callback(update, context)
-        elif data == "memory_game":
-            await placeholder_callback(update, context)
-        elif data == "lucky_number":
-            await placeholder_callback(update, context)
-        elif data == "color_guess":
-            await placeholder_callback(update, context)
-        elif data == "turbo_spin":
-            await placeholder_callback(update, context)
-        elif data == "bonus_hunt":
-            await placeholder_callback(update, context)
-        elif data == "daily_challenge":
-            await placeholder_callback(update, context)
-        elif data == "play_mines":
-            await placeholder_callback(update, context)
-        elif data == "play_crash":
-            await placeholder_callback(update, context)
-        elif data == "play_limbo":
-            await placeholder_callback(update, context)
-        elif data == "play_hilo":
-            await placeholder_callback(update, context)
-        elif data == "play_plinko":
-            await placeholder_callback(update, context)
         elif data == "show_stats":
             await show_stats_callback(update, context)
         elif data == "show_help":
             await help_callback(update, context)
         elif data == "all_games":
             await all_games_callback(update, context)
+        elif data == "play_dice":
+            await play_dice_callback(update, context)
+        elif data.startswith("dice_predict_"):
+            await handle_dice_prediction(update, context)
+        # Add more game callbacks as needed
         else:
             await placeholder_callback(update, context)
     except Exception as e:
