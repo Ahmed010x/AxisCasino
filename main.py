@@ -202,6 +202,19 @@ async def init_db():
             )
         """)
         
+        # Redeem codes table
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS redeem_codes (
+                code TEXT PRIMARY KEY,
+                value_ltc REAL NOT NULL,
+                created_by INTEGER,
+                created_at TEXT DEFAULT '',
+                redeemed_by INTEGER,
+                redeemed_at TEXT DEFAULT '',
+                is_redeemed INTEGER DEFAULT 0
+            )
+        """)
+        
         # Create indexes
         await db.execute("CREATE INDEX IF NOT EXISTS idx_users_balance ON users (balance)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_game_sessions_user ON game_sessions (user_id)")
@@ -289,7 +302,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("🎮 Play", callback_data="mini_app_centre"), InlineKeyboardButton("💰 Balance", callback_data="show_balance")],
         [InlineKeyboardButton("💳 Deposit", callback_data="deposit"), InlineKeyboardButton("💸 Withdraw", callback_data="withdraw")],
-        [InlineKeyboardButton("ℹ️ Help", callback_data="show_help")]
+        [InlineKeyboardButton("🎁 Redeem", callback_data="redeem_panel"), InlineKeyboardButton("ℹ️ Help", callback_data="show_help")]
     ]
     # Edit the message if possible, otherwise send a new one
     if hasattr(update, 'callback_query') and update.callback_query:
@@ -848,6 +861,7 @@ No withdrawals found.
 DEPOSIT_LTC_AMOUNT = 1001
 WITHDRAW_LTC_AMOUNT = 1002
 WITHDRAW_LTC_ADDRESS = 1003
+REDEEM_CODE_INPUT = 2001
 
 # --- Deposit Conversation Handlers ---
 async def deposit_crypto_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1284,6 +1298,97 @@ async def cryptobot_webhook(request):
         logger.info(f"Credited {amount} LTC to user {user_id}")
     return aiohttp.web.Response(status=200)
 
+# --- Redeem Code Functions ---
+import secrets
+
+def generate_redeem_code(length: int = 10) -> str:
+    """Generate a secure random redeem code."""
+    alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+async def create_redeem_code(value_ltc: float, created_by: int) -> str:
+    code = generate_redeem_code()
+    now = datetime.now().isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO redeem_codes (code, value_ltc, created_by, created_at) VALUES (?, ?, ?, ?)",
+            (code, value_ltc, created_by, now)
+        )
+        await db.commit()
+    return code
+
+async def get_redeem_code_info(code: str) -> dict | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("SELECT * FROM redeem_codes WHERE code = ?", (code,))
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
+async def redeem_code(code: str, user_id: int) -> tuple[bool, str, float]:
+    """Try to redeem a code. Returns (success, message, value_ltc)"""
+    now = datetime.now().isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("SELECT * FROM redeem_codes WHERE code = ?", (code,))
+        row = await cur.fetchone()
+        if not row:
+            return False, "❌ Invalid code.", 0.0
+        if row['is_redeemed']:
+            return False, "❌ This code has already been redeemed.", 0.0
+        value_ltc = row['value_ltc']
+        await db.execute(
+            "UPDATE redeem_codes SET is_redeemed = 1, redeemed_by = ?, redeemed_at = ? WHERE code = ?",
+            (user_id, now, code)
+        )
+        await db.execute(
+            "UPDATE users SET balance = balance + ? WHERE id = ?",
+            (value_ltc, user_id)
+        )
+        await db.commit()
+    return True, f"✅ Code redeemed! {value_ltc:.8f} LTC has been added to your balance.", value_ltc
+
+# --- Redeem Code Handlers ---
+from telegram.ext import ConversationHandler
+
+async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🎁 Enter your redeem code below to claim your reward:",
+    )
+    return REDEEM_CODE_INPUT
+
+async def redeem_code_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    code = update.message.text.strip().upper()
+    user = await get_user(user_id)
+    if not user:
+        await update.message.reply_text("❌ You must be registered to redeem a code.")
+        return ConversationHandler.END
+    success, msg, value = await redeem_code(code, user_id)
+    await update.message.reply_text(msg)
+    return ConversationHandler.END
+
+# --- Redeem Panel Handler ---
+async def redeem_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    text = (
+        "🎁 <b>Redeem a Code</b> 🎁\n\n"
+        "If you have a code from an admin or event, enter it below to claim your reward!\n\n"
+        "<i>Click the button below to enter your code.</i>"
+    )
+    keyboard = [
+        [InlineKeyboardButton("🔑 Enter Redeem Code", callback_data="redeem_start")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+# --- Redeem Start Handler (button triggers text input) ---
+async def redeem_start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text("🎁 Enter your redeem code below:")
+    return REDEEM_CODE_INPUT
+
 # --- Main Callback Handler ---
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle all callback queries"""
@@ -1331,6 +1436,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await withdraw_callback(update, context)
         elif data == "withdrawal_history":
             await withdrawal_history_callback(update, context)
+        
+        # Redeem code
+        elif data == "redeem_code":
+            await redeem_command(update, context)
+        elif data == "redeem_panel":
+            await redeem_panel_callback(update, context)
+        elif data == "redeem_start":
+            return await redeem_start_callback(update, context)
         
         # Placeholder handlers
         else:
@@ -1387,6 +1500,18 @@ async def main():
         states={
             WITHDRAW_LTC_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_crypto_amount)],
             WITHDRAW_LTC_ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_crypto_address)]
+        },
+        fallbacks=[]
+    ))
+    
+    application.add_handler(CommandHandler("redeem", redeem_command))
+    application.add_handler(ConversationHandler(
+        entry_points=[
+            CommandHandler("redeem", redeem_command),
+            CallbackQueryHandler(redeem_start_callback, pattern="^redeem_start$")
+        ],
+        states={
+            REDEEM_CODE_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND, redeem_code_input)]
         },
         fallbacks=[]
     ))
