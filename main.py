@@ -1388,15 +1388,34 @@ async def help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await query.edit_message_text(help_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
-# --- Main Callback Handler ---
+# --- All Games Handler ---
+async def all_games_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show a unified list of all available games with quick access buttons."""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    user = await get_user(user_id)
+    balance = user['balance']
+    username = user['username']
+    text = f"""
+🎮 <b>ALL GAMES</b> 🎮\n\n👤 <b>{username}</b> | Balance: <b>{balance:,}</b> chips\n\nSelect a game to play:\n"""
+    keyboard = [
+        [InlineKeyboardButton("🎰 Slots", callback_data="play_slots"), InlineKeyboardButton("🃏 Blackjack", callback_data="play_blackjack")],
+        [InlineKeyboardButton("🎡 Roulette", callback_data="play_roulette"), InlineKeyboardButton("🎲 Dice", callback_data="play_dice")],
+        [InlineKeyboardButton("🪙 Coin Flip", callback_data="coin_flip"), InlineKeyboardButton("🧠 Memory Game", callback_data="memory_game")],
+        [InlineKeyboardButton("🎯 Lucky Number", callback_data="lucky_number"), InlineKeyboardButton("🌈 Color Guess", callback_data="color_guess")],
+        [InlineKeyboardButton("⚡ Turbo Spin", callback_data="turbo_spin"), InlineKeyboardButton("🎁 Bonus Hunt", callback_data="bonus_hunt")],
+        [InlineKeyboardButton("🃄 Poker", callback_data="play_poker")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+# --- Update handle_callback to support all_games ---
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle all callback queries"""
     query = update.callback_query
     await query.answer()
     data = query.data
-
     try:
-        # Main navigation
         if data == "main_panel":
             await main_panel_callback(update, context)
         elif data == "mini_app_centre":
@@ -1429,6 +1448,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await show_stats_callback(update, context)
         elif data == "show_help":
             await help_callback(update, context)
+        elif data == "all_games":
+            await all_games_callback(update, context)
+        # Add more game callbacks as needed
         else:
             await placeholder_callback(update, context)
     except Exception as e:
