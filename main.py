@@ -423,17 +423,7 @@ async def play_slots_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     user_id = query.from_user.id
     user = await get_user(user_id)
-    # Allow owner(s) to play with zero balance
-    if user['balance'] <= 0 and user_id not in ADMIN_USER_IDS:
-        await query.edit_message_text(
-            "❌ You have no funds to play. Please deposit to continue.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
-                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-            ])
-        )
-        return
-    
+    # Remove balance check here; let user set up bet first
     text = f"""
 🎰 **SLOT MACHINES** 🎰
 
@@ -472,7 +462,10 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = await get_user(user_id)
     # Allow owner/admins to play even with zero balance
-    if user['balance'] < bet and user_id not in ADMIN_USER_IDS:
+    if user['balance'] < bet and user_id in ADMIN_USER_IDS:
+        # Do NOT deduct balance for owner/admins, just proceed
+        pass
+    elif user['balance'] < bet:
         await query.edit_message_text(
             "❌ You have no funds to play. Please deposit to continue.",
             reply_markup=InlineKeyboardMarkup([
@@ -481,8 +474,7 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ])
         )
         return
-    # Deduct balance only if not admin/owner
-    if user_id not in ADMIN_USER_IDS:
+    else:
         result = await deduct_balance(user_id, bet)
         if result is False:
             await query.edit_message_text(
@@ -523,16 +515,7 @@ async def coin_flip_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.answer()
     user_id = query.from_user.id
     user = await get_user(user_id)
-    if user['balance'] <= 0 and user_id not in ADMIN_USER_IDS:
-        await query.edit_message_text(
-            "❌ You have no funds to play. Please deposit to continue.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
-                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-            ])
-        )
-        return
-    
+    # Remove balance check here; let user set up bet first
     text = f"""
 🪙 **COIN FLIP** 🪙
 
@@ -575,7 +558,10 @@ async def handle_coinflip_bet(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     user = await get_user(user_id)
     # Allow owner/admins to play even with zero balance
-    if user['balance'] < bet and user_id not in ADMIN_USER_IDS:
+    if user['balance'] < bet and user_id in ADMIN_USER_IDS:
+        # Do NOT deduct balance for owner/admins, just proceed
+        pass
+    elif user['balance'] < bet:
         await query.edit_message_text(
             "❌ You have no funds to play. Please deposit to continue.",
             reply_markup=InlineKeyboardMarkup([
@@ -584,8 +570,7 @@ async def handle_coinflip_bet(update: Update, context: ContextTypes.DEFAULT_TYPE
             ])
         )
         return
-    # Deduct balance only if not admin/owner
-    if user_id not in ADMIN_USER_IDS:
+    else:
         result = await deduct_balance(user_id, bet)
         if result is False:
             await query.edit_message_text(
@@ -635,16 +620,7 @@ async def play_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.answer()
     user_id = query.from_user.id
     user = await get_user(user_id)
-    if user['balance'] <= 0 and user_id not in ADMIN_USER_IDS:
-        await query.edit_message_text(
-            "❌ You have no funds to play. Please deposit to continue.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
-                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-            ])
-        )
-        return
-    
+    # Remove balance check here; let user set up bet first
     balance = await format_usd(user['balance'])
     text = (
         f"🎲 <b>DICE PREDICTION</b> 🎲\n\n"
@@ -664,7 +640,6 @@ async def play_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-    # Store state for next step
     context.user_data['dice_prediction'] = None
     context.user_data['dice_bet_stage'] = 'choose_prediction'
 
@@ -696,7 +671,10 @@ async def dice_prediction_bet_amount(update: Update, context: ContextTypes.DEFAU
     ltc_usd_rate = await get_ltc_usd_rate()
     bet_ltc = bet_usd / ltc_usd_rate if ltc_usd_rate > 0 else 0
     # Allow owner/admins to play even with zero balance
-    if user['balance'] < bet_ltc and user_id not in ADMIN_USER_IDS:
+    if user['balance'] < bet_ltc and user_id in ADMIN_USER_IDS:
+        # Do NOT deduct balance for owner/admins, just proceed
+        pass
+    elif user['balance'] < bet_ltc:
         await update.message.reply_text(
             "❌ You have no funds to play. Please deposit to continue.",
             reply_markup=InlineKeyboardMarkup([
@@ -705,8 +683,7 @@ async def dice_prediction_bet_amount(update: Update, context: ContextTypes.DEFAU
             ])
         )
         return ConversationHandler.END
-    # Deduct balance only if not admin/owner
-    if user_id not in ADMIN_USER_IDS:
+    else:
         result = await deduct_balance(user_id, bet_ltc)
         if result is False:
             await update.message.reply_text(
@@ -822,28 +799,15 @@ async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     user = await get_user(user_id)
 
-    # Check minimum withdrawal amount
-    if user['balance'] < MIN_WITHDRAWAL_USD / await get_ltc_usd_rate():
-        await query.edit_message_text(
-            f"❌ Minimum withdrawal: ${MIN_WITHDRAWAL_USD:.2f}",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
-                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-            ])
-        )
-        return
-    
+    # Remove balance check here; let user set up withdrawal first
     # Get withdrawal history
     recent_withdrawals = await get_user_withdrawals(user_id, 3)
     pending_withdrawals = [w for w in recent_withdrawals if w['status'] == 'pending']
-    
     # Check for pending withdrawals
     if pending_withdrawals:
         await query.answer("❌ You have pending withdrawals. Please wait for them to complete.", show_alert=True)
         return
-    
     balance_usd = await format_usd(user['balance'])
-    
     # Show recent withdrawals if any
     withdrawal_history = ""
     if recent_withdrawals:
@@ -852,7 +816,6 @@ async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             status_emoji = {"completed": "✅", "pending": "⏳", "failed": "❌"}.get(w['status'], "❓")
             date = w['created_at'][:10] if w['created_at'] else "Unknown"
             withdrawal_history += f"• {status_emoji} ${w['amount_usd']:.2f} - {date}\n"
-    
     text = f"""
 💸 **WITHDRAW FUNDS** 💸
 
@@ -876,13 +839,11 @@ async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 {withdrawal_history}
 Choose your withdrawal method:
 """
-    
     keyboard = [
         [InlineKeyboardButton("₿ Litecoin Withdraw", callback_data="withdraw_crypto")],
         [InlineKeyboardButton("📊 Withdrawal History", callback_data="withdrawal_history")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
-    
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
 # --- Withdrawal History Handler ---
@@ -1667,6 +1628,7 @@ async def main():
     
     # Start aiohttp server
     runner = aiohttp.web.AppRunner(app)
+   
     await runner.setup()
     site = aiohttp.web.TCPSite(runner, '0.0.0.0', PORT)
     await site.start()

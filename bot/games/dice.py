@@ -10,6 +10,7 @@ from typing import Tuple
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from bot.database.user import get_user, add_game_result
+from ...main import ADMIN_USER_IDS  # Import admin IDs
 
 
 def roll_dice() -> Tuple[int, int]:
@@ -184,7 +185,7 @@ async def handle_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         
         # Check balance
         user_data = await get_user(user_id)
-        if not user_data or user_data['balance'] < bet_amount:
+        if (not user_data or user_data['balance'] < bet_amount) and user_id not in ADMIN_USER_IDS:
             await query.answer("❌ Insufficient balance!")
             return
         

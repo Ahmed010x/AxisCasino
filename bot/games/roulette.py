@@ -9,6 +9,7 @@ from typing import Dict, List, Tuple
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from bot.database.user import get_user, add_game_result
+from ...main import ADMIN_USER_IDS  # Import admin IDs
 
 
 # Roulette wheel (European - single zero)
@@ -203,9 +204,9 @@ async def handle_roulette_callback(update: Update, context: ContextTypes.DEFAULT
         if len(parts) > 4:  # Single number bet
             bet_number = int(parts[4])
         
-        # Check balance
+        # Check balance, allow admins to play with zero balance
         user_data = await get_user(user_id)
-        if not user_data or user_data['balance'] < bet_amount:
+        if (not user_data or user_data['balance'] < bet_amount) and user_id not in ADMIN_USER_IDS:
             await query.answer("❌ Insufficient balance!")
             return
         

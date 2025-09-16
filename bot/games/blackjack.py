@@ -10,6 +10,7 @@ from typing import List, Dict, Tuple
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from bot.database.user import get_user, save_game_session, get_game_session, delete_game_session, add_game_result
+from ...main import ADMIN_USER_IDS  # Import admin IDs
 
 
 # Card values and suits
@@ -183,10 +184,9 @@ async def handle_blackjack_callback(update: Update, context: ContextTypes.DEFAUL
     if data.startswith("blackjack_bet_"):
         # Starting a new game
         bet_amount = int(data.split('_')[-1])
-        
-        # Check balance
+        # Check balance, allow admins to play with zero balance
         user_data = await get_user(user_id)
-        if not user_data or user_data['balance'] < bet_amount:
+        if (not user_data or user_data['balance'] < bet_amount) and user_id not in ADMIN_USER_IDS:
             await query.edit_message_text("❌ Insufficient balance! Use /daily for free chips.")
             return
         
@@ -226,7 +226,7 @@ async def handle_blackjack_callback(update: Update, context: ContextTypes.DEFAUL
         elif action == "double":
             # Check if user has enough balance for double down
             user_data = await get_user(user_id)
-            if user_data['balance'] < game.bet_amount:
+            if user_data['balance'] < game.bet_amount and user_id not in ADMIN_USER_IDS:
                 await query.answer("❌ Insufficient balance to double down!")
                 return
             
