@@ -114,15 +114,15 @@ except ImportError:
 
 # --- Utility: Fetch LTC→USD rate and format as USD ---
 async def get_ltc_usd_rate() -> float:
-    """Fetch the current LTC to USD conversion rate from CoinGecko."""
-    url = "https://api.coingecko.com/api/v3/simple/price?ids=litecoin&vs_currencies=usd"
+    """Fetch the current LTC to USD conversion rate from CryptoCompare."""
+    url = "https://min-api.cryptocompare.com/data/price?fsym=LTC&tsyms=USD"
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
                 data = await resp.json()
-                return float(data['litecoin']['usd'])
+                return float(data['USD'])
     except Exception as e:
-        logger.error(f"Failed to fetch LTC→USD rate: {e}")
+        logger.error(f"Failed to fetch LTC→USD rate from CryptoCompare: {e}")
         return 0.0
 
 async def format_usd(ltc_amount: float) -> str:
@@ -627,12 +627,16 @@ async def show_balance_callback(update: Update, context: ContextTypes.DEFAULT_TY
     user = await get_user(user_id)
     if not user:
         user = await create_user(user_id, query.from_user.username or query.from_user.first_name)
+    # Await the format_usd coroutine for all balance fields
+    current_balance = await format_usd(user['balance'])
+    total_wagered = await format_usd(user['total_wagered'])
+    total_won = await format_usd(user['total_won'])
     text = (
         f"💰 BALANCE\n\n"
-        f"Current Balance: {format_usd(user['balance'])}\n"
+        f"Current Balance: {current_balance}\n"
         f"Games Played: {user['games_played']}\n"
-        f"Total Wagered: {format_usd(user['total_wagered'])}\n"
-        f"Total Won: {format_usd(user['total_won'])}\n"
+        f"Total Wagered: {total_wagered}\n"
+        f"Total Won: {total_won}\n"
     )
     keyboard = [
         [InlineKeyboardButton("💳 Deposit", callback_data="deposit"), InlineKeyboardButton("💸 Withdraw", callback_data="withdraw")],
