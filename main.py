@@ -471,11 +471,28 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user = await get_user(user_id)
-    # Deduct the bet amount before playing
-    result = await deduct_balance(user_id, bet)
-    if result is False:
-        await query.answer("❌ Not enough balance", show_alert=True)
+    # Allow owner/admins to play even with zero balance
+    if user['balance'] < bet and user_id not in ADMIN_USER_IDS:
+        await query.edit_message_text(
+            "❌ You have no funds to play. Please deposit to continue.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+            ])
+        )
         return
+    # Deduct balance only if not admin/owner
+    if user_id not in ADMIN_USER_IDS:
+        result = await deduct_balance(user_id, bet)
+        if result is False:
+            await query.edit_message_text(
+                "❌ You have no funds to play. Please deposit to continue.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
+                    [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+                ])
+            )
+            return
 
     # Simple slots simulation
     symbols = ["🍒", "🍋", "🍊", "🔔", "💎"]
@@ -557,12 +574,28 @@ async def handle_coinflip_bet(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     user = await get_user(user_id)
-    # Deduct the bet amount before playing
-    result = await deduct_balance(user_id, bet)
-    if result is False:
-        await query.answer("❌ Not enough balance", show_alert=True)
+    # Allow owner/admins to play even with zero balance
+    if user['balance'] < bet and user_id not in ADMIN_USER_IDS:
+        await query.edit_message_text(
+            "❌ You have no funds to play. Please deposit to continue.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+            ])
+        )
         return
-    
+    # Deduct balance only if not admin/owner
+    if user_id not in ADMIN_USER_IDS:
+        result = await deduct_balance(user_id, bet)
+        if result is False:
+            await query.edit_message_text(
+                "❌ You have no funds to play. Please deposit to continue.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
+                    [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+                ])
+            )
+            return
     # Flip coin
     coin_result = random.choice(["heads", "tails"])
     coin_emoji = "🟡" if coin_result == "heads" else "⚫"
@@ -662,11 +695,28 @@ async def dice_prediction_bet_amount(update: Update, context: ContextTypes.DEFAU
         return 'dice_bet_amount'
     ltc_usd_rate = await get_ltc_usd_rate()
     bet_ltc = bet_usd / ltc_usd_rate if ltc_usd_rate > 0 else 0
-    if user['balance'] < bet_ltc:
-        await update.message.reply_text("❌ Not enough balance. Enter a smaller amount:")
-        return 'dice_bet_amount'
-    # Deduct the bet amount before playing
-    await deduct_balance(user_id, bet_ltc)
+    # Allow owner/admins to play even with zero balance
+    if user['balance'] < bet_ltc and user_id not in ADMIN_USER_IDS:
+        await update.message.reply_text(
+            "❌ You have no funds to play. Please deposit to continue.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+            ])
+        )
+        return ConversationHandler.END
+    # Deduct balance only if not admin/owner
+    if user_id not in ADMIN_USER_IDS:
+        result = await deduct_balance(user_id, bet_ltc)
+        if result is False:
+            await update.message.reply_text(
+                "❌ You have no funds to play. Please deposit to continue.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
+                    [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+                ])
+            )
+            return ConversationHandler.END
     prediction = context.user_data.get('dice_prediction')
     roll = random.randint(1, 6)
     win = False
@@ -1042,9 +1092,16 @@ async def withdraw_crypto_amount(update: Update, context: ContextTypes.DEFAULT_T
             await update.message.reply_text("❌ Unable to fetch LTC/USD rate. Please try again later.")
             return WITHDRAW_LTC_AMOUNT
         ltc_amount = usd_amount / ltc_usd_rate
-        # Check if user has sufficient balance
-        if ltc_amount > user['balance']:
-            await update.message.reply_text("❌ No funds to withdraw.")
+        # Attempt to deduct balance (simulate withdrawal attempt)
+        result = await deduct_balance(user_id, ltc_amount)
+        if result is False:
+            await update.message.reply_text(
+                "❌ No funds to withdraw.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
+                    [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+                ])
+            )
             return WITHDRAW_LTC_AMOUNT
         # Calculate fees
         fee_ltc = calculate_withdrawal_fee(ltc_amount)
@@ -1054,6 +1111,8 @@ async def withdraw_crypto_amount(update: Update, context: ContextTypes.DEFAULT_T
         # Validate that after fees, user still gets meaningful amount
         if net_ltc <= 0:
             await update.message.reply_text("❌ Amount too small after fees. Please enter a larger amount.")
+            # Refund the deducted amount
+            await update_balance(user_id, ltc_amount)
             return WITHDRAW_LTC_AMOUNT
     except ValueError as e:
         await update.message.reply_text(f"❌ Invalid amount. Please enter a valid USD amount:")
@@ -1586,7 +1645,7 @@ async def main():
             REDEEM_CODE_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND, redeem_code_input)]
         },
         fallbacks=[]
-    ))
+       ))
     
        
     # Add command handlers
