@@ -160,6 +160,14 @@ def log_admin_action(user_id: int, action: str):
     """Log admin actions for debugging"""
     logger.info(f"🔧 Admin action by {user_id}: {action}")
 
+# --- Owner (Super Admin) Configuration ---
+load_dotenv(".env.owner")  # Load owner ID from dedicated file
+OWNER_USER_ID = int(os.environ.get("OWNER_USER_ID", "0"))
+
+def is_owner(user_id: int) -> bool:
+    """Check if user is the owner (super admin)"""
+    return user_id == OWNER_USER_ID
+
 # --- Production Database System ---
 async def init_db():
     """Initialize production database"""
