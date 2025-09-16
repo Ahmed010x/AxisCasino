@@ -642,6 +642,57 @@ Play again or try another game:
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
+# --- Rigged Dice Game ---
+async def play_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle rigged dice game (always rolls a 1 for the user)"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    user = await get_user(user_id)
+    text = (
+        f"🎲 <b>RIGGED DICE</b> 🎲\n\n"
+        f"💰 <b>Your Balance:</b> {await format_usd(user['balance'])}\n\n"
+        f"This is a <b>rigged</b> dice game. No matter what, you always roll a <b>1</b>!\n\n"
+        f"Choose your bet amount (in USD):"
+    )
+    keyboard = [
+        [InlineKeyboardButton("🎲 Bet $5", callback_data="dice_bet_5"), InlineKeyboardButton("🎲 Bet $10", callback_data="dice_bet_10")],
+        [InlineKeyboardButton("🎲 Bet $20", callback_data="dice_bet_20"), InlineKeyboardButton("🎲 Bet $50", callback_data="dice_bet_50")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def handle_dice_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle rigged dice bet (user always loses)"""
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    user_id = query.from_user.id
+    try:
+        bet = int(data.split("_")[-1])
+    except Exception:
+        await query.answer("Invalid bet", show_alert=True)
+        return
+    user = await get_user(user_id)
+    if user['balance'] < bet:
+        await query.answer("❌ Not enough balance", show_alert=True)
+        return
+    await deduct_balance(user_id, bet)
+    # Rigged: user always rolls a 1
+    user_roll = 1
+    bot_roll = random.randint(2, 6)
+    text = (
+        f"🎲 <b>RIGGED DICE RESULT</b> 🎲\n\n"
+        f"You rolled: <b>{user_roll}</b>\n"
+        f"Bot rolled: <b>{bot_roll}</b>\n\n"
+        f"😢 <b>You lose!</b> Lost <b>${bet}</b>.\n\n"
+        f"💰 <b>New Balance:</b> {await format_usd((await get_user(user_id))['balance'])}"
+    )
+    keyboard = [
+        [InlineKeyboardButton("🎲 Play Again", callback_data="play_dice"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
 # --- Simple Placeholder Handlers ---
 
 async def show_balance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1403,7 +1454,10 @@ async def all_games_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("🪙 Coin Flip", callback_data="coin_flip"), InlineKeyboardButton("🧠 Memory Game", callback_data="memory_game")],
         [InlineKeyboardButton("🎯 Lucky Number", callback_data="lucky_number"), InlineKeyboardButton("🌈 Color Guess", callback_data="color_guess")],
         [InlineKeyboardButton("⚡ Turbo Spin", callback_data="turbo_spin"), InlineKeyboardButton("🎁 Bonus Hunt", callback_data="bonus_hunt")],
-        [InlineKeyboardButton("🃄 Poker", callback_data="play_poker")],
+        [InlineKeyboardButton("🎪 Daily Challenge", callback_data="daily_challenge"), InlineKeyboardButton("🃄 Poker", callback_data="play_poker")],
+        [InlineKeyboardButton("💣 Mines", callback_data="play_mines"), InlineKeyboardButton("📈 Crash", callback_data="play_crash")],
+        [InlineKeyboardButton("📉 Limbo", callback_data="play_limbo"), InlineKeyboardButton("🔼 HiLo", callback_data="play_hilo")],
+        [InlineKeyboardButton("🎱 Plinko", callback_data="play_plinko")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
@@ -1442,13 +1496,44 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await coin_flip_callback(update, context)
         elif data.startswith("coinflip_"):
             await handle_coinflip_bet(update, context)
+        elif data == "play_dice":
+            await play_dice_callback(update, context)
+        elif data.startswith("dice_bet_"):
+            await handle_dice_bet(update, context)
+        elif data == "play_blackjack":
+            await placeholder_callback(update, context)
+        elif data == "play_roulette":
+            await placeholder_callback(update, context)
+        elif data == "play_poker":
+            await placeholder_callback(update, context)
+        elif data == "memory_game":
+            await placeholder_callback(update, context)
+        elif data == "lucky_number":
+            await placeholder_callback(update, context)
+        elif data == "color_guess":
+            await placeholder_callback(update, context)
+        elif data == "turbo_spin":
+            await placeholder_callback(update, context)
+        elif data == "bonus_hunt":
+            await placeholder_callback(update, context)
+        elif data == "daily_challenge":
+            await placeholder_callback(update, context)
+        elif data == "play_mines":
+            await placeholder_callback(update, context)
+        elif data == "play_crash":
+            await placeholder_callback(update, context)
+        elif data == "play_limbo":
+            await placeholder_callback(update, context)
+        elif data == "play_hilo":
+            await placeholder_callback(update, context)
+        elif data == "play_plinko":
+            await placeholder_callback(update, context)
         elif data == "show_stats":
             await show_stats_callback(update, context)
         elif data == "show_help":
             await help_callback(update, context)
         elif data == "all_games":
             await all_games_callback(update, context)
-        # Add more game callbacks as needed
         else:
             await placeholder_callback(update, context)
     except Exception as e:
