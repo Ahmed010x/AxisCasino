@@ -1411,17 +1411,29 @@ async def show_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
-# --- Help Handler ---
-async def help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show help panel as a callback."""
-    query = update.callback_query
-    await query.answer()
-    help_text = f"""
-🎰 <b>CASINO BOT HELP</b> 🎰\n\n<b>Commands:</b>\n/start - Main panel\n/app - Mini App Centre\n/help - This help\n\n<b>Features:</b>\n🚀 <b>WebApp Integration</b> - Play in full browser\n🎮 <b>Classic Casino</b> - Slots, Blackjack, Roulette\n🎯 <b>Inline Games</b> - Quick coin flip, mini games\n💰 <b>Balance System</b> - Earn and spend chips\n\n<b>WebApp Status:</b>\n• URL: {WEBAPP_URL}\n• Enabled: {'✅ Yes' if WEBAPP_ENABLED else '❌ No'}\n\nReady to play? Use /start!\n"""
-    keyboard = [
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    await query.edit_message_text(help_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+# --- Help Command Handler ---
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send a help message with available commands and usage."""
+    help_text = (
+        "<b>Casino Bot Help</b>\n\n"
+        "Welcome to the Casino Bot! Here are some useful commands and tips:\n\n"
+        "<b>Commands:</b>\n"
+        "/start - Show the main menu\n"
+        "/balance - Show your current balance\n"
+        "/deposit - Deposit funds\n"
+        "/withdraw - Withdraw funds\n"
+        "/redeem - Redeem a code\n"
+        "/app - Open the Mini App Centre\n"
+        "/help - Show this help message\n\n"
+        "<b>Tips:</b>\n"
+        "• Use the buttons to navigate games and features.\n"
+        "• All payments are in Litecoin (LTC), but you enter amounts in USD.\n"
+        "• If you have any issues, contact support: {SUPPORT_CHANNEL}"
+    )
+    if update.message:
+        await update.message.reply_text(help_text, parse_mode=ParseMode.HTML)
+    elif update.callback_query:
+        await update.callback_query.edit_message_text(help_text, parse_mode=ParseMode.HTML)
 
 # --- All Games Handler ---
 async def all_games_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
