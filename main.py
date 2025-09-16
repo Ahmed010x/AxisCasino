@@ -461,6 +461,18 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user = await get_user(user_id)
+    if user['balance'] < bet and user_id in ADMIN_USER_IDS:
+        # Admin/owner test mode: do not deduct, always show win (simulate test mode)
+        symbols = ["💎", "💎", "💎"]
+        multiplier = 100
+        win_amount = bet * multiplier
+        text = f"🎰 {' '.join(symbols)}\n\n🛡️ <b>TEST MODE</b> (Admin)\n🎉 <b>JACKPOT!</b> You won <b>${win_amount:,}</b> (x{multiplier})!\n\n💰 <b>Balance:</b> {await format_usd(user['balance'])}"
+        keyboard = [
+            [InlineKeyboardButton("🔄 Play Again", callback_data="play_slots"), InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        return
     # Allow owner/admins to play even with zero balance
     if user['balance'] < bet and user_id in ADMIN_USER_IDS:
         # Do NOT deduct balance for owner/admins, just proceed
@@ -535,7 +547,6 @@ Choose your bet amount (in USD) and side:
         [InlineKeyboardButton("🟡 Heads - $10", callback_data="coinflip_heads_10"), InlineKeyboardButton("⚫ Tails - $10", callback_data="coinflip_tails_10")],
         [InlineKeyboardButton("🟡 Heads - $25", callback_data="coinflip_heads_25"), InlineKeyboardButton("⚫ Tails - $25", callback_data="coinflip_tails_25")],
         [InlineKeyboardButton("🟡 Heads - $50", callback_data="coinflip_heads_50"), InlineKeyboardButton("⚫ Tails - $50", callback_data="coinflip_tails_50")],
-        [InlineKeyboardButton("🔙 Back to Inline Games", callback_data="inline_games")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
@@ -557,6 +568,17 @@ async def handle_coinflip_bet(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     user = await get_user(user_id)
+    if user['balance'] < bet and user_id in ADMIN_USER_IDS:
+        # Admin/owner test mode: do not deduct, always show win
+        coin_result = choice = "heads"
+        win_amount = bet * 1.92
+        text = f"🪙 <b>COIN FLIP RESULT</b> 🪙\n\n🛡️ <b>TEST MODE</b> (Admin)\n🎉 <b>YOU WIN!</b>\n\n🟡 Coin landed on <b>HEADS</b>\n🟡 You chose <b>HEADS</b>\n\n💰 Won: <b>${win_amount:.2f}</b>\n\n💰 <b>New Balance:</b> {await format_usd(user['balance'])}\n\nPlay again or try another game:"
+        keyboard = [
+            [InlineKeyboardButton("🔄 Flip Again", callback_data="coin_flip"), InlineKeyboardButton("🎮 Other Games", callback_data="inline_games")],
+            [InlineKeyboardButton("🎰 Slots", callback_data="play_slots"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        return
     # Allow owner/admins to play even with zero balance
     if user['balance'] < bet and user_id in ADMIN_USER_IDS:
         # Do NOT deduct balance for owner/admins, just proceed
@@ -618,7 +640,7 @@ async def play_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Handle dice prediction game"""
     query = update.callback_query
     await query.answer()
-    user_id = query.from_user.id
+    user_id = query.effective_user.id
     user = await get_user(user_id)
     # Remove balance check here; let user set up bet first
     balance = await format_usd(user['balance'])
