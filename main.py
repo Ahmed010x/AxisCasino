@@ -241,7 +241,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data = await get_user(user_id)
     if not user_data:
         user_data = await create_user(user_id, username)
-    # Await the format_usd coroutine for balance display
     balance_usd = await format_usd(user_data['balance'])
     text = (
         f"🎰 CASINO BOT 🎰\n\n"
@@ -255,7 +254,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💳 Deposit", callback_data="deposit"), InlineKeyboardButton("💸 Withdraw", callback_data="withdraw")],
         [InlineKeyboardButton("ℹ️ Help", callback_data="show_help")]
     ]
-    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    # Robustly get the message object for reply
+    message = getattr(update, 'message', None) or getattr(getattr(update, 'callback_query', None), 'message', None)
+    if message:
+        await message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    else:
+        logger.error("No message object found in update for start_command")
 
 # --- Mini App Centre ---
 async def show_mini_app_centre(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -778,7 +782,7 @@ async def deposit_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TY
             return ConversationHandler.END
         payload = {"hidden_message": str(user_id)}
         invoice = await create_litecoin_invoice(
-            ltc_amount, user_id, asset="LTC", address=True, invoice_type='miniapp', payload=payload
+            ltc_amount, user_id, address=True, invoice_type='miniapp', payload=payload
         )
         logger.info(f"CryptoBot invoice response: {invoice}")
         if invoice.get("ok"):
