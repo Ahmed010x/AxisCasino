@@ -241,10 +241,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data = await get_user(user_id)
     if not user_data:
         user_data = await create_user(user_id, username)
+    # Await the format_usd coroutine for balance display
+    balance_usd = await format_usd(user_data['balance'])
     text = (
         f"🎰 CASINO BOT 🎰\n\n"
         f"👋 Welcome, {username}!\n\n"
-        f"💰 Balance: {format_usd(user_data['balance'])}\n"
+        f"💰 Balance: {balance_usd}\n"
         f"🏆 Games Played: {user_data['games_played']}\n\n"
         "Choose an action below:"
     )
@@ -725,7 +727,7 @@ WITHDRAW_LTC_ADDRESS = 1003
 async def deposit_crypto_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = await get_user(user_id)
-    min_deposit_usd = 0.01
+    min_deposit_usd = 0.50  # Set minimum deposit to $0.50
     text = (
         f"₿ Litecoin Deposit\n\n"
         f"Current Balance: {await format_usd(user['balance'])}\n\n"
@@ -742,10 +744,10 @@ async def deposit_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TY
     user_id = update.effective_user.id
     try:
         usd_amount = float(update.message.text.strip())
-        if usd_amount < 0.01:
+        if usd_amount < 0.50:  # Enforce minimum deposit of $0.50
             raise ValueError
     except Exception:
-        await update.message.reply_text("❌ Invalid amount. Please enter a valid USD amount (min $0.01):")
+        await update.message.reply_text("❌ Invalid amount. Please enter a valid USD amount (min $0.50):")
         return DEPOSIT_LTC_AMOUNT
     try:
         # Convert USD to LTC
@@ -776,7 +778,7 @@ async def deposit_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TY
             return ConversationHandler.END
         payload = {"hidden_message": str(user_id)}
         invoice = await create_litecoin_invoice(
-            ltc_amount, user_id, address=True, invoice_type='miniapp', payload=payload
+            ltc_amount, user_id, asset="LTC", address=True, invoice_type='miniapp', payload=payload
         )
         logger.info(f"CryptoBot invoice response: {invoice}")
         if invoice.get("ok"):
