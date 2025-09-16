@@ -325,73 +325,32 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- Mini App Centre ---
 async def show_mini_app_centre(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show the comprehensive Mini App Centre with WebApp integration"""
+    """Show the simplified Mini App Centre with only an All Games button"""
     user_id = update.effective_user.id
     user = await get_user(user_id)
-    
     balance = user['balance']
     total_games = user['games_played']
     username = user['username']
-    
+
     text = f"""
-🎮 **CASINO MINI APP CENTRE** 🎮
+🎮 <b>CASINO MINI APP CENTRE</b> 🎮
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🎲 **{username}** | Balance: **{balance:,}** chips
-🎯 **Games Played:** {total_games}
+👤 <b>{username}</b> | Balance: <b>{balance:,}</b> chips
+🎯 <b>Games Played:</b> {total_games}
 
-🔥 **GAME CATEGORIES**
-
-🎰 **STAKE ORIGINALS** 
-*Premium in-house games with best RTP*
-• 🚀 Crash • 💣 Mines • 🏀 Plinko
-• 🃏 Hi-Lo • 🎲 Limbo • 🎡 Wheel
-
-🎲 **CLASSIC CASINO**
-*Traditional casino favorites*  
-• 🎰 Slots • 🃏 Blackjack • 🎡 Roulette
-• 🎲 Dice • 🃄 Poker • 🎯 More
-
-🏆 **TOURNAMENTS**
-*Compete for massive prizes*
-• 🔥 Weekly Events • 💎 Championships
-• ⚡ Speed Rounds • 👑 VIP Tournaments
-
-💎 **VIP GAMES**
-*Exclusive high-limit experiences*
-• 💰 High Stakes • 🎪 Private Tables
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🎁 **ACTIVE PROMOTIONS:**
-• 🎊 Weekly Bonus: 5% of all bets
-• 🔗 Referral Bonus: 100 chips per friend
-• 🏆 Achievement rewards for milestones
-
-Choose your gaming experience:
+Welcome to the Casino! Access all games below:
 """
-    
-    keyboard = []
-    
-    # Add WebApp button if enabled (disabled for compatibility)
-    # if WEBAPP_ENABLED:
-    #     web_app = WebApp(url=f"{WEBAPP_URL}?user_id={user_id}&balance={balance}")
-    #     keyboard.append([InlineKeyboardButton("🚀 PLAY IN WEBAPP", web_app=web_app)])
-    
-    # Add regular game category buttons
-    keyboard.extend([
-        [InlineKeyboardButton("🔥 STAKE ORIGINALS", callback_data="stake_originals")],
-        [InlineKeyboardButton("🎰 CLASSIC CASINO", callback_data="classic_casino"), InlineKeyboardButton("🎮 INLINE GAMES", callback_data="inline_games")],
-        [InlineKeyboardButton("🏆 TOURNAMENTS", callback_data="stake_tournaments"), InlineKeyboardButton("💎 VIP GAMES", callback_data="vip_games")],
-        [InlineKeyboardButton("🎁 BONUSES", callback_data="bonus_centre"), InlineKeyboardButton("📊 STATISTICS", callback_data="show_stats")],
-        [InlineKeyboardButton("⚙️ SETTINGS", callback_data="user_settings"), InlineKeyboardButton("❓ HELP", callback_data="show_help")],
+
+    keyboard = [
+        [InlineKeyboardButton("🎮 All Games", callback_data="all_games")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ])
-    
+    ]
+
     if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     else:
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
 # --- Mini App Command ---
 async def mini_app_centre_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1389,13 +1348,53 @@ async def redeem_start_callback(update: Update, context: ContextTypes.DEFAULT_TY
     await query.message.reply_text("🎁 Enter your redeem code below:")
     return REDEEM_CODE_INPUT
 
+# --- Statistics Handler ---
+async def show_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show user statistics: balance, games played, total wagered, total won, withdrawals."""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    user = await get_user(user_id)
+    if not user:
+        await query.answer("User not found.", show_alert=True)
+        return
+    balance = await format_usd(user['balance'])
+    total_wagered = await format_usd(user['total_wagered'])
+    total_won = await format_usd(user['total_won'])
+    withdrawals = await get_user_withdrawals(user_id, 100)
+    total_withdrawn = sum(w['amount_usd'] for w in withdrawals if w['status'] == 'completed')
+    text = (
+        f"📊 <b>Your Casino Statistics</b> 📊\n\n"
+        f"💰 <b>Balance:</b> {balance}\n"
+        f"🎮 <b>Games Played:</b> {user['games_played']}\n"
+        f"💸 <b>Total Wagered:</b> {total_wagered}\n"
+        f"🏆 <b>Total Won:</b> {total_won}\n"
+        f"💵 <b>Total Withdrawn:</b> ${total_withdrawn:.2f}\n"
+    )
+    keyboard = [
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+# --- Help Handler ---
+async def help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show help panel as a callback."""
+    query = update.callback_query
+    await query.answer()
+    help_text = f"""
+🎰 <b>CASINO BOT HELP</b> 🎰\n\n<b>Commands:</b>\n/start - Main panel\n/app - Mini App Centre\n/help - This help\n\n<b>Features:</b>\n🚀 <b>WebApp Integration</b> - Play in full browser\n🎮 <b>Classic Casino</b> - Slots, Blackjack, Roulette\n🎯 <b>Inline Games</b> - Quick coin flip, mini games\n💰 <b>Balance System</b> - Earn and spend chips\n\n<b>WebApp Status:</b>\n• URL: {WEBAPP_URL}\n• Enabled: {'✅ Yes' if WEBAPP_ENABLED else '❌ No'}\n\nReady to play? Use /start!\n"""
+    keyboard = [
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    await query.edit_message_text(help_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
 # --- Main Callback Handler ---
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle all callback queries"""
     query = update.callback_query
     await query.answer()
     data = query.data
-    
+
     try:
         # Main navigation
         if data == "main_panel":
@@ -1412,14 +1411,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await deposit_crypto_start(update, context)
         elif data == "withdraw_crypto":
             await withdraw_crypto_start(update, context)
-        
-        # Game categories
-        elif data == "classic_casino":
-            await classic_casino_callback(update, context)
-        elif data == "inline_games":
-            await inline_games_callback(update, context)
-        
-        # Individual games
+        elif data == "withdrawal_history":
+            await withdrawal_history_callback(update, context)
+        elif data == "redeem_panel":
+            await redeem_panel_callback(update, context)
+        elif data == "redeem_start":
+            await redeem_start_callback(update, context)
         elif data == "play_slots":
             await play_slots_callback(update, context)
         elif data.startswith("slots_bet_"):
@@ -1428,29 +1425,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await coin_flip_callback(update, context)
         elif data.startswith("coinflip_"):
             await handle_coinflip_bet(update, context)
-        
-        # Deposit and withdraw
-        elif data == "deposit":
-            await deposit_callback(update, context)
-        elif data == "withdraw":
-            await withdraw_callback(update, context)
-        elif data == "withdrawal_history":
-            await withdrawal_history_callback(update, context)
-        
-        # Redeem code
-        elif data == "redeem_code":
-            await redeem_command(update, context)
-        elif data == "redeem_panel":
-            await redeem_panel_callback(update, context)
-        elif data == "redeem_start":
-            return await redeem_start_callback(update, context)
-        
-        # Placeholder handlers
+        elif data == "show_stats":
+            await show_stats_callback(update, context)
+        elif data == "show_help":
+            await help_callback(update, context)
         else:
             await placeholder_callback(update, context)
-            
     except Exception as e:
-        logger.error(f"Error handling callback {data}: {e}")
+        logger.error(f"Callback error: {e}")
         await query.answer("❌ An error occurred. Please try again.", show_alert=True)
 
 # --- Bot Commands ---
