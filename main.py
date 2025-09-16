@@ -1311,7 +1311,7 @@ async def create_redeem_code(value_ltc: float, created_by: int) -> str:
         await db.commit()
     return code
 
-async def get_redeem_code_info(code: str) -> dict | None:
+async def get_redeem_code_info(code: str) -> Optional[dict]:
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cur = await db.execute("SELECT * FROM redeem_codes WHERE code = ?", (code,))
