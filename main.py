@@ -52,6 +52,13 @@ from telegram.error import TelegramError, BadRequest, Forbidden, NetworkError
 # Import nest_asyncio for event loop compatibility
 import nest_asyncio
 
+# Logging setup - Must be at the top before any code that uses logger
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
+
 # --- Config ---
 load_dotenv()
 # Load additional environment from env.litecoin file
@@ -257,13 +264,6 @@ MIN_WITHDRAWAL_USD = float(os.environ.get("MIN_WITHDRAWAL_USD", "1.00"))
 MAX_WITHDRAWAL_USD_DAILY = float(os.environ.get("MAX_WITHDRAWAL_USD_DAILY", "10000.00"))
 WITHDRAWAL_FEE_PERCENT = float(os.environ.get("WITHDRAWAL_FEE_PERCENT", "0.02"))  # 2% withdrawal fee
 WITHDRAWAL_COOLDOWN_SECONDS = int(os.environ.get("WITHDRAWAL_COOLDOWN_SECONDS", "300"))  # 5 minutes between withdrawals
-
-# Logging
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
-)
-logger = logging.getLogger(__name__)
 
 # Import CryptoBot utilities
 try:
