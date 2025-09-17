@@ -108,12 +108,9 @@ CRYPTO_ADDRESS_PATTERNS = {
 
 async def create_crypto_invoice(asset: str, amount: float, user_id: int, payload: dict = None) -> dict:
     """Create a crypto invoice using CryptoBot integration."""
-    from bot.utils.cryptobot import create_litecoin_invoice
     try:
-        if asset.upper() == 'LTC':
-            return await create_litecoin_invoice(amount, user_id, payload=payload)
-        # Add more assets as needed
-        return {"ok": False, "error": "Unsupported asset"}
+        from bot.utils.cryptobot import create_crypto_invoice as cryptobot_create_invoice
+        return await cryptobot_create_invoice(asset, amount, user_id, payload=payload)
     except Exception as e:
         logger.error(f"create_crypto_invoice error: {e}")
         return {"ok": False, "error": str(e)}
@@ -183,12 +180,9 @@ async def update_withdrawal_status(withdrawal_id: int, status: str, transaction_
 
 async def send_crypto(address: str, amount: float, comment: str, asset: str = 'LTC') -> dict:
     """Send crypto to a user using CryptoBot integration."""
-    from bot.utils.cryptobot import send_litecoin
     try:
-        if asset.upper() == 'LTC':
-            return await send_litecoin(address, amount, comment)
-        # Add more assets as needed
-        return {"ok": False, "error": "Unsupported asset"}
+        from bot.utils.cryptobot import send_crypto as cryptobot_send_crypto
+        return await cryptobot_send_crypto(asset, address, amount, comment)
     except Exception as e:
         logger.error(f"send_crypto error: {e}")
         return {"ok": False, "error": str(e)}
@@ -1459,21 +1453,18 @@ async def enhanced_start_command(update: Update, context: ContextTypes.DEFAULT_T
     user = update.effective_user
     user_id = user.id
     username = user.username or user.first_name
-    
     try:
         user_data = await get_user(user_id)
         if not user_data:
             user_data = await create_user(user_id, username)
-        
-        balance_usd = await format_usd(user_data['balance'])
-        
-        # Check if user is owner or admin
-        status_text = ""
+        # If user is owner, show owner panel immediately
         if is_owner(user_id):
-            status_text = "👑 <b>OWNER</b> • "
-        elif is_admin(user_id):
+            await owner_panel_callback(update, context)
+            return
+        balance_usd = await format_usd(user_data['balance'])
+        status_text = ""
+        if is_admin(user_id):
             status_text = "🔑 <b>ADMIN</b> • "
-        
         text = (
             f"🎰 <b>CASINO BOT v{BOT_VERSION}</b> 🎰\n\n"
             f"👋 Welcome, {status_text}{username}!\n\n"
@@ -1482,40 +1473,21 @@ async def enhanced_start_command(update: Update, context: ContextTypes.DEFAULT_T
             f"🎮 <b>Supported Assets:</b> LTC, TON, SOL\n\n"
             "Choose an action below:"
         )
-        
         keyboard = [
             [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"), InlineKeyboardButton("💰 Balance", callback_data="show_balance")],
             [InlineKeyboardButton("💳 Deposit", callback_data="deposit"), InlineKeyboardButton("💸 Withdraw", callback_data="withdraw")],
             [InlineKeyboardButton("🎁 Redeem", callback_data="redeem_panel"), InlineKeyboardButton("ℹ️ Help", callback_data="show_help")],
             [InlineKeyboardButton("📊 Statistics", callback_data="show_stats")]
         ]
-        
-        # Add admin panel for admins and owner panel for owner
-        if is_owner(user_id):
-            keyboard.append([InlineKeyboardButton("👑 Owner Panel", callback_data="owner_panel"), InlineKeyboardButton("⚙️ Admin Panel", callback_data="admin_panel")])
-        elif is_admin(user_id):
+        if is_admin(user_id):
             keyboard.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="admin_panel")])
-        
-        # Edit the message if possible, otherwise send a new one
         if hasattr(update, 'callback_query') and update.callback_query:
             try:
-                await update.callback_query.edit_message_text(
-                    text,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode=ParseMode.HTML
-                )
+                await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
             except Exception as e:
-                logger.error(f"Failed to edit message in start_command: {e}")
-                message = getattr(update, 'message', None) or getattr(getattr(update, 'callback_query', None), 'message', None)
-                if message:
-                    await message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+                await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
         else:
-            message = getattr(update, 'message', None) or getattr(getattr(update, 'callback_query', None), 'message', None)
-            if message:
-                await message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-            else:
-                logger.error("No message object found in update for start_command")
-                
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.error(f"Error in start command: {e}")
         await update.message.reply_text("❌ Welcome! There was an issue loading your data. Please try again.")
