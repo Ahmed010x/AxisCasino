@@ -44,7 +44,7 @@ from telegram.ext import (
     ConversationHandler
 )
 import nest_asyncio
-from telegram.error import TelegramError, BadRequest, Forbidden
+from telegram.error import TelegramError, BadRequest, Forbidden, NetworkError
 
 # --- Config ---
 load_dotenv()
@@ -1794,3 +1794,51 @@ async def ask_deposit_amount(update: Update, context: ContextTypes.DEFAULT_TYPE,
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     else:
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+def main():
+    import nest_asyncio
+    nest_asyncio.apply()
+    try:
+        asyncio.run(run_bot())
+    except RuntimeError as e:
+        # Handles 'asyncio.run() cannot be called from a running event loop' (e.g. in Jupyter)
+        logging.error(f"RuntimeError: {e}. Trying alternative event loop policy.")
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(run_bot())
+
+async def run_bot():
+    while True:
+        try:
+            # Import and build your Application here to avoid multiple instances
+            from telegram.ext import ApplicationBuilder
+            application = ApplicationBuilder().token(BOT_TOKEN).build()
+
+            # Register handlers, etc.
+            # --- Command Handlers ---
+            application.add_handler(CommandHandler("start", start_command))
+            application.add_handler(CommandHandler("app", mini_app_centre_command))
+            
+            # --- Callback Query Handlers ---
+            application.add_handler(CallbackQueryHandler(classic_casino_callback, pattern="^classic_casino$"))
+            application.add_handler(CallbackQueryHandler(play_slots_callback, pattern="^play_slots$"))
+            application.add_handler(CallbackQueryHandler(coin_flip_callback, pattern="^coin_flip$"))
+            application.add_handler(CallbackQueryHandler(play_dice_callback, pattern="^play_dice$"))
+            application.add_handler(CallbackQueryHandler(show_mini_app_centre, pattern="^mini_app_centre$"))
+            
+            # --- Admin / Owner Commands ---
+            application.add_handler(CommandHandler("admin", show_stats_callback))
+            application.add_handler(CommandHandler("demo", admin_toggle_demo_callback))
+            
+            # --- Fallback for unknown callbacks ---
+            application.add_handler(CallbackQueryHandler(lambda u, c: c.bot.answer_callback_query(u.callback_query.id), pattern="^unknown$"))
+            
+            # --- Error Handlers ---
+            application.add_error_handler(lambda update, context: logger.error(f"Update {update} caused error {context.error}"))
+            
+            await application.run_polling()
+        except NetworkError as e:
+            logging.error(f"NetworkError: {e}. Retrying in 10 seconds...")
+            time.sleep(10)
+        except Exception as e:
+            logging.error(f"Unhandled exception: {e}. Retrying in 10 seconds...")
+            time.sleep(10)
