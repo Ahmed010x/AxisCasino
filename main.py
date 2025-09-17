@@ -1,6 +1,6 @@
 # bot.py
 """
-Enhanced Telegram Casino Bot v2.0
+Enhanced Telegram Casino Bot v2.1
 Professional-grade casino with security, anti-fraud, and comprehensive features.
 Stake-style interface with advanced game mechanics and user protection.
 """
@@ -43,8 +43,10 @@ from telegram.ext import (
     filters,
     ConversationHandler
 )
-import nest_asyncio
 from telegram.error import TelegramError, BadRequest, Forbidden, NetworkError
+
+# Import nest_asyncio for event loop compatibility
+import nest_asyncio
 
 # --- Config ---
 load_dotenv()
@@ -53,6 +55,9 @@ load_dotenv("env.litecoin")
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 DB_PATH = os.environ.get("CASINO_DB", "casino.db")
+
+# Global demo mode flag
+DEMO_MODE = os.environ.get("DEMO_MODE", "false").lower() == "true"
 
 # CryptoBot configuration
 CRYPTOBOT_API_TOKEN = os.environ.get("CRYPTOBOT_API_TOKEN")
@@ -829,7 +834,10 @@ async def deposit_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TY
     try:
         usd_amount = float(update.message.text.strip())
         if usd_amount < 0.50:
-            raise ValueError("Amount too small")
+            await update.message.reply_text(
+                f"❌ Minimum deposit is $0.50. Please enter a valid amount for {asset_name}:"
+            )
+            return DEPOSIT_LTC_AMOUNT
     except Exception:
         await update.message.reply_text(
             f"❌ Invalid amount. Please enter a valid USD amount (min $0.50) for {asset_name}:"
@@ -1564,7 +1572,7 @@ async def check_withdrawal_limits(user_id: int, usd_amount: float) -> dict:
             
             # Check cooldown period
             if last_withdrawal:
-                last_time = datetime.fromisolat(last_withdrawal)
+                last_time = datetime.fromisoformat(last_withdrawal)
                 time_diff = (datetime.now() - last_time).total_seconds()
                 if time_diff < WITHDRAWAL_COOLDOWN_SECONDS:
                     remaining_minutes = int((WITHDRAWAL_COOLDOWN_SECONDS - time_diff) / 60)
@@ -1667,92 +1675,57 @@ def calculate_withdrawal_fee(amount: float) -> float:
     """Calculate withdrawal fee based on configured percent."""
     return amount * WITHDRAWAL_FEE_PERCENT
 
-async def check_withdrawal_limits(user_id: int, amount_usd: float) -> dict:
-    """Check if withdrawal is within daily limits"""
-    today = datetime.now().strftime("%Y-%m-%d")
+# --- Deposit Asset Handlers ---
+async def deposit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle deposit selection"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    user = await get_user(user_id)
     
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        cur = await db.execute("""
-            SELECT * FROM daily_withdrawal_limits 
-            WHERE user_id = ? AND date = ?
-        """, (user_id, today))
-        limit_row = await cur.fetchone()
-        
-        if limit_row:
-            total_withdrawn = limit_row['total_withdrawn_usd']
-            withdrawal_count = limit_row['withdrawal_count']
-            last_withdrawal = limit_row['last_withdrawal_time']
-            
-            # Check daily limit
-            if total_withdrawn + amount_usd > MAX_WITHDRAWAL_USD_DAILY:
-                return {
-                    'allowed': False,
-                    'reason': f"Daily withdrawal limit exceeded. Limit: ${MAX_WITHDRAWAL_USD_DAILY:.2f}, Used: ${total_withdrawn:.2f}"
-                }
-            
-            # Check cooldown
-            if last_withdrawal:
-                last_time = datetime.fromisoformat(last_withdrawal)
-                cooldown_end = last_time + timedelta(seconds=WITHDRAWAL_COOLDOWN_SECONDS)
-                if datetime.now() < cooldown_end:
-                    remaining = (cooldown_end - datetime.now()).seconds
-                    return {
-                        'allowed': False,
-                        'reason': f"Withdrawal cooldown active. Please wait {remaining} seconds."
-                    }
-        
-        return {'allowed': True, 'reason': 'OK'}
-
-async def update_withdrawal_limits(user_id: int, amount_usd: float):
-    """Update daily withdrawal limits after successful withdrawal"""
-    today = datetime.now().strftime("%Y-%m-%d")
-    current_time = datetime.now().isoformat()
+    balance_usd = await format_usd(user['balance'])
     
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
-            INSERT OR REPLACE INTO daily_withdrawal_limits 
-            (user_id, date, total_withdrawn_usd, withdrawal_count, last_withdrawal_time)
-            VALUES (
-                ?,
-                ?,
-                COALESCE((SELECT total_withdrawn_usd FROM daily_withdrawal_limits WHERE user_id = ? AND date = ?), 0) + ?,
-                COALESCE((SELECT withdrawal_count FROM daily_withdrawal_limits WHERE user_id = ? AND date = ?), 0) + 1,
-                ?
-            )
-        """, (user_id, today, user_id, today, amount_usd, user_id, today, current_time))
-        await db.commit()
+    text = f"""
+💳 **DEPOSIT FUNDS** 💳
 
-async def update_withdrawal_status(withdrawal_id: int, status: str, transaction_id: str = '', error_message: str = ''):
-    """Update withdrawal status in database"""
-    processed_at = datetime.now().isoformat() if status in ['completed', 'failed'] else ''
+💰 **Current Balance:** {balance_usd}
+👤 **Player:** {user['username']}
+
+🪙 **Supported Cryptocurrencies:**
+Choose your preferred deposit method:
+
+• **Litecoin (LTC)** - Fast & Low Fees
+• **Toncoin (TON)** - Telegram Native
+• **Solana (SOL)** - Ultra Fast
+
+💡 **All deposits are processed instantly via CryptoBot**
+"""
     
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
-            UPDATE withdrawals 
-            SET status = ?, transaction_id = ?, error_message = ?, processed_at = ?
-            WHERE id = ?
-        """, (status, transaction_id, error_message, processed_at, withdrawal_id))
-        await db.commit()
-
-async def log_withdrawal_attempt(user_id: int, amount_ltc: float, amount_usd: float, 
-                               fee_ltc: float, fee_usd: float, to_address: str) -> int:
-    """Log withdrawal attempt and return withdrawal ID"""
-    current_time = datetime.now().isoformat()
+    keyboard = [
+        [
+            InlineKeyboardButton("Ł Deposit LTC", callback_data="deposit_ltc"),
+            InlineKeyboardButton("🪙 Deposit TON", callback_data="deposit_ton"),
+            InlineKeyboardButton("◎ Deposit SOL", callback_data="deposit_sol")
+        ],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
     
-    async with aiosqlite.connect(DB_PATH) as db:
-        cur = await db.execute("""
-            INSERT INTO withdrawals 
-            (user_id, amount_ltc, amount_usd, fee_ltc, fee_usd, to_address, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (user_id, amount_ltc, amount_usd, fee_ltc, fee_usd, to_address, current_time))
-        withdrawal_id = cur.lastrowid
-        await db.commit()
-        return withdrawal_id
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
-# --- Deposit Utility Functions ---
+async def deposit_ltc_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle LTC deposit selection"""
+    await ask_deposit_amount(update, context, "LTC")
+
+async def deposit_ton_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle TON deposit selection"""  
+    await ask_deposit_amount(update, context, "TON")
+
+async def deposit_sol_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle SOL deposit selection"""
+    await ask_deposit_amount(update, context, "SOL")
+
 async def ask_deposit_amount(update: Update, context: ContextTypes.DEFAULT_TYPE, asset: str):
-    """Handle deposit amount selection for specified asset"""
+    """Ask user for deposit amount for specified crypto asset"""
     context.user_data['deposit_asset'] = asset
     user_id = update.effective_user.id
     user = await get_user(user_id)
@@ -1768,77 +1741,187 @@ async def ask_deposit_amount(update: Update, context: ContextTypes.DEFAULT_TYPE,
         f"{asset_emoji} <b>{asset_name} Deposit</b>\n\n"
         f"💰 <b>Current Balance:</b> {balance_usd}\n"
         f"📊 <b>Current {asset} Rate:</b> ${asset_rate:.2f}\n\n"
-        f"💡 <b>Choose deposit amount:</b>\n"
-        f"Select an amount below or tap 'Custom Amount' for other values."
+        f"📋 <b>Deposit Details:</b>\n"
+        f"• Minimum: $0.50\n"
+        f"• Maximum: No limit\n"
+        f"• No fees on deposits!\n\n"
+        f"💡 <b>Note:</b> You'll receive exact USD value based on current rate\n\n"
+        f"Enter the amount in <b>USD</b> you want to deposit:"
     )
     
-    keyboard = [
-        [
-            InlineKeyboardButton("💰 $10 USD", callback_data=f"deposit_{asset.lower()}_10"),
-            InlineKeyboardButton("💰 $25 USD", callback_data=f"deposit_{asset.lower()}_25")
-        ],
-        [
-            InlineKeyboardButton("💰 $50 USD", callback_data=f"deposit_{asset.lower()}_50"),
-            InlineKeyboardButton("💰 $100 USD", callback_data=f"deposit_{asset.lower()}_100")
-        ],
-        [
-            InlineKeyboardButton("💰 $250 USD", callback_data=f"deposit_{asset.lower()}_250"),
-            InlineKeyboardButton("💰 $500 USD", callback_data=f"deposit_{asset.lower()}_500")
-        ],
-        [InlineKeyboardButton("✏️ Custom Amount", callback_data=f"deposit_{asset.lower()}_custom")],
-        [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
+    await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML)
+    return DEPOSIT_LTC_AMOUNT
+
+async def ask_deposit_amount_ltc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await ask_deposit_amount(update, context, "LTC")
+
+async def ask_deposit_amount_ton(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await ask_deposit_amount(update, context, "TON")
+
+async def ask_deposit_amount_sol(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await ask_deposit_amount(update, context, "SOL")
+
+# --- Handler Registration and Main Function ---
+async def register_handlers(application):
+    """Register all bot handlers"""
+    # Initialize database first
+    await init_db()
     
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-    else:
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    # --- Command Handlers ---
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("app", mini_app_centre_command))
+    application.add_handler(CommandHandler("help", show_help_callback))
+    
+    # --- Enhanced Start Command Handler ---
+    application.add_handler(CallbackQueryHandler(enhanced_start_command, pattern="^main_panel$"))
+    
+    # --- Core Game Handlers ---
+    application.add_handler(CallbackQueryHandler(show_mini_app_centre, pattern="^mini_app_centre$"))
+    application.add_handler(CallbackQueryHandler(classic_casino_callback, pattern="^classic_casino$"))
+    application.add_handler(CallbackQueryHandler(classic_casino_callback, pattern="^all_games$"))
+    application.add_handler(CallbackQueryHandler(classic_casino_callback, pattern="^inline_games$"))
+    
+    # --- Game Specific Handlers ---
+    application.add_handler(CallbackQueryHandler(play_slots_callback, pattern="^play_slots$"))
+    application.add_handler(CallbackQueryHandler(handle_slots_bet, pattern="^slots_bet_"))
+    application.add_handler(CallbackQueryHandler(coin_flip_callback, pattern="^coin_flip$"))
+    application.add_handler(CallbackQueryHandler(handle_coinflip_bet, pattern="^coinflip_"))
+    application.add_handler(CallbackQueryHandler(play_dice_callback, pattern="^play_dice$"))
+    application.add_handler(CallbackQueryHandler(dice_prediction_choose, pattern="^dice_predict_"))
+    
+    # --- Account Handlers ---
+    application.add_handler(CallbackQueryHandler(show_balance_callback, pattern="^show_balance$"))
+    application.add_handler(CallbackQueryHandler(show_stats_callback, pattern="^show_stats$"))
+    application.add_handler(CallbackQueryHandler(show_help_callback, pattern="^show_help$"))
+    
+    # --- Deposit/Withdrawal Handlers ---
+    application.add_handler(CallbackQueryHandler(deposit_callback, pattern="^deposit$"))
+    application.add_handler(CallbackQueryHandler(deposit_ltc_callback, pattern="^deposit_ltc$"))
+    application.add_handler(CallbackQueryHandler(deposit_ton_callback, pattern="^deposit_ton$"))
+    application.add_handler(CallbackQueryHandler(deposit_sol_callback, pattern="^deposit_sol$"))
+    application.add_handler(CallbackQueryHandler(withdraw_callback, pattern="^withdraw$"))
+    application.add_handler(CallbackQueryHandler(withdraw_crypto_ltc, pattern="^withdraw_crypto_ltc$"))
+    application.add_handler(CallbackQueryHandler(withdraw_crypto_ton, pattern="^withdraw_crypto_ton$"))
+    application.add_handler(CallbackQueryHandler(withdraw_crypto_sol, pattern="^withdraw_crypto_sol$"))
+    
+    # --- Admin Handlers ---
+    application.add_handler(CallbackQueryHandler(admin_panel_callback, pattern="^admin_panel$"))
+    application.add_handler(CallbackQueryHandler(admin_toggle_demo_callback, pattern="^admin_toggle_demo$"))
+    
+    # --- Conversation Handlers ---
+    dice_conversation = ConversationHandler(
+        entry_points=[CallbackQueryHandler(dice_prediction_choose, pattern="^dice_predict_")],
+        states={
+            'dice_bet_amount': [MessageHandler(filters.TEXT & ~filters.COMMAND, dice_prediction_bet_amount)]
+        },
+        fallbacks=[CommandHandler("start", start_command)],
+        per_message=False
+    )
+    application.add_handler(dice_conversation)
+    
+    deposit_conversation = ConversationHandler(
+        entry_points=[CallbackQueryHandler(ask_deposit_amount_ltc, pattern="^deposit_ltc_custom$"),
+                     CallbackQueryHandler(ask_deposit_amount_ton, pattern="^deposit_ton_custom$"),
+                     CallbackQueryHandler(ask_deposit_amount_sol, pattern="^deposit_sol_custom$")],
+        states={
+            DEPOSIT_LTC_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, deposit_crypto_amount)]
+        },
+        fallbacks=[CommandHandler("start", start_command)],
+        per_message=False
+    )
+    application.add_handler(deposit_conversation)
+    
+    withdrawal_conversation = ConversationHandler(
+        entry_points=[CallbackQueryHandler(ask_withdraw_amount, pattern="^withdraw_crypto_")],
+        states={
+            WITHDRAW_LTC_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_crypto_amount)],
+            WITHDRAW_LTC_ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_crypto_address)]
+        },
+        fallbacks=[CommandHandler("start", start_command)],
+        per_message=False
+    )
+    application.add_handler(withdrawal_conversation)
+    
+    # --- Error Handler ---
+    async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Log the error and send a telegram message to notify the developer."""
+        logger.error("Exception while handling an update:", exc_info=context.error)
+        
+        # Try to send error message to user if possible
+        if update and hasattr(update, 'effective_user'):
+            try:
+                if hasattr(update, 'callback_query') and update.callback_query:
+                    await update.callback_query.answer("❌ An error occurred. Please try again.", show_alert=True)
+                elif hasattr(update, 'message') and update.message:
+                    await update.message.reply_text("❌ An error occurred. Please try again later.")
+            except Exception as e:
+                logger.error(f"Could not send error message to user: {e}")
+    
+    application.add_error_handler(error_handler)
 
 def main():
-    import nest_asyncio
+    """Main function to run the bot"""
+    # Apply nest_asyncio for compatibility
     nest_asyncio.apply()
+    
+    # Check for required environment variables
+    if not BOT_TOKEN:
+        print("❌ Error: BOT_TOKEN not found in environment variables")
+        print("Please set BOT_TOKEN in your .env file or environment")
+        sys.exit(1)
+    
+    print("🎰 Starting Casino Bot with Multi-Asset Support...")
+    print(f"🚀 WebApp URL: {WEBAPP_URL}")
+    print(f"✅ WebApp Enabled: {WEBAPP_ENABLED}")
+    print(f"🔧 Demo Mode: {DEMO_MODE}")
+    
+    # Start the bot
     try:
         asyncio.run(run_bot())
-    except RuntimeError as e:
-        # Handles 'asyncio.run() cannot be called from a running event loop' (e.g. in Jupyter)
-        logging.error(f"RuntimeError: {e}. Trying alternative event loop policy.")
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(run_bot())
+    except KeyboardInterrupt:
+        print("\n🛑 Bot stopped by user")
+    except Exception as e:
+        print(f"❌ Fatal error: {e}")
+        sys.exit(1)
 
 async def run_bot():
-    while True:
+    """Run the bot with retry logic for network errors"""
+    retry_count = 0
+    max_retries = 10
+    
+    while retry_count < max_retries:
         try:
-            # Import and build your Application here to avoid multiple instances
-            from telegram.ext import ApplicationBuilder
+            # Build application
             application = ApplicationBuilder().token(BOT_TOKEN).build()
-
-            # Register handlers, etc.
-            # --- Command Handlers ---
-            application.add_handler(CommandHandler("start", start_command))
-            application.add_handler(CommandHandler("app", mini_app_centre_command))
             
-            # --- Callback Query Handlers ---
-            application.add_handler(CallbackQueryHandler(classic_casino_callback, pattern="^classic_casino$"))
-            application.add_handler(CallbackQueryHandler(play_slots_callback, pattern="^play_slots$"))
-            application.add_handler(CallbackQueryHandler(coin_flip_callback, pattern="^coin_flip$"))
-            application.add_handler(CallbackQueryHandler(play_dice_callback, pattern="^play_dice$"))
-            application.add_handler(CallbackQueryHandler(show_mini_app_centre, pattern="^mini_app_centre$"))
+            # Register all handlers
+            await register_handlers(application)
             
-            # --- Admin / Owner Commands ---
-            application.add_handler(CommandHandler("admin", show_stats_callback))
-            application.add_handler(CommandHandler("demo", admin_toggle_demo_callback))
+            print("✅ Bot handlers registered successfully")
+            print("🚀 Starting polling...")
             
-            # --- Fallback for unknown callbacks ---
-            application.add_handler(CallbackQueryHandler(lambda u, c: c.bot.answer_callback_query(u.callback_query.id), pattern="^unknown$"))
+            # Start polling
+            await application.run_polling(
+                drop_pending_updates=True,
+                allowed_updates=['message', 'callback_query', 'inline_query']
+            )
             
-            # --- Error Handlers ---
-            application.add_error_handler(lambda update, context: logger.error(f"Update {update} caused error {context.error}"))
-            
-            await application.run_polling()
         except NetworkError as e:
-            logging.error(f"NetworkError: {e}. Retrying in 10 seconds...")
-            time.sleep(10)
+            retry_count += 1
+            wait_time = min(30, 5 * retry_count)  # Exponential backoff up to 30s
+            print(f"🌐 Network error (attempt {retry_count}/{max_retries}): {e}")
+            print(f"⏳ Retrying in {wait_time} seconds...")
+            await asyncio.sleep(wait_time)
+            
         except Exception as e:
-            logging.error(f"Unhandled exception: {e}. Retrying in 10 seconds...")
-            time.sleep(10)
+            retry_count += 1
+            wait_time = min(60, 10 * retry_count)  # Exponential backoff up to 60s
+            print(f"❌ Unexpected error (attempt {retry_count}/{max_retries}): {e}")
+            print(f"⏳ Retrying in {wait_time} seconds...")
+            await asyncio.sleep(wait_time)
+    
+    print(f"❌ Failed to start bot after {max_retries} attempts")
+    sys.exit(1)
+
+if __name__ == "__main__":
+    main()
