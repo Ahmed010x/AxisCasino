@@ -35,6 +35,7 @@ from telegram import (
 )
 from telegram.constants import ParseMode
 from telegram.ext import (
+    Application,
     ApplicationBuilder,
     CommandHandler,
     CallbackQueryHandler,
@@ -735,7 +736,8 @@ async def dice_prediction_bet_amount(update: Update, context: ContextTypes.DEFAU
     try:
         bet_usd = float(update.message.text.strip())
         if bet_usd <= 0:
-            raise ValueError
+            await update.message.reply_text("❌ Invalid amount. Enter a positive USD amount:")
+            return 'dice_bet_amount'
     except Exception:
         await update.message.reply_text("❌ Invalid amount. Enter a positive USD amount:")
         return 'dice_bet_amount'
@@ -1751,3 +1753,161 @@ async def ask_deposit_amount(update: Update, context: ContextTypes.DEFAULT_TYPE,
     
     await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML)
     return DEPOSIT_LTC_AMOUNT
+
+async def ask_deposit_amount_ltc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Helper function for LTC deposit amount"""
+    return await ask_deposit_amount(update, context, "LTC")
+
+async def ask_deposit_amount_ton(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Helper function for TON deposit amount"""
+    return await ask_deposit_amount(update, context, "TON")
+
+async def ask_deposit_amount_sol(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Helper function for SOL deposit amount"""
+    return await ask_deposit_amount(update, context, "SOL")
+
+# --- Handler Registration and Main Function ---
+async def register_handlers(application):
+    """Register all bot handlers"""
+    # Initialize database first
+    await init_db()
+    
+    # --- Command Handlers ---
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("app", mini_app_centre_command))
+    application.add_handler(CommandHandler("help", show_help_callback))
+    
+    # --- Enhanced Start Command Handler ---
+    application.add_handler(CallbackQueryHandler(enhanced_start_command, pattern="^main_panel$"))
+    
+    # --- Core Game Handlers ---
+    application.add_handler(CallbackQueryHandler(show_mini_app_centre, pattern="^mini_app_centre$"))
+    application.add_handler(CallbackQueryHandler(classic_casino_callback, pattern="^classic_casino$"))
+    application.add_handler(CallbackQueryHandler(classic_casino_callback, pattern="^all_games$"))
+    application.add_handler(CallbackQueryHandler(classic_casino_callback, pattern="^inline_games$"))
+    
+    # --- Game Specific Handlers ---
+    application.add_handler(CallbackQueryHandler(play_slots_callback, pattern="^play_slots$"))
+    application.add_handler(CallbackQueryHandler(handle_slots_bet, pattern="^slots_bet_"))
+    application.add_handler(CallbackQueryHandler(coin_flip_callback, pattern="^coin_flip$"))
+    application.add_handler(CallbackQueryHandler(handle_coinflip_bet, pattern="^coinflip_"))
+    application.add_handler(CallbackQueryHandler(play_dice_callback, pattern="^play_dice$"))
+    application.add_handler(CallbackQueryHandler(dice_prediction_choose, pattern="^dice_predict_"))
+    
+    # --- Account Handlers ---
+    application.add_handler(CallbackQueryHandler(show_balance_callback, pattern="^show_balance$"))
+    application.add_handler(CallbackQueryHandler(show_stats_callback, pattern="^show_stats$"))
+    application.add_handler(CallbackQueryHandler(show_help_callback, pattern="^show_help$"))
+    
+    # --- Deposit/Withdrawal Handlers ---
+    application.add_handler(CallbackQueryHandler(deposit_callback, pattern="^deposit$"))
+    application.add_handler(CallbackQueryHandler(deposit_ltc_callback, pattern="^deposit_ltc$"))
+    application.add_handler(CallbackQueryHandler(deposit_ton_callback, pattern="^deposit_ton$"))
+    application.add_handler(CallbackQueryHandler(deposit_sol_callback, pattern="^deposit_sol$"))
+    application.add_handler(CallbackQueryHandler(withdraw_callback, pattern="^withdraw$"))
+    application.add_handler(CallbackQueryHandler(withdraw_crypto_ltc, pattern="^withdraw_crypto_ltc$"))
+    application.add_handler(CallbackQueryHandler(withdraw_crypto_ton, pattern="^withdraw_crypto_ton$"))
+    application.add_handler(CallbackQueryHandler(withdraw_crypto_sol, pattern="^withdraw_crypto_sol$"))
+    
+    # --- Admin Handlers ---
+    application.add_handler(CallbackQueryHandler(admin_panel_callback, pattern="^admin_panel$"))
+    application.add_handler(CallbackQueryHandler(admin_toggle_demo_callback, pattern="^admin_toggle_demo$"))
+    
+    # --- Conversation Handlers ---
+    dice_conversation = ConversationHandler(
+        entry_points=[CallbackQueryHandler(dice_prediction_choose, pattern="^dice_predict_")],
+        states={
+            'dice_bet_amount': [MessageHandler(filters.TEXT & ~filters.COMMAND, dice_prediction_bet_amount)]
+        },
+        fallbacks=[CommandHandler("start", start_command)],
+        per_message=False
+    )
+    application.add_handler(dice_conversation)
+    
+    deposit_conversation = ConversationHandler(
+        entry_points=[CallbackQueryHandler(ask_deposit_amount_ltc, pattern="^deposit_ltc$"),
+                     CallbackQueryHandler(ask_deposit_amount_ton, pattern="^deposit_ton$"),
+                     CallbackQueryHandler(ask_deposit_amount_sol, pattern="^deposit_sol$")],
+        states={
+            DEPOSIT_LTC_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, deposit_crypto_amount)]
+        },
+        fallbacks=[CommandHandler("start", start_command)],
+        per_message=False
+    )
+    application.add_handler(deposit_conversation)
+    
+    withdrawal_conversation = ConversationHandler(
+        entry_points=[CallbackQueryHandler(ask_withdraw_amount, pattern="^withdraw_crypto_")],
+        states={
+            WITHDRAW_LTC_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_crypto_amount)],
+            WITHDRAW_LTC_ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_crypto_address)]
+        },
+        fallbacks=[CommandHandler("start", start_command)],
+        per_message=False
+    )
+    application.add_handler(withdrawal_conversation)
+    
+    # --- Error Handler ---
+    async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Log the error and send a telegram message to notify the developer."""
+        logger.error("Exception while handling an update:", exc_info=context.error)
+        
+        # Try to send error message to user if possible
+        if update and hasattr(update, 'effective_user'):
+            try:
+                await update.message.reply_text("❌ An error occurred. Please try again later.")
+            except:
+                pass
+    
+    application.add_error_handler(error_handler)
+
+def main():
+    """Main function to run the bot"""
+    # Apply nest_asyncio for compatibility
+    nest_asyncio.apply()
+    
+    # Check for required environment variables
+    if not BOT_TOKEN:
+        print("❌ ERROR: BOT_TOKEN not found in environment variables!")
+        return
+    
+    print("🎰 Starting Casino Bot with Multi-Asset Support...")
+    print(f"🚀 WebApp URL: {WEBAPP_URL}")
+    print(f"✅ WebApp Enabled: {WEBAPP_ENABLED}")
+    print(f"🔧 Demo Mode: {DEMO_MODE}")
+    
+    # Start the bot
+    try:
+        asyncio.run(run_bot())
+    except KeyboardInterrupt:
+        print("\n👋 Bot stopped by user")
+    except Exception as e:
+        print(f"❌ Critical error: {e}")
+
+async def run_bot():
+    """Run the bot with retry logic for network errors"""
+    retry_count = 0
+    max_retries = 10
+    
+    while retry_count < max_retries:
+        try:
+            application = Application.builder().token(BOT_TOKEN).build()
+            await register_handlers(application)
+            print(f"✅ Bot started successfully (attempt {retry_count + 1})")
+            await application.run_polling(allowed_updates=Update.ALL_TYPES)
+            break
+        except Exception as e:
+            retry_count += 1
+            wait_time = min(retry_count * 2, 30)
+            print(f"❌ Bot start failed (attempt {retry_count}/{max_retries}): {e}")
+            if retry_count < max_retries:
+                print(f"⏳ Retrying in {wait_time} seconds...")
+                await asyncio.sleep(wait_time)
+            else:
+                print("❌ Max retries reached. Bot failed to start.")
+                break
+    
+    print(f"❌ Failed to start bot after {max_retries} attempts")
+
+if __name__ == "__main__":
+    main()
