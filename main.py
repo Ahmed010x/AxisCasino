@@ -802,10 +802,16 @@ async def deposit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "💳 <b>Deposit</b>\n\n"
         "Choose your deposit method below.\n\n"
-        "• Litecoin (CryptoBot, instant)\n"
+        "• Litecoin (LTC)\n"
+        "• Toncoin (TON)\n"
+        "• Solana (SOL)\n"
     )
     keyboard = [
-        [InlineKeyboardButton("Ł Litecoin (CryptoBot)", callback_data="deposit_crypto")],
+        [
+            InlineKeyboardButton("Ł Litecoin (LTC)", callback_data="deposit_crypto_ltc"),
+            InlineKeyboardButton("🪙 Toncoin (TON)", callback_data="deposit_crypto_ton"),
+            InlineKeyboardButton("◎ Solana (SOL)", callback_data="deposit_crypto_sol")
+        ],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
