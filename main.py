@@ -510,7 +510,7 @@ async def add_winnings(user_id: int, amount: float):
         await db.execute("""
             UPDATE users SET 
                 balance = balance + ?, 
-                total_won = total_won + ? 
+                total_won = total_w
             WHERE id = ?
         """, (amount, amount, user_id))
         await db.commit()
@@ -1809,3 +1809,202 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+
+# --- Main Bot Application ---
+def main():
+    """Main function to start the bot."""
+    logger.info("🚀 Starting Telegram Casino Bot...")
+    
+    # Initialize database first
+    async def init_database():
+        await init_db()
+        logger.info("✅ Database initialized")
+    
+    # Run database initialization
+    asyncio.run(init_database())
+    
+    # Create the Application
+    application = Application.builder().token(BOT_TOKEN).build()
+    
+    # Add all handlers
+    
+    # Command handlers
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("balance", show_balance_callback))
+    application.add_handler(CommandHandler("app", mini_app_centre_command))
+    application.add_handler(CommandHandler("help", help_command))
+    
+    # Callback query handlers
+    application.add_handler(CallbackQueryHandler(mini_app_centre_callback, pattern="^mini_app_centre$"))
+    application.add_handler(CallbackQueryHandler(show_balance_callback, pattern="^show_balance$"))
+    application.add_handler(CallbackQueryHandler(classic_casino_callback, pattern="^classic_casino$"))
+    application.add_handler(CallbackQueryHandler(play_slots_callback, pattern="^play_slots$"))
+    application.add_handler(CallbackQueryHandler(handle_slots_bet, pattern="^slots_bet_"))
+    application.add_handler(CallbackQueryHandler(coin_flip_callback, pattern="^coin_flip$"))
+    application.add_handler(CallbackQueryHandler(handle_coinflip_bet, pattern="^coinflip_"))
+    application.add_handler(CallbackQueryHandler(play_dice_callback, pattern="^play_dice$"))
+    application.add_handler(CallbackQueryHandler(dice_prediction_choose, pattern="^dice_predict_"))
+    application.add_handler(CallbackQueryHandler(withdraw_callback, pattern="^withdraw$"))
+    application.add_handler(CallbackQueryHandler(withdraw_crypto_ltc, pattern="^withdraw_crypto_ltc$"))
+    application.add_handler(CallbackQueryHandler(withdraw_crypto_ton, pattern="^withdraw_crypto_ton$"))
+    application.add_handler(CallbackQueryHandler(withdraw_crypto_sol, pattern="^withdraw_crypto_sol$"))
+    application.add_handler(CallbackQueryHandler(show_stats_callback, pattern="^show_stats$"))
+    application.add_handler(CallbackQueryHandler(start_command, pattern="^main_panel$"))
+    
+    # Admin handlers
+    application.add_handler(CallbackQueryHandler(admin_panel_callback, pattern="^admin_panel$"))
+    application.add_handler(CallbackQueryHandler(admin_toggle_demo_callback, pattern="^admin_toggle_demo$"))
+    application.add_handler(CallbackQueryHandler(owner_panel_callback, pattern="^owner_panel$"))
+    
+    # Conversation handlers for deposit/withdrawal
+    deposit_conv_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(deposit_callback, pattern="^deposit$")],
+        states={
+            DEPOSIT_LTC_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, deposit_crypto_amount)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel_conversation)],
+    )
+    application.add_handler(deposit_conv_handler)
+    
+    withdraw_conv_handler = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(withdraw_crypto_ltc, pattern="^withdraw_crypto_ltc$"),
+            CallbackQueryHandler(withdraw_crypto_ton, pattern="^withdraw_crypto_ton$"),
+            CallbackQueryHandler(withdraw_crypto_sol, pattern="^withdraw_crypto_sol$"),
+        ],
+        states={
+            WITHDRAW_LTC_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_crypto_amount)],
+            WITHDRAW_LTC_ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_crypto_address)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel_conversation)],
+    )
+    application.add_handler(withdraw_conv_handler)
+    
+    dice_conv_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(dice_prediction_choose, pattern="^dice_predict_")],
+        states={
+            'dice_bet_amount': [MessageHandler(filters.TEXT & ~filters.COMMAND, dice_prediction_bet_amount)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel_conversation)],
+    )
+    application.add_handler(dice_conv_handler)
+    
+    # Catch-all callback handler for unhandled callbacks
+    application.add_handler(CallbackQueryHandler(default_callback_handler))
+    
+    logger.info("✅ All handlers registered")
+    logger.info(f"🎰 Casino Bot v{BOT_VERSION} is ready!")
+    logger.info(f"🔧 Admin users: {ADMIN_USER_IDS}")
+    logger.info(f"👑 Owner user: {OWNER_USER_ID}")
+    logger.info(f"🧪 Demo mode: {'ON' if DEMO_MODE else 'OFF'}")
+    
+    # Start the bot
+    application.run_polling(drop_pending_updates=True)
+
+# --- Missing Handler Functions ---
+async def deposit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle deposit requests - show asset selection"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    user = await get_user(user_id)
+    balance_usd = await format_usd(user['balance'])
+    
+    text = f"""
+💳 **DEPOSIT FUNDS** 💳
+
+💰 **Current Balance:** {balance_usd}
+👤 **Player:** {user['username']}
+
+🏦 **Choose Deposit Method:**
+
+🪙 **Supported Cryptocurrencies:**
+• Litecoin (LTC) - Fast & Low Fees
+• Toncoin (TON) - Telegram Native
+• Solana (SOL) - High Speed
+
+💡 **Benefits:**
+• Instant deposits via CryptoBot
+• Minimum deposit: $0.50
+• No deposit fees
+• Automatic balance updates
+"""
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("Ł Litecoin (LTC)", callback_data="deposit_crypto_ltc"),
+            InlineKeyboardButton("🪙 Toncoin (TON)", callback_data="deposit_crypto_ton"),
+            InlineKeyboardButton("◎ Solana (SOL)", callback_data="deposit_crypto_sol")
+        ],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+
+async def deposit_crypto_ltc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await ask_deposit_amount(update, context, asset="LTC")
+
+async def deposit_crypto_ton(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await ask_deposit_amount(update, context, asset="TON")
+
+async def deposit_crypto_sol(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await ask_deposit_amount(update, context, asset="SOL")
+
+async def ask_deposit_amount(update: Update, context: ContextTypes.DEFAULT_TYPE, asset: str):
+    context.user_data['deposit_asset'] = asset
+    asset_name = {"LTC": "Litecoin", "TON": "Toncoin", "SOL": "Solana"}.get(asset, asset)
+    asset_emoji = {"LTC": "Ł", "TON": "🪙", "SOL": "◎"}.get(asset, "💰")
+    
+    text = (
+        f"{asset_emoji} <b>{asset_name} Deposit</b>\n\n"
+        f"💰 <b>Minimum deposit:</b> $0.50\n"
+        f"⚡ <b>Processing time:</b> Instant\n"
+        f"💸 <b>Fees:</b> Free\n\n"
+        f"Enter the amount in <b>USD</b> you want to deposit:"
+    )
+    
+    await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML)
+    return DEPOSIT_LTC_AMOUNT
+
+async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancel any active conversation"""
+    await update.message.reply_text(
+        "❌ Operation cancelled.",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ])
+    )
+    return ConversationHandler.END
+
+async def default_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle unrecognized callback queries"""
+    query = update.callback_query
+    await query.answer("🚧 Feature coming soon!", show_alert=True)
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show help information"""
+    text = (
+        f"🎰 <b>CASINO BOT HELP</b> 🎰\n\n"
+        f"<b>Available Commands:</b>\n"
+        "🎮 /start - Welcome message and main menu\n"
+        "🎮 /app - Access the Mini App Centre (games, balance, etc.)\n"
+        "💰 /balance - Check your current balance\n"
+        "💳 /deposit - Deposit funds to your account\n"
+        "💸 /withdraw - Withdraw funds from your account\n"
+        "🎁 /redeem - Redeem a bonus or gift code\n"
+        "📊 /stats - View your gaming statistics\n"
+        "ℹ️ /help - Show this help message\n\n"
+        "For support, contact our support channel: @casino_support\n"
+        "Enjoy your time at the casino! 🎉"
+    )
+    
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+
+# --- Missing Callback Handlers ---
+async def mini_app_centre_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle mini app centre callback"""
+    await show_mini_app_centre(update, context)
+
+async def all_games_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show all available games"""
+    await classic_casino_callback(update, context)
