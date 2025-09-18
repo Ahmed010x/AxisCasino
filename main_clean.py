@@ -6,27 +6,30 @@ Stake-style interface with advanced game mechanics and user protection.
 """
 
 import os
-import sys
-import logging
-import asyncio
-import threading
-import time
 import random
+import asyncio
+import logging
 import hashlib
+import hmac
+import time
+import json
 import uuid
-import re
-import aiohttp
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
 from dotenv import load_dotenv
+import aiohttp
+import aiohttp.web
+import signal
+import sys
 from datetime import datetime, timedelta
 from collections import defaultdict, deque
+import threading
 from flask import Flask
 from waitress import serve
-import nest_asyncio
 
 import aiosqlite
+from bot.database.db import DATABASE_PATH
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -599,8 +602,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     if is_admin(user_id):
         keyboard.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="admin_panel")])
-    if is_owner(user_id):
-        keyboard.append([InlineKeyboardButton("👑 Owner Panel", callback_data="owner_panel")])
     
     if hasattr(update, 'callback_query') and update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
@@ -1554,10 +1555,9 @@ async def admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     
     keyboard = [
         [InlineKeyboardButton("🎮 Toggle Demo Mode", callback_data="admin_toggle_demo")],
-        [InlineKeyboardButton("📊 User Stats", callback_data="owner_user_stats")],
-        [InlineKeyboardButton("💰 Balance Report", callback_data="owner_financial")],
+        [InlineKeyboardButton("📊 User Stats", callback_data="admin_user_stats")],
+        [InlineKeyboardButton("💰 Balance Report", callback_data="admin_balance_report")],
         [InlineKeyboardButton("🔄 Refresh Stats", callback_data="admin_panel")],
-        [InlineKeyboardButton("👤 User Panel", callback_data="main_panel")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
@@ -1591,17 +1591,14 @@ async def admin_toggle_demo_callback(update: Update, context: ContextTypes.DEFAU
 
 async def owner_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Owner panel with full administrative features"""
-    query = getattr(update, "callback_query", None)
-    user = update.effective_user
-    user_id = user.id if user else None
-
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
     if not is_owner(user_id):
-        if query:
-            await query.answer("❌ Access denied. Owner only.", show_alert=True)
-        else:
-            await update.message.reply_text("❌ Access denied. Owner only.")
+        await query.answer("❌ Access denied. Owner only.", show_alert=True)
         return
-
+    
     # Get comprehensive bot statistics
     async with aiosqlite.connect(DB_PATH) as db:
         # Total users
@@ -1629,10 +1626,10 @@ async def owner_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         withdrawal_data = await cursor.fetchone()
         withdrawals_today = withdrawal_data[0] or 0
         withdrawal_amount_today = withdrawal_data[1] or 0.0
-
+    
     total_balance_usd = await format_usd(total_balance)
     total_wagered_usd = await format_usd(total_wagered)
-
+    
     text = f"""
 👑 **OWNER CONTROL PANEL** 👑
 
@@ -1647,7 +1644,9 @@ async def owner_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 • Withdrawals: {withdrawals_today} (${withdrawal_amount_today:.2f})
 
 🎮 **Bot Version:** {BOT_VERSION}
+🔧 **Admin Users:** {len(ADMIN_USER_IDS)}
 """
+    
     keyboard = [
         [InlineKeyboardButton("📊 Detailed Stats", callback_data="owner_detailed_stats")],
         [InlineKeyboardButton("👥 User Management", callback_data="owner_user_mgmt")],
@@ -1655,22 +1654,20 @@ async def owner_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         [InlineKeyboardButton("🎮 Toggle Demo Mode", callback_data="admin_toggle_demo")],
         [InlineKeyboardButton("⚙️ System Health", callback_data="owner_system_health")],
         [InlineKeyboardButton("🔄 Refresh Data", callback_data="owner_panel")],
-        [InlineKeyboardButton("👤 User Panel", callback_data="main_panel")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
-    if query:
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-    else:
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
 # --- Help and Utility Functions ---
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show help information"""
+
+
+
     text = """
 🎰 **CASINO BOT HELP** 🎰
-
-
 
 **Commands:**
 • /start - Main menu
@@ -1697,6 +1694,10 @@ Contact @casino_support for help
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
     else:
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+
+async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show help callback"""
+    await help_command(update, context)
 
 async def redeem_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle redeem panel"""
@@ -1822,8 +1823,13 @@ async def async_main():
     application.add_handler(CallbackQueryHandler(withdraw_crypto_sol, pattern="^withdraw_crypto_sol$"))
     application.add_handler(CallbackQueryHandler(start_command, pattern="^main_panel$"))
     application.add_handler(CallbackQueryHandler(redeem_panel_callback, pattern="^redeem_panel$"))
-    application.add_handler(CallbackQueryHandler(help_command, pattern="^show_help$"))
+    application.add_handler(CallbackQueryHandler(show_help, pattern="^show_help$"))
     application.add_handler(CallbackQueryHandler(show_stats_callback, pattern="^show_stats$"))
+    
+    # Deposit handlers
+    application.add_handler(CallbackQueryHandler(deposit_crypto_ltc, pattern="^deposit_crypto_ltc$"))
+    application.add_handler(CallbackQueryHandler(deposit_crypto_ton, pattern="^deposit_crypto_ton$"))
+    application.add_handler(CallbackQueryHandler(deposit_crypto_sol, pattern="^deposit_crypto_sol$"))
     
     # Admin/Owner handlers
     application.add_handler(CallbackQueryHandler(admin_panel_callback, pattern="^admin_panel$"))
@@ -1832,12 +1838,7 @@ async def async_main():
     
     # Conversation handlers for deposit/withdrawal
     deposit_conv_handler = ConversationHandler(
-        entry_points=[
-            CallbackQueryHandler(deposit_callback, pattern="^deposit$"),
-            CallbackQueryHandler(deposit_crypto_ltc, pattern="^deposit_crypto_ltc$"),
-            CallbackQueryHandler(deposit_crypto_ton, pattern="^deposit_crypto_ton$"),
-            CallbackQueryHandler(deposit_crypto_sol, pattern="^deposit_crypto_sol$"),
-        ],
+        entry_points=[CallbackQueryHandler(deposit_callback, pattern="^deposit$")],
         states={
             DEPOSIT_LTC_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, deposit_crypto_amount)],
         },
