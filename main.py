@@ -26,6 +26,7 @@ from datetime import datetime, timedelta
 from collections import defaultdict, deque
 import threading
 from flask import Flask
+from waitress import serve
 
 import aiosqlite
 from bot.database.db import DATABASE_PATH
@@ -58,6 +59,9 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
+
+# Global variables
+start_time = time.time()  # Record bot start time for metrics
 
 # --- Config ---
 load_dotenv()
@@ -234,16 +238,60 @@ def create_keep_alive_server():
             "webapp": WEBAPP_ENABLED,
         }
 
+    @app.route("/ping")
+    def ping():
+        """Simple ping endpoint for health checks."""
+        return {"pong": True, "timestamp": datetime.now().isoformat()}
+
+    @app.route("/metrics")
+    def metrics():
+        """Basic metrics endpoint for monitoring."""
+        return {
+            "uptime": time.time() - start_time,
+            "status": "running",
+            "bot_version": BOT_VERSION,
+            "demo_mode": DEMO_MODE,
+        }
+
     return app
 
 def start_keep_alive_server():
-    """Start the keep-alive Flask server in a background thread."""
+    """Start the production-ready keep-alive server using Waitress."""
     app = create_keep_alive_server()
+    
+    # Record start time for metrics
+    global start_time
+    start_time = time.time()
+    
+    # Get server configuration from environment
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "8080"))
+    threads = int(os.environ.get("THREADS", "4"))
+    
     def run():
-        app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=False, use_reloader=False)
+        try:
+            logger.info(f"🚀 Starting production keep-alive server on {host}:{port} with {threads} threads")
+            # Use Waitress for production deployment
+            serve(
+                app,
+                host=host,
+                port=port,
+                threads=threads,
+                connection_limit=1000,
+                cleanup_interval=30,
+                # Only set trusted proxy headers if we're behind a proxy
+                trusted_proxy='*',
+                trusted_proxy_headers=['x-forwarded-for', 'x-forwarded-proto'],
+            )
+        except Exception as e:
+            logger.error(f"Failed to start keep-alive server: {e}")
+            # Fallback to Flask development server if Waitress fails
+            logger.warning("Falling back to Flask development server")
+            app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)
+    
     thread = threading.Thread(target=run, daemon=True)
     thread.start()
-    logger.info("✅ Keep-alive server started on port %s", os.environ.get("PORT", 8080))
+    logger.info("✅ Production keep-alive server started on port %s", port)
 
 # Start keep-alive server on bot startup
 start_keep_alive_server()
