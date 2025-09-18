@@ -293,8 +293,8 @@ def start_keep_alive_server():
     thread.start()
     logger.info("✅ Production keep-alive server started on port %s", port)
 
-# Start keep-alive server on bot startup
-start_keep_alive_server()
+# Start keep-alive server on bot startup (removed - will start in async_main)
+# start_keep_alive_server()
 
 # Rest of the configuration (keeping existing)
 # VIP Level Requirements
@@ -1926,14 +1926,9 @@ async def async_main():
     
     # Start the bot using run_polling (this will block and handle everything)
     logger.info("🎯 Starting bot polling...")
-    try:
-        await application.run_polling(drop_pending_updates=True, stop_signals=None)
-    except KeyboardInterrupt:
-        logger.info("🛑 Received interrupt signal, shutting down...")
-    except Exception as e:
-        logger.error(f"❌ Error in bot polling: {e}")
-    finally:
-        logger.info("✅ Bot shutdown complete")
+    
+    # Simple approach - let run_polling handle everything
+    await application.run_polling(drop_pending_updates=True)
 
 # --- Missing Handler Functions ---
 async def deposit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
