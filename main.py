@@ -1810,18 +1810,14 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
-# --- Main Bot Application ---
-def main():
-    """Main function to start the bot."""
+# --- Async Main Entry Point ---
+async def async_main():
+    """Async main function to properly start both bot and keep-alive server."""
     logger.info("🚀 Starting Telegram Casino Bot...")
     
     # Initialize database first
-    async def init_database():
-        await init_db()
-        logger.info("✅ Database initialized")
-    
-    # Run database initialization
-    asyncio.run(init_database())
+    await init_db()
+    logger.info("✅ Database initialized")
     
     # Create the Application
     application = Application.builder().token(BOT_TOKEN).build()
@@ -1850,6 +1846,11 @@ def main():
     application.add_handler(CallbackQueryHandler(withdraw_crypto_sol, pattern="^withdraw_crypto_sol$"))
     application.add_handler(CallbackQueryHandler(show_stats_callback, pattern="^show_stats$"))
     application.add_handler(CallbackQueryHandler(start_command, pattern="^main_panel$"))
+    
+    # Deposit handlers
+    application.add_handler(CallbackQueryHandler(deposit_crypto_ltc, pattern="^deposit_crypto_ltc$"))
+    application.add_handler(CallbackQueryHandler(deposit_crypto_ton, pattern="^deposit_crypto_ton$"))
+    application.add_handler(CallbackQueryHandler(deposit_crypto_sol, pattern="^deposit_crypto_sol$"))
     
     # Admin handlers
     application.add_handler(CallbackQueryHandler(admin_panel_callback, pattern="^admin_panel$"))
@@ -1898,8 +1899,48 @@ def main():
     logger.info(f"👑 Owner user: {OWNER_USER_ID}")
     logger.info(f"🧪 Demo mode: {'ON' if DEMO_MODE else 'OFF'}")
     
-    # Start the bot
-    application.run_polling(drop_pending_updates=True)
+    # Start keep-alive server in a separate thread for deployment platforms
+    def start_keep_alive():
+        app = Flask(__name__)
+        
+        @app.route('/')
+        def index():
+            return {
+                "status": "running",
+                "bot_version": BOT_VERSION,
+                "timestamp": datetime.now().isoformat(),
+                "demo_mode": DEMO_MODE
+            }
+        
+        @app.route('/health')
+        def health():
+            return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+            
+        # Start server
+        serve(app, host='0.0.0.0', port=int(os.getenv('PORT', 8080)))
+    
+    # Start keep-alive server in background thread
+    keep_alive_thread = threading.Thread(target=start_keep_alive, daemon=True)
+    keep_alive_thread.start()
+    logger.info("✅ Keep-alive server started")
+    
+    # Initialize and start the bot
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling(drop_pending_updates=True)
+    
+    logger.info("🎯 Bot is now running and polling for updates...")
+    
+    # Keep the bot running
+    try:
+        await application.updater.idle()
+    except KeyboardInterrupt:
+        logger.info("🛑 Received interrupt signal, shutting down...")
+    finally:
+        await application.updater.stop()
+        await application.stop()
+        await application.shutdown()
+        logger.info("✅ Bot shutdown complete")
 
 # --- Missing Handler Functions ---
 async def deposit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2008,3 +2049,7 @@ async def mini_app_centre_callback(update: Update, context: ContextTypes.DEFAULT
 async def all_games_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show all available games"""
     await classic_casino_callback(update, context)
+
+if __name__ == "__main__":
+    # Run the async main function
+    asyncio.run(async_main())
