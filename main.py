@@ -2039,5 +2039,30 @@ async def all_games_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await classic_casino_callback(update, context)
 
 if __name__ == "__main__":
-    # Run the async main function
-    asyncio.run(async_main())
+    """
+    Production-ready entry point for deployment platforms like Render.
+    Handles event loop conflicts gracefully.
+    """
+    import nest_asyncio
+    import logging
+    
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Apply nest_asyncio to handle nested loops
+        nest_asyncio.apply()
+        logger.info("Applied nest_asyncio")
+        
+        # Run the bot
+        logger.info("Starting bot...")
+        asyncio.run(async_main())
+        
+    except Exception as e:
+        logger.error(f"Bot failed to start: {e}")
+        import sys
+        sys.exit(1)
