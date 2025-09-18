@@ -1904,26 +1904,24 @@ if __name__ == "__main__":
     Production-ready entry point for deployment platforms like Render.
     Handles event loop conflicts gracefully.
     """
-    import nest_asyncio
-    import logging
-    
     # Configure logging
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     logger = logging.getLogger(__name__)
-    
     try:
         # Apply nest_asyncio to handle nested loops
         nest_asyncio.apply()
         logger.info("Applied nest_asyncio")
-        
-        # Run the bot
+        # Run the bot using a compatible event loop approach
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
         logger.info("Starting bot...")
-        asyncio.run(async_main())
-        
+        loop.run_until_complete(async_main())
     except Exception as e:
         logger.error(f"Bot failed to start: {e}")
-        import sys
         sys.exit(1)
