@@ -1924,22 +1924,15 @@ async def async_main():
     keep_alive_thread.start()
     logger.info("✅ Keep-alive server started")
     
-    # Initialize and start the bot
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling(drop_pending_updates=True)
-    
-    logger.info("🎯 Bot is now running and polling for updates...")
-    
-    # Keep the bot running
+    # Start the bot using run_polling (this will block and handle everything)
+    logger.info("🎯 Starting bot polling...")
     try:
-        await application.updater.idle()
+        await application.run_polling(drop_pending_updates=True, stop_signals=None)
     except KeyboardInterrupt:
         logger.info("🛑 Received interrupt signal, shutting down...")
+    except Exception as e:
+        logger.error(f"❌ Error in bot polling: {e}")
     finally:
-        await application.updater.stop()
-        await application.stop()
-        await application.shutdown()
         logger.info("✅ Bot shutdown complete")
 
 # --- Missing Handler Functions ---
