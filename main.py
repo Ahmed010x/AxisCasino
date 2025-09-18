@@ -1028,7 +1028,7 @@ async def handle_dice_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if won:
         win_amount = bet_ltc * multiplier
         await update_balance(user_id, win_amount)
-        result_text = f"🎉 **YOU WIN!**\nDice rolled: **{roll}**\nYour prediction: **{prediction.title()}**\nPayout: **${bet * multiplier:.2f}** ({multiplier}x)"
+        result_text = f"🎉 **YOU WIN!**\nDice rolled: **{roll}**\nYour prediction: **{prediction.title()}**\nPayout: **${bet * multiplier:.2f}**"
     else:
         win_amount = 0
         result_text = f"😢 **YOU LOSE!**\nDice rolled: **{roll}**\nYour prediction: **{prediction.title()}**\nLost: **${bet}**"
@@ -1580,7 +1580,7 @@ async def admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     ]
     
     if is_owner(user_id):
-        keyboard.insert(-1, [InlineKeyboardButton("👑 Owner Panel", callback_data="owner_panel")])
+        keyboard.append([InlineKeyboardButton("👑 Owner Panel", callback_data="owner_panel")])
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
@@ -1652,33 +1652,38 @@ async def owner_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     total_wagered_usd = await format_usd(total_wagered)
 
     text = f"""
-👑 **OWNER CONTROL PANEL** 👑
+👑 <b>OWNER CONTROL PANEL</b> 👑
 
-📊 **System Statistics:**
+📊 <b>System Statistics:</b>
 • Total Users: {total_users:,}
 • Total Balance: {total_balance_usd}
 • Total Wagered: {total_wagered_usd}
 • Total Games: {total_games:,}
 • Demo Mode: {'ON' if DEMO_MODE else 'OFF'}
 
-💰 **Today's Activity:**
+💰 <b>Today's Activity:</b>
 • Withdrawals: {withdrawals_today} (${withdrawal_amount_today:.2f})
 
-🎮 **Bot Version:** {BOT_VERSION}
+🎮 <b>Bot Version:</b> {BOT_VERSION}
 """
+    # Improved button layout with better organization
     keyboard = [
-        [InlineKeyboardButton("📊 Detailed Stats", callback_data="owner_detailed_stats")],
-        [InlineKeyboardButton("👥 User Management", callback_data="owner_user_mgmt")],
-        [InlineKeyboardButton("💰 Financial Report", callback_data="owner_financial")],
-        [InlineKeyboardButton("🎮 Toggle Demo Mode", callback_data="admin_toggle_demo")],
-        [InlineKeyboardButton("⚙️ System Health", callback_data="owner_system_health")],
+        [InlineKeyboardButton("📊 Detailed Stats", callback_data="owner_detailed_stats"), 
+         InlineKeyboardButton("👥 User Management", callback_data="owner_user_mgmt")],
+        [InlineKeyboardButton("💰 Financial Report", callback_data="owner_financial"), 
+         InlineKeyboardButton("📋 Withdrawal History", callback_data="owner_withdrawals")],
+        [InlineKeyboardButton("⚙️ System Health", callback_data="owner_system_health"), 
+         InlineKeyboardButton("🎮 Toggle Demo", callback_data="admin_toggle_demo")],
+        [InlineKeyboardButton("🔧 Bot Settings", callback_data="owner_bot_settings"), 
+         InlineKeyboardButton("📈 Analytics", callback_data="owner_analytics")],
         [InlineKeyboardButton("🔄 Refresh Data", callback_data="owner_panel")],
-        [InlineKeyboardButton("👤 User Panel", callback_data="main_panel")],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        [InlineKeyboardButton("👤 User Panel", callback_data="main_panel"), 
+         InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
+    
     if query:
         try:
-            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
         except BadRequest as e:
             logger.error(f"[OWNER PANEL] BadRequest: {e}")
             await query.answer("❌ Failed to update panel. Please try again.", show_alert=True)
@@ -1689,7 +1694,464 @@ async def owner_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             logger.error(f"[OWNER PANEL] Unexpected error: {e}")
             await query.answer("❌ Unexpected error. Please try again.", show_alert=True)
     else:
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def owner_detailed_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show detailed system statistics"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    if not is_owner(user_id):
+        await query.answer("❌ Access denied. Owner only.", show_alert=True)
+        return
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        # User statistics
+        cursor = await db.execute("SELECT COUNT(*) FROM users")
+        total_users = (await cursor.fetchone())[0]
+        
+        cursor = await db.execute("SELECT COUNT(*) FROM users WHERE games_played > 0")
+        active_players = (await cursor.fetchone())[0]
+        
+        # Game statistics
+        cursor = await db.execute("SELECT SUM(games_played) FROM users")
+        total_games = (await cursor.fetchone())[0] or 0
+        
+        cursor = await db.execute("SELECT SUM(total_wagered), SUM(balance) FROM users")
+        result = await cursor.fetchone()
+        total_wagered = result[0] or 0.0
+        total_balance = result[1] or 0.0
+        
+        # Recent activity (last 24h)
+        yesterday = (datetime.now() - timedelta(days=1)).isoformat()
+        cursor = await db.execute("SELECT COUNT(*) FROM users WHERE last_active > ?", (yesterday,))
+        recent_active = (await cursor.fetchone())[0]
+        
+        # Top players by balance
+        cursor = await db.execute("SELECT username, balance FROM users ORDER BY balance DESC LIMIT 5")
+        top_players = await cursor.fetchall()
+
+    text = f"""
+📊 <b>DETAILED SYSTEM STATISTICS</b>
+
+👥 <b>User Metrics:</b>
+• Total Registered: {total_users:,}
+• Active Players: {active_players:,}
+• Recent Activity (24h): {recent_active:,}
+• Conversion Rate: {(active_players/max(total_users,1)*100):.1f}%
+
+🎮 <b>Game Metrics:</b>
+• Total Games Played: {total_games:,}
+• Total Wagered: {await format_usd(total_wagered)}
+• Current Balances: {await format_usd(total_balance)}
+• Avg Games/User: {(total_games/max(active_players,1)):.1f}
+
+💰 <b>Top Players by Balance:</b>
+"""
+    
+    for i, (username, balance) in enumerate(top_players, 1):
+        text += f"• #{i} {username}: {await format_usd(balance)}\n"
+
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back to Owner Panel", callback_data="owner_panel")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def owner_user_mgmt_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """User management panel"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    if not is_owner(user_id):
+        await query.answer("❌ Access denied. Owner only.", show_alert=True)
+        return
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Recent users
+        cursor = await db.execute("""
+            SELECT user_id, username, balance, games_played, created_at 
+            FROM users ORDER BY created_at DESC LIMIT 10
+        """)
+        recent_users = await cursor.fetchall()
+        
+        # Problem users (high balance, no games)
+        cursor = await db.execute("""
+            SELECT user_id, username, balance FROM users 
+            WHERE balance > 0.1 AND games_played = 0 
+            ORDER BY balance DESC LIMIT 5
+        """)
+        problem_users = await cursor.fetchall()
+
+    text = f"""
+👥 <b>USER MANAGEMENT</b>
+
+📝 <b>Recent Registrations:</b>
+"""
+    
+    for user_data in recent_users[:5]:
+        user_id_db, username, balance, games, created = user_data
+        text += f"• {username} - {await format_usd(balance)} ({games} games)\n"
+    
+    text += f"\n⚠️ <b>High Balance, No Games:</b>\n"
+    for user_data in problem_users:
+        user_id_db, username, balance = user_data
+        text += f"• {username}: {await format_usd(balance)}\n"
+
+    keyboard = [
+        [InlineKeyboardButton("📊 Export Users", callback_data="owner_export_users"),
+         InlineKeyboardButton("🔍 User Search", callback_data="owner_user_search")],
+        [InlineKeyboardButton("⚠️ Problem Users", callback_data="owner_problem_users"),
+         InlineKeyboardButton("📈 User Analytics", callback_data="owner_user_analytics")],
+        [InlineKeyboardButton("🔙 Back to Owner Panel", callback_data="owner_panel")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def owner_financial_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Financial report panel"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    if not is_owner(user_id):
+        await query.answer("❌ Access denied. Owner only.", show_alert=True)
+        return
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Today's stats
+        today = datetime.now().date()
+        
+        # Withdrawals today
+        cursor = await db.execute("""
+            SELECT COUNT(*), COALESCE(SUM(amount_usd), 0) FROM withdrawals 
+            WHERE DATE(created_at) = ? AND status = 'completed'
+        """, (today,))
+        withdrawals_today = await cursor.fetchone()
+        
+        # This week's stats
+        week_ago = (datetime.now() - timedelta(days=7)).date()
+        cursor = await db.execute("""
+            SELECT COUNT(*), COALESCE(SUM(amount_usd), 0) FROM withdrawals 
+            WHERE DATE(created_at) >= ? AND status = 'completed'
+        """, (week_ago,))
+        withdrawals_week = await cursor.fetchone()
+        
+        # Current balances
+        cursor = await db.execute("SELECT SUM(balance) FROM users")
+        total_balance = (await cursor.fetchone())[0] or 0.0
+        
+        # Total wagered
+        cursor = await db.execute("SELECT SUM(total_wagered) FROM users")
+        total_wagered = (await cursor.fetchone())[0] or 0.0
+
+    text = f"""
+💰 <b>FINANCIAL REPORT</b>
+
+📊 <b>Today ({today}):</b>
+• Withdrawals: {withdrawals_today[0]} transactions
+• Withdrawal Amount: ${withdrawals_today[1]:.2f}
+
+📈 <b>This Week:</b>
+• Withdrawals: {withdrawals_week[0]} transactions  
+• Withdrawal Amount: ${withdrawals_week[1]:.2f}
+
+💵 <b>Current Status:</b>
+• Total User Balances: {await format_usd(total_balance)}
+• Total Wagered (All Time): {await format_usd(total_wagered)}
+• House Edge: {((total_wagered - total_balance)/max(total_wagered,1)*100):.2f}%
+
+📋 <b>Risk Assessment:</b>
+• Balance/Wagered Ratio: {(total_balance/max(total_wagered,1)*100):.1f}%
+• Status: {'🟢 Healthy' if total_balance/max(total_wagered,1) < 0.3 else '🟡 Monitor' if total_balance/max(total_wagered,1) < 0.5 else '🔴 High Risk'}
+"""
+
+    keyboard = [
+        [InlineKeyboardButton("📊 Export Report", callback_data="owner_export_financial"),
+         InlineKeyboardButton("💸 Withdrawal Details", callback_data="owner_withdrawals")],
+        [InlineKeyboardButton("📈 Revenue Chart", callback_data="owner_revenue_chart"),
+         InlineKeyboardButton("⚠️ Risk Analysis", callback_data="owner_risk_analysis")],
+        [InlineKeyboardButton("🔙 Back to Owner Panel", callback_data="owner_panel")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def owner_withdrawals_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show withdrawal history and management"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    if not is_owner(user_id):
+        await query.answer("❌ Access denied. Owner only.", show_alert=True)
+        return
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Recent withdrawals
+        cursor = await db.execute("""
+            SELECT user_id, asset, amount, amount_usd, address, status, created_at, transaction_hash
+            FROM withdrawals ORDER BY created_at DESC LIMIT 10
+        """)
+        recent_withdrawals = await cursor.fetchall()
+        
+        # Pending withdrawals
+        cursor = await db.execute("""
+            SELECT COUNT(*) FROM withdrawals WHERE status = 'pending'
+        """)
+        pending_count = (await cursor.fetchone())[0]
+
+    text = f"""
+💸 <b>WITHDRAWAL MANAGEMENT</b>
+
+⏳ <b>Pending Withdrawals:</b> {pending_count}
+
+📋 <b>Recent Withdrawals:</b>
+"""
+    
+    for withdrawal in recent_withdrawals[:8]:
+        user_id_w, asset, amount, amount_usd, address, status, created, tx_hash = withdrawal
+        status_emoji = {"completed": "✅", "pending": "⏳", "failed": "❌"}.get(status, "❓")
+        # Get user info
+        async with aiosqlite.connect(DB_PATH) as db2:
+            cursor2 = await db2.execute("SELECT username FROM users WHERE user_id = ?", (user_id_w,))
+            user_result = await cursor2.fetchone()
+            username = user_result[0] if user_result else f"ID:{user_id_w}"
+        
+        text += f"• {status_emoji} {username}: ${amount_usd:.2f} {asset}\n"
+        if tx_hash:
+            text += f"  TX: {tx_hash[:12]}...\n"
+
+    keyboard = [
+        [InlineKeyboardButton("⏳ Pending Only", callback_data="owner_pending_withdrawals"),
+         InlineKeyboardButton("✅ Completed Only", callback_data="owner_completed_withdrawals")],
+        [InlineKeyboardButton("❌ Failed Only", callback_data="owner_failed_withdrawals"),
+         InlineKeyboardButton("📊 Export All", callback_data="owner_export_withdrawals")],
+        [InlineKeyboardButton("🔙 Back to Owner Panel", callback_data="owner_panel")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def owner_system_health_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """System health and diagnostics"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    if not is_owner(user_id):
+        await query.answer("❌ Access denied. Owner only.", show_alert=True)
+        return
+
+    # Check system health
+    health_status = []
+    
+    # Database check
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("SELECT 1")
+        health_status.append("✅ Database: Connected")
+    except Exception as e:
+        health_status.append(f"❌ Database: Error - {str(e)[:50]}")
+    
+    # CryptoBot API check
+    if CRYPTOBOT_API_TOKEN:
+        health_status.append("✅ CryptoBot: Token configured")
+    else:
+        health_status.append("❌ CryptoBot: No token")
+    
+    # Rate checking
+    try:
+        ltc_rate = await get_ltc_usd_rate()
+        if ltc_rate > 0:
+            health_status.append(f"✅ LTC Rate: ${ltc_rate:.2f}")
+        else:
+            health_status.append("⚠️ LTC Rate: Unable to fetch")
+    except Exception as e:
+        health_status.append("❌ LTC Rate: API Error")
+    
+    # Bot settings
+    health_status.append(f"🎮 Demo Mode: {'ON' if DEMO_MODE else 'OFF'}")
+    health_status.append(f"👑 Owner ID: {OWNER_USER_ID}")
+    health_status.append(f"🔧 Admin IDs: {len(ADMIN_USER_IDS)} configured")
+
+    text = f"""
+⚙️ <b>SYSTEM HEALTH CHECK</b>
+
+🔍 <b>System Status:</b>
+{chr(10).join(health_status)}
+
+📊 <b>Environment:</b>
+• Bot Version: {BOT_VERSION}
+• Python: {'3.13+' if hasattr(sys, 'version_info') else 'Unknown'}
+• Uptime: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+🛠️ <b>Configuration:</b>
+• Min Withdrawal: ${MIN_WITHDRAWAL_USD}
+• Max Daily Withdrawal: ${MAX_WITHDRAWAL_USD_DAILY}
+• Withdrawal Fee: {WITHDRAWAL_FEE_PERCENT}%
+• Withdrawal Cooldown: {WITHDRAWAL_COOLDOWN_SECONDS//60} minutes
+"""
+
+    keyboard = [
+        [InlineKeyboardButton("🔄 Refresh Health", callback_data="owner_system_health"),
+         InlineKeyboardButton("📋 Export Logs", callback_data="owner_export_logs")],
+        [InlineKeyboardButton("⚙️ Test APIs", callback_data="owner_test_apis"),
+         InlineKeyboardButton("🛠️ Config Check", callback_data="owner_config_check")],
+        [InlineKeyboardButton("🔙 Back to Owner Panel", callback_data="owner_panel")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def owner_bot_settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Bot settings and configuration"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    if not is_owner(user_id):
+        await query.answer("❌ Access denied. Owner only.", show_alert=True)
+        return
+
+    text = f"""
+🔧 <b>BOT SETTINGS</b>
+
+⚙️ <b>Current Configuration:</b>
+• Demo Mode: {'🟢 ON' if DEMO_MODE else '🔴 OFF'}
+• Min Withdrawal: ${MIN_WITHDRAWAL_USD}
+• Max Daily Withdrawal: ${MAX_WITHDRAWAL_USD_DAILY}
+• Withdrawal Fee: {WITHDRAWAL_FEE_PERCENT}%
+• Cooldown Period: {WITHDRAWAL_COOLDOWN_SECONDS//60} minutes
+
+👑 <b>Access Control:</b>
+• Owner ID: {OWNER_USER_ID}
+• Admin Count: {len(ADMIN_USER_IDS)}
+
+🎮 <b>Game Settings:</b>
+• Slots RTP: 96.5%
+• Dice RTP: 98%
+• Coin Flip RTP: 98%
+
+💰 <b>Supported Assets:</b>
+• LTC (Litecoin)
+• TON (Toncoin)
+• SOL (Solana)
+"""
+
+    keyboard = [
+        [InlineKeyboardButton("🎮 Toggle Demo", callback_data="admin_toggle_demo"),
+         InlineKeyboardButton("💰 Withdrawal Settings", callback_data="owner_withdrawal_settings")],
+        [InlineKeyboardButton("👥 Admin Management", callback_data="owner_admin_mgmt"),
+         InlineKeyboardButton("🎯 Game Settings", callback_data="owner_game_settings")],
+        [InlineKeyboardButton("💸 Asset Settings", callback_data="owner_asset_settings"),
+         InlineKeyboardButton("📊 Rate Settings", callback_data="owner_rate_settings")],
+        [InlineKeyboardButton("🔙 Back to Owner Panel", callback_data="owner_panel")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def owner_analytics_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Analytics and insights"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    if not is_owner(user_id):
+        await query.answer("❌ Access denied. Owner only.", show_alert=True)
+        return
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        # User growth
+        cursor = await db.execute("""
+            SELECT DATE(created_at) as date, COUNT(*) as count 
+            FROM users 
+            WHERE created_at >= datetime('now', '-7 days')
+            GROUP BY DATE(created_at)
+            ORDER BY date DESC
+        """)
+        user_growth = await cursor.fetchall()
+        
+        # Game popularity
+        cursor = await db.execute("""
+            SELECT game_type, COUNT(*) as plays, SUM(bet_amount) as wagered
+            FROM game_sessions 
+            WHERE created_at >= datetime('now', '-7 days')
+            GROUP BY game_type
+            ORDER BY plays DESC
+        """)
+        game_stats = await cursor.fetchall()
+
+    text = f"""
+📈 <b>ANALYTICS & INSIGHTS</b>
+
+📊 <b>User Growth (Last 7 Days):</b>
+"""
+    
+    for date, count in user_growth[:5]:
+        text += f"• {date}: +{count} users\n"
+    
+    text += f"\n🎮 <b>Game Popularity (Last 7 Days):</b>\n"
+    
+    for game_type, plays, wagered in game_stats:
+        text += f"• {game_type.title()}: {plays} plays, {await format_usd(wagered)} wagered\n"
+
+    text += f"""
+
+🎯 <b>Key Metrics:</b>
+• Avg Daily Signups: {sum(count for _, count in user_growth)/max(len(user_growth), 1):.1f}
+• Most Popular Game: {game_stats[0][0].title() if game_stats else 'No data'}
+• Total Sessions (7d): {sum(plays for _, plays, _ in game_stats)}
+"""
+
+    keyboard = [
+        [InlineKeyboardButton("📊 Full Report", callback_data="owner_full_analytics"),
+         InlineKeyboardButton("📈 Growth Chart", callback_data="owner_growth_chart")],
+        [InlineKeyboardButton("🎮 Game Analytics", callback_data="owner_game_analytics"),
+         InlineKeyboardButton("👥 User Behavior", callback_data="owner_user_behavior")],
+        [InlineKeyboardButton("🔙 Back to Owner Panel", callback_data="owner_panel")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+# Placeholder handlers for buttons that need more complex implementation
+async def owner_placeholder_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Placeholder for owner panel features that need more implementation"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    if not is_owner(user_id):
+        await query.answer("❌ Access denied. Owner only.", show_alert=True)
+        return
+
+    feature_name = query.data.replace("owner_", "").replace("_", " ").title()
+    
+    text = f"""
+🚧 <b>{feature_name}</b>
+
+This feature is currently under development.
+
+Available soon:
+• Advanced functionality
+• Detailed reports
+• Enhanced controls
+
+Please check back in future updates.
+"""
+
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back to Owner Panel", callback_data="owner_panel")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
 # --- Help and Utility Functions ---
 
@@ -1858,47 +2320,29 @@ async def async_main():
     application.add_handler(CallbackQueryHandler(admin_toggle_demo_callback, pattern="^admin_toggle_demo$"))
     application.add_handler(CallbackQueryHandler(owner_panel_callback, pattern="^owner_panel$"))
     
-    # Conversation handlers for deposit/withdrawal
-    deposit_conv_handler = ConversationHandler(
-        entry_points=[
-            CallbackQueryHandler(deposit_callback, pattern="^deposit$"),
-            CallbackQueryHandler(deposit_crypto_ltc, pattern="^deposit_crypto_ltc$"),
-            CallbackQueryHandler(deposit_crypto_ton, pattern="^deposit_crypto_ton$"),
-            CallbackQueryHandler(deposit_crypto_sol, pattern="^deposit_crypto_sol$"),
-        ],
-        states={
-            DEPOSIT_LTC_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, deposit_crypto_amount)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel_conversation)],
-    )
-    application.add_handler(deposit_conv_handler)
+    # Owner panel detailed handlers
+    application.add_handler(CallbackQueryHandler(owner_detailed_stats_callback, pattern="^owner_detailed_stats$"))
+    application.add_handler(CallbackQueryHandler(owner_user_mgmt_callback, pattern="^owner_user_mgmt$"))
+    application.add_handler(CallbackQueryHandler(owner_financial_callback, pattern="^owner_financial$"))
+    application.add_handler(CallbackQueryHandler(owner_withdrawals_callback, pattern="^owner_withdrawals$"))
+    application.add_handler(CallbackQueryHandler(owner_system_health_callback, pattern="^owner_system_health$"))
+    application.add_handler(CallbackQueryHandler(owner_bot_settings_callback, pattern="^owner_bot_settings$"))
+    application.add_handler(CallbackQueryHandler(owner_analytics_callback, pattern="^owner_analytics$"))
     
-    withdraw_conv_handler = ConversationHandler(
-        entry_points=[
-            CallbackQueryHandler(withdraw_crypto_ltc, pattern="^withdraw_crypto_ltc$"),
-            CallbackQueryHandler(withdraw_crypto_ton, pattern="^withdraw_crypto_ton$"),
-            CallbackQueryHandler(withdraw_crypto_sol, pattern="^withdraw_crypto_sol$"),
-        ],
-        states={
-            WITHDRAW_LTC_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_crypto_amount)],
-            WITHDRAW_LTC_ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_crypto_address)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel_conversation)],
-    )
-    application.add_handler(withdraw_conv_handler)
+    # Owner panel placeholder handlers (for features under development)
+    placeholder_patterns = [
+        "^owner_export_users$", "^owner_user_search$", "^owner_problem_users$", "^owner_user_analytics$",
+        "^owner_export_financial$", "^owner_revenue_chart$", "^owner_risk_analysis$",
+        "^owner_pending_withdrawals$", "^owner_completed_withdrawals$", "^owner_failed_withdrawals$", "^owner_export_withdrawals$",
+        "^owner_export_logs$", "^owner_test_apis$", "^owner_config_check$",
+        "^owner_withdrawal_settings$", "^owner_admin_mgmt$", "^owner_game_settings$", "^owner_asset_settings$", "^owner_rate_settings$",
+        "^owner_full_analytics$", "^owner_growth_chart$", "^owner_game_analytics$", "^owner_user_behavior$"
+    ]
     
-    # Catch-all callback handler for unhandled callbacks
-    application.add_handler(CallbackQueryHandler(default_callback_handler))
-
-    # Register global error handler
-    application.add_error_handler(global_error_handler)
-
-    logger.info("✅ All handlers registered")
-    logger.info(f"🎰 Casino Bot v{BOT_VERSION} is ready!")
-    logger.info(f"🔧 Admin users: {ADMIN_USER_IDS}")
-    logger.info(f"👑 Owner user: {OWNER_USER_ID}")
-    logger.info(f"🧪 Demo mode: {'ON' if DEMO_MODE else 'OFF'}")
+    for pattern in placeholder_patterns:
+        application.add_handler(CallbackQueryHandler(owner_placeholder_callback, pattern=pattern))
     
+    # ...existing code...
     # Start keep-alive server in a separate thread for deployment platforms
     def start_keep_alive():
         app = Flask(__name__)
