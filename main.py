@@ -45,6 +45,7 @@ from telegram.ext import (
     filters,
     ConversationHandler
 )
+from telegram.error import BadRequest, TelegramError
 
 # Configure logging
 logging.basicConfig(
@@ -561,6 +562,23 @@ async def log_game_session(user_id: int, game_type: str, bet_amount: float, win_
             
     except Exception as e:
         logger.error(f"Error logging game session: {e}")
+
+# --- Global Error Handler ---
+async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log and handle uncaught exceptions globally."""
+    logger.error(f"[GLOBAL ERROR] Exception: {context.error}")
+    try:
+        if update and hasattr(update, 'effective_user') and update.effective_user:
+            user_id = update.effective_user.id
+        else:
+            user_id = None
+        # Optionally, send a user-friendly error message
+        if update and hasattr(update, 'message') and update.message:
+            await update.message.reply_text("❌ An unexpected error occurred. Please try again later.")
+        elif update and hasattr(update, 'callback_query') and update.callback_query:
+            await update.callback_query.answer("❌ An unexpected error occurred.", show_alert=True)
+    except Exception as e:
+        logger.error(f"[GLOBAL ERROR] Failed to notify user: {e}")
 
 # --- Bot Handlers ---
 
@@ -1659,7 +1677,17 @@ async def owner_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     if query:
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+        try:
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+        except BadRequest as e:
+            logger.error(f"[OWNER PANEL] BadRequest: {e}")
+            await query.answer("❌ Failed to update panel. Please try again.", show_alert=True)
+        except TelegramError as e:
+            logger.error(f"[OWNER PANEL] TelegramError: {e}")
+            await query.answer("❌ Telegram error. Please try again.", show_alert=True)
+        except Exception as e:
+            logger.error(f"[OWNER PANEL] Unexpected error: {e}")
+            await query.answer("❌ Unexpected error. Please try again.", show_alert=True)
     else:
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
@@ -1861,7 +1889,10 @@ async def async_main():
     
     # Catch-all callback handler for unhandled callbacks
     application.add_handler(CallbackQueryHandler(default_callback_handler))
-    
+
+    # Register global error handler
+    application.add_error_handler(global_error_handler)
+
     logger.info("✅ All handlers registered")
     logger.info(f"🎰 Casino Bot v{BOT_VERSION} is ready!")
     logger.info(f"🔧 Admin users: {ADMIN_USER_IDS}")
