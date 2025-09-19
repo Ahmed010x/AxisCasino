@@ -1,0 +1,33 @@
+[Unit]
+Description=Telegram Casino Bot
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/app
+Environment=PYTHONPATH=/app
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/local/bin/python3 production_launcher.py
+Restart=always
+RestartSec=10
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Resource limits
+LimitNOFILE=4096
+MemoryMax=1G
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=casino-bot
+
+# Security (optional)
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

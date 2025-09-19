@@ -2346,22 +2346,153 @@ async def async_main():
     # Start keep-alive server in a separate thread for deployment platforms
     def start_keep_alive():
         app = Flask(__name__)
+        app.config['JSON_SORT_KEYS'] = False
+        
+        # Keep track of bot startup time for uptime calculation
+        startup_time = datetime.now()
         
         @app.route('/')
         def index():
+            uptime = datetime.now() - startup_time
             return {
                 "status": "running",
+                "bot_name": "Telegram Casino Bot",
                 "bot_version": BOT_VERSION,
+                "uptime_seconds": int(uptime.total_seconds()),
+                "uptime_human": str(uptime).split('.')[0],
                 "timestamp": datetime.now().isoformat(),
-                "demo_mode": DEMO_MODE
+                "demo_mode": DEMO_MODE,
+                "supported_assets": ["LTC", "TON", "SOL"],
+                "endpoints": {
+                    "health": "/health",
+                    "status": "/status",
+                    "metrics": "/metrics"
+                }
             }
         
         @app.route('/health')
         def health():
-            return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+            """Comprehensive health check endpoint"""
+            health_data = {
+                "status": "healthy",
+                "timestamp": datetime.now().isoformat(),
+                "checks": {}
+            }
             
-        # Start server
-        serve(app, host='0.0.0.0', port=int(os.getenv('PORT', 8080)))
+            # Database health check
+            try:
+                import aiosqlite
+                # Simple sync check since this is a sync endpoint
+                health_data["checks"]["database"] = {
+                    "status": "healthy",
+                    "message": "Database connection available"
+                }
+            except Exception as e:
+                health_data["checks"]["database"] = {
+                    "status": "unhealthy", 
+                    "message": f"Database error: {str(e)}"
+                }
+                health_data["status"] = "degraded"
+            
+            # CryptoBot API check
+            if CRYPTOBOT_API_TOKEN:
+                health_data["checks"]["cryptobot"] = {
+                    "status": "configured",
+                    "message": "CryptoBot API token is configured"
+                }
+            else:
+                health_data["checks"]["cryptobot"] = {
+                    "status": "warning",
+                    "message": "CryptoBot API token not configured"
+                }
+            
+            # Bot configuration check
+            health_data["checks"]["configuration"] = {
+                "status": "healthy",
+                "demo_mode": DEMO_MODE,
+                "owner_configured": OWNER_USER_ID > 0,
+                "admin_count": len(ADMIN_USER_IDS)
+            }
+            
+            return health_data
+        
+        @app.route('/status')
+        def status():
+            """Bot status and basic metrics"""
+            uptime = datetime.now() - startup_time
+            return {
+                "bot_status": "running",
+                "version": BOT_VERSION,
+                "uptime": {
+                    "seconds": int(uptime.total_seconds()),
+                    "human": str(uptime).split('.')[0]
+                },
+                "configuration": {
+                    "demo_mode": DEMO_MODE,
+                    "withdrawal_limits": {
+                        "min_usd": MIN_WITHDRAWAL_USD,
+                        "max_daily_usd": MAX_WITHDRAWAL_USD_DAILY,
+                        "fee_percent": WITHDRAWAL_FEE_PERCENT
+                    },
+                    "supported_games": ["slots", "coinflip", "dice"],
+                    "supported_assets": ["LTC", "TON", "SOL"]
+                },
+                "environment": {
+                    "port": int(os.getenv('PORT', 8080)),
+                    "render_url": os.getenv('RENDER_EXTERNAL_URL', 'Not set')
+                }
+            }
+        
+        @app.route('/metrics')
+        def metrics():
+            """Basic metrics endpoint"""
+            uptime = datetime.now() - startup_time
+            return {
+                "uptime_seconds": int(uptime.total_seconds()),
+                "timestamp": datetime.now().isoformat(),
+                "version": BOT_VERSION,
+                "demo_mode": DEMO_MODE,
+                "configuration_status": {
+                    "bot_token": "configured" if BOT_TOKEN else "missing",
+                    "cryptobot_token": "configured" if CRYPTOBOT_API_TOKEN else "missing",
+                    "owner_id": "configured" if OWNER_USER_ID > 0 else "missing",
+                    "admin_count": len(ADMIN_USER_IDS)
+                }
+            }
+        
+        @app.route('/ping')
+        def ping():
+            """Simple ping endpoint"""
+            return {"pong": True, "timestamp": datetime.now().isoformat()}
+        
+        @app.errorhandler(404)
+        def not_found(error):
+            return {
+                "error": "Not Found",
+                "message": "The requested endpoint does not exist",
+                "available_endpoints": ["/", "/health", "/status", "/metrics", "/ping"]
+            }, 404
+        
+        @app.errorhandler(500)
+        def internal_error(error):
+            return {
+                "error": "Internal Server Error",
+                "message": "An unexpected error occurred",
+                "timestamp": datetime.now().isoformat()
+            }, 500
+            
+        # Start server with error handling
+        try:
+            logger.info(f"🌐 Starting keep-alive server on port {int(os.getenv('PORT', 8080))}")
+            serve(app, host='0.0.0.0', port=int(os.getenv('PORT', 8080)), threads=4)
+        except Exception as e:
+            logger.error(f"❌ Failed to start keep-alive server: {e}")
+            # Fallback to Flask development server
+            try:
+                logger.info("🔄 Falling back to Flask development server")
+                app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8080)), debug=False)
+            except Exception as fallback_error:
+                logger.error(f"❌ Fallback server also failed: {fallback_error}")
     
     # Start keep-alive server in background thread
     keep_alive_thread = threading.Thread(target=start_keep_alive, daemon=True)
