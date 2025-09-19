@@ -563,6 +563,29 @@ async def log_game_session(user_id: int, game_type: str, bet_amount: float, win_
     except Exception as e:
         logger.error(f"Error logging game session: {e}")
 
+async def safe_edit_message(query, text, reply_markup=None, parse_mode=None, disable_web_page_preview=None):
+    """Safely edit a message, handling 'message not modified' errors"""
+    try:
+        await query.edit_message_text(
+            text=text,
+            reply_markup=reply_markup,
+            parse_mode=parse_mode,
+            disable_web_page_preview=disable_web_page_preview
+        )
+    except BadRequest as e:
+        if "Message is not modified" in str(e):
+            # Message content is the same, just answer the callback
+            await query.answer()
+        elif "Message to edit not found" in str(e):
+            # Message was deleted, send a new one
+            await query.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+        else:
+            # Re-raise other BadRequest errors
+            raise e
+    except Exception as e:
+        logger.error(f"Error editing message: {e}")
+        await query.answer("❌ An error occurred. Please try again.")
+
 # --- Global Error Handler ---
 async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log and handle uncaught exceptions globally."""
@@ -593,7 +616,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # If user is owner, show owner panel immediately
     if is_owner(user_id):
-        await owner_panel_callback(update, context)
+        # Create a mock callback query for owner panel
+        text = f"👑 Welcome, Owner! Redirecting to Owner Panel..."
+        keyboard = [[InlineKeyboardButton("👑 Owner Panel", callback_data="owner_panel")]]
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
         return
     
     balance_usd = await format_usd(user_data['balance'])
@@ -621,7 +647,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard.append([InlineKeyboardButton("👑 Owner Panel", callback_data="owner_panel")])
     
     if hasattr(update, 'callback_query') and update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        await safe_edit_message(update.callback_query, text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     else:
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
@@ -650,7 +676,7 @@ Welcome to the Casino! Access all games below:
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
 
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    await safe_edit_message(query, text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
 async def mini_app_centre_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /app"""
@@ -1468,7 +1494,7 @@ async def owner_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     # Add Admin Panel switch for owner
     keyboard.append([InlineKeyboardButton("🔑 Admin Panel", callback_data="admin_panel")])
     
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    await safe_edit_message(query, text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
 async def owner_detailed_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show detailed owner statistics (placeholder)"""
