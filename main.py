@@ -563,29 +563,6 @@ async def log_game_session(user_id: int, game_type: str, bet_amount: float, win_
     except Exception as e:
         logger.error(f"Error logging game session: {e}")
 
-async def safe_edit_message(query, text, reply_markup=None, parse_mode=None, disable_web_page_preview=None):
-    """Safely edit a message, handling 'message not modified' errors"""
-    try:
-        await query.edit_message_text(
-            text=text,
-            reply_markup=reply_markup,
-            parse_mode=parse_mode,
-            disable_web_page_preview=disable_web_page_preview
-        )
-    except BadRequest as e:
-        if "Message is not modified" in str(e):
-            # Message content is the same, just answer the callback
-            await query.answer()
-        elif "Message to edit not found" in str(e):
-            # Message was deleted, send a new one
-            await query.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
-        else:
-            # Re-raise other BadRequest errors
-            raise e
-    except Exception as e:
-        logger.error(f"Error editing message: {e}")
-        await query.answer("❌ An error occurred. Please try again.")
-
 # --- Global Error Handler ---
 async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log and handle uncaught exceptions globally."""
@@ -616,10 +593,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # If user is owner, show owner panel immediately
     if is_owner(user_id):
-        # Create a mock callback query for owner panel
-        text = f"👑 Welcome, Owner! Redirecting to Owner Panel..."
-        keyboard = [[InlineKeyboardButton("👑 Owner Panel", callback_data="owner_panel")]]
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        await owner_panel_callback(update, context)
         return
     
     balance_usd = await format_usd(user_data['balance'])
@@ -647,7 +621,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard.append([InlineKeyboardButton("👑 Owner Panel", callback_data="owner_panel")])
     
     if hasattr(update, 'callback_query') and update.callback_query:
-        await safe_edit_message(update.callback_query, text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     else:
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
@@ -676,7 +650,7 @@ Welcome to the Casino! Access all games below:
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
 
-    await safe_edit_message(query, text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
 async def mini_app_centre_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /app"""
@@ -1449,15 +1423,19 @@ async def owner_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         cursor = await db.execute("SELECT SUM(games_played) FROM users")
         total_games = (await cursor.fetchone())[0] or 0
         
-        # Withdrawals today
-        today = datetime.now().date()
-        cursor = await db.execute("""
-            SELECT COUNT(*), SUM(amount_usd) FROM withdrawals 
-            WHERE DATE(created_at) = ? AND status = 'completed'
-        """, (today,))
-        withdrawal_data = await cursor.fetchone()
-        withdrawals_today = withdrawal_data[0] or 0
-        withdrawal_amount_today = withdrawal_data[1] or 0.0
+        # Withdrawals today (handle table not existing)
+        try:
+            today = datetime.now().date()
+            cursor = await db.execute("""
+                SELECT COUNT(*), SUM(amount_usd) FROM withdrawals 
+                WHERE DATE(created_at) = ? AND status = 'completed'
+            """, (today,))
+            withdrawal_data = await cursor.fetchone()
+            withdrawals_today = withdrawal_data[0] or 0
+            withdrawal_amount_today = withdrawal_data[1] or 0.0
+        except Exception:
+            withdrawals_today = 0
+            withdrawal_amount_today = 0.0
 
     total_balance_usd = await format_usd(total_balance)
     total_wagered_usd = await format_usd(total_wagered)
@@ -1494,7 +1472,11 @@ async def owner_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     # Add Admin Panel switch for owner
     keyboard.append([InlineKeyboardButton("🔑 Admin Panel", callback_data="admin_panel")])
     
-    await safe_edit_message(query, text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    # Handle both callback query and direct message
+    if query:
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    else:
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
 async def owner_detailed_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show detailed owner statistics (placeholder)"""
@@ -2167,6 +2149,9 @@ async def async_main():
     application.add_handler(CallbackQueryHandler(owner_bot_settings_callback, pattern="^owner_bot_settings$"))
     application.add_handler(CallbackQueryHandler(owner_analytics_callback, pattern="^owner_analytics$"))
     
+    # Health refresh handler
+    application.add_handler(CallbackQueryHandler(health_refresh_callback, pattern="^health_refresh$"))
+    
     # Owner panel placeholder handlers (for features under development)
     placeholder_patterns = [
         "^owner_export_users$", "^owner_user_search$", "^owner_problem_users$", "^owner_user_analytics$",
@@ -2179,6 +2164,9 @@ async def async_main():
     
     for pattern in placeholder_patterns:
         application.add_handler(CallbackQueryHandler(owner_placeholder_callback, pattern=pattern))
+    
+    # Add global error handler
+    application.add_error_handler(global_error_handler)
     
     # Start keep-alive server in a separate thread for deployment platforms
     def start_keep_alive():

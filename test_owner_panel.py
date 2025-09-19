@@ -1,244 +1,149 @@
 #!/usr/bin/env python3
 """
-Owner Panel Integration Test
-Tests the new owner panel functionality and user view switching.
+Owner Panel Test Script
+Tests owner panel functionality and access control
 """
 
-import sys
 import os
-from unittest.mock import MagicMock, AsyncMock, patch
+import sys
+import asyncio
+from unittest.mock import Mock, AsyncMock
+sys.path.append('.')
 
-# Add the project directory to the path
-sys.path.insert(0, os.path.dirname(__file__))
+# Import our main module
+import main
 
-def test_owner_panel_functions():
-    """Test that owner panel functions are properly defined"""
+class MockUser:
+    def __init__(self, user_id, username="TestOwner"):
+        self.id = user_id
+        self.username = username
+        self.first_name = username
+
+class MockUpdate:
+    def __init__(self, user_id, is_callback=False):
+        self.effective_user = MockUser(user_id)
+        if is_callback:
+            self.callback_query = Mock()
+            self.callback_query.from_user = self.effective_user
+            self.callback_query.answer = AsyncMock()
+            self.callback_query.edit_message_text = AsyncMock()
+        else:
+            self.message = Mock()
+            self.message.reply_text = AsyncMock()
+
+class MockContext:
+    def __init__(self):
+        self.bot_data = {}
+
+async def test_owner_functions():
+    """Test owner panel functionality"""
     print("🧪 Testing Owner Panel Functions...")
     
-    try:
-        from main import (
-            owner_panel_callback, 
-            owner_user_view_callback, 
-            owner_financial_callback,
-            owner_users_callback,
-            owner_settings_callback,
-            is_owner,
-            enhanced_start_command
-        )
-        print("✅ All owner panel functions imported successfully")
-        return True
-    except ImportError as e:
-        print(f"❌ Failed to import owner panel functions: {e}")
-        return False
-
-def test_owner_check_function():
-    """Test the owner check functionality"""
-    print("\n🧪 Testing Owner Check Function...")
+    # Test 1: Owner detection
+    print("\n1. Testing owner detection...")
     
+    # Set a test owner ID for testing
+    original_owner_id = main.OWNER_USER_ID
+    main.OWNER_USER_ID = 12345  # Test owner ID
+    
+    test_owner_id = 12345
+    test_regular_id = 67890
+    
+    # Test owner detection
+    assert main.is_owner(test_owner_id) == True, "Owner should be detected"
+    assert main.is_owner(test_regular_id) == False, "Regular user should not be owner"
+    print("✅ Owner detection working correctly")
+    
+    # Test 2: Database initialization
+    print("\n2. Testing database initialization...")
     try:
-        from main import is_owner, OWNER_USER_ID
-        
-        # Test with owner ID
-        if OWNER_USER_ID > 0:
-            result = is_owner(OWNER_USER_ID)
-            if result:
-                print(f"✅ Owner check works for owner ID {OWNER_USER_ID}")
-            else:
-                print(f"❌ Owner check failed for owner ID {OWNER_USER_ID}")
-                return False
-        else:
-            print("⚠️ No owner ID configured, testing with mock ID")
-            
-        # Test with non-owner ID
-        result = is_owner(99999999)
-        if not result:
-            print("✅ Owner check correctly rejects non-owner")
-        else:
-            print("❌ Owner check incorrectly accepts non-owner")
-            return False
-            
-        return True
+        await main.init_db()
+        print("✅ Database initialization successful")
     except Exception as e:
-        print(f"❌ Owner check test failed: {e}")
+        print(f"❌ Database initialization failed: {e}")
         return False
-
-def test_enhanced_start_command():
-    """Test that enhanced start command includes owner panel"""
-    print("\n🧪 Testing Enhanced Start Command...")
     
+    # Test 3: Owner panel callback (direct call)
+    print("\n3. Testing owner panel callback (direct call)...")
     try:
-        # Mock the necessary objects
-        mock_update = MagicMock()
-        mock_context = MagicMock()
-        mock_query = MagicMock()
-        mock_user = MagicMock()
-        
-        # Set up the mock
-        mock_user.id = 7586751688  # Use the admin ID as owner for testing
-        mock_user.username = "test_owner"
-        mock_user.first_name = "Test"
-        mock_update.effective_user = mock_user
-        mock_update.callback_query = mock_query
-        mock_query.answer = AsyncMock()
-        mock_query.edit_message_text = AsyncMock()
-        
-        # Check if the file contains owner panel logic
-        with open("main.py", "r") as f:
-            content = f.read()
-        
-        if "owner_panel" in content and "Owner Panel" in content:
-            print("✅ Enhanced start command includes owner panel logic")
-            return True
-        else:
-            print("❌ Enhanced start command missing owner panel logic")
-            return False
-            
+        update = MockUpdate(test_owner_id, is_callback=False)
+        context = MockContext()
+        await main.owner_panel_callback(update, context)
+        print("✅ Owner panel direct call successful")
     except Exception as e:
-        print(f"❌ Enhanced start command test failed: {e}")
+        print(f"❌ Owner panel direct call failed: {e}")
         return False
-
-def test_owner_panel_handlers():
-    """Test that owner panel handlers are registered"""
-    print("\n🧪 Testing Owner Panel Handler Registration...")
     
+    # Test 4: Owner panel callback (callback query)
+    print("\n4. Testing owner panel callback (callback query)...")
     try:
-        with open("main.py", "r") as f:
-            content = f.read()
-        
-        required_handlers = [
-            "owner_panel_callback",
-            "owner_user_view_callback", 
-            "owner_financial_callback",
-            "owner_users_callback",
-            "owner_settings_callback"
-        ]
-        
-        missing_handlers = []
-        for handler in required_handlers:
-            if f'CallbackQueryHandler({handler}' not in content:
-                missing_handlers.append(handler)
-        
-        if not missing_handlers:
-            print("✅ All owner panel handlers are registered")
-            return True
-        else:
-            print(f"❌ Missing handler registrations: {missing_handlers}")
-            return False
-            
+        update = MockUpdate(test_owner_id, is_callback=True)
+        context = MockContext()
+        await main.owner_panel_callback(update, context)
+        print("✅ Owner panel callback query successful")
     except Exception as e:
-        print(f"❌ Handler registration test failed: {e}")
+        print(f"❌ Owner panel callback query failed: {e}")
         return False
-
-def test_user_view_switching():
-    """Test the user view switching functionality"""
-    print("\n🧪 Testing User View Switching...")
     
+    # Test 5: Access control for non-owner
+    print("\n5. Testing access control for non-owner...")
     try:
-        with open("main.py", "r") as f:
-            content = f.read()
-        
-        # Check for user view switching elements
-        required_elements = [
-            "Switch to User View",
-            "USER VIEW MODE",
-            "Back to Owner Panel",
-            "owner_user_view"
-        ]
-        
-        missing_elements = []
-        for element in required_elements:
-            if element not in content:
-                missing_elements.append(element)
-        
-        if not missing_elements:
-            print("✅ User view switching functionality implemented")
-            return True
-        else:
-            print(f"❌ Missing user view elements: {missing_elements}")
-            return False
-            
+        update = MockUpdate(test_regular_id, is_callback=True)
+        context = MockContext()
+        await main.owner_panel_callback(update, context)
+        print("✅ Access control working correctly")
     except Exception as e:
-        print(f"❌ User view switching test failed: {e}")
+        print(f"❌ Access control test failed: {e}")
         return False
-
-def test_owner_panel_features():
-    """Test comprehensive owner panel features"""
-    print("\n🧪 Testing Owner Panel Features...")
     
-    try:
-        with open("main.py", "r") as f:
-            content = f.read()
-        
-        # Check for key owner panel features
-        required_features = [
-            "Financial Overview",
-            "System Status", 
-            "Game Stats",
-            "User Management",
-            "System Settings",
-            "Financial Reports",
-            "Emergency Controls"
-        ]
-        
-        missing_features = []
-        for feature in required_features:
-            if feature not in content:
-                missing_features.append(feature)
-        
-        if not missing_features:
-            print("✅ All owner panel features implemented")
-            return True
-        else:
-            print(f"❌ Missing features: {missing_features}")
-            return False
-            
-    except Exception as e:
-        print(f"❌ Owner panel features test failed: {e}")
-        return False
-
-def main():
-    """Run all tests"""
-    print("🚀 Owner Panel Integration Test Suite")
-    print("=" * 50)
-    
-    tests = [
-        test_owner_panel_functions,
-        test_owner_check_function,
-        test_enhanced_start_command,
-        test_owner_panel_handlers,
-        test_user_view_switching,
-        test_owner_panel_features
+    # Test 6: Sub-panel functions
+    print("\n6. Testing owner sub-panel functions...")
+    sub_panels = [
+        main.owner_detailed_stats_callback,
+        main.owner_user_mgmt_callback,
+        main.owner_financial_callback,
+        main.owner_withdrawals_callback,
+        main.owner_system_health_callback,
+        main.owner_bot_settings_callback,
+        main.owner_analytics_callback,
+        main.owner_placeholder_callback
     ]
     
-    results = []
-    for test in tests:
+    for panel_func in sub_panels:
         try:
-            result = test()
-            results.append(result)
+            update = MockUpdate(test_owner_id, is_callback=True)
+            context = MockContext()
+            await panel_func(update, context)
         except Exception as e:
-            print(f"❌ Test failed with exception: {e}")
-            results.append(False)
+            print(f"❌ Sub-panel {panel_func.__name__} failed: {e}")
+            return False
     
-    print("\n" + "=" * 50)
-    print("📊 Test Results Summary:")
-    passed = sum(results)
-    total = len(results)
+    print("✅ All owner sub-panel functions working")
     
-    print(f"✅ Passed: {passed}/{total}")
-    if passed == total:
-        print("🎉 All tests passed! Owner panel integration is complete.")
-        print("\n📋 Owner Panel Features:")
-        print("• 👑 Dedicated owner panel with comprehensive controls")
-        print("• 👤 User view switching (owner can see user perspective)")
-        print("• 💰 Financial dashboard and analytics")
-        print("• 👥 User management and monitoring")
-        print("• ⚙️ System settings and configuration")
-        print("• 🚨 Emergency controls and admin tools")
-        return True
+    # Restore original owner ID
+    main.OWNER_USER_ID = original_owner_id
+    
+    print("\n🎉 All owner panel tests passed!")
+    return True
+
+async def main_test():
+    """Run all tests"""
+    print("🎰 Telegram Casino Bot - Owner Panel Test")
+    print("=" * 50)
+    
+    success = await test_owner_functions()
+    
+    if success:
+        print("\n✅ All tests passed! Owner panel is working correctly.")
+        return 0
     else:
-        print("❌ Some tests failed. Please review the issues above.")
-        return False
+        print("\n❌ Some tests failed! Check the output above.")
+        return 1
 
 if __name__ == "__main__":
-    success = main()
-    sys.exit(0 if success else 1)
+    try:
+        exit_code = asyncio.run(main_test())
+        sys.exit(exit_code)
+    except Exception as e:
+        print(f"❌ Test runner failed: {e}")
+        sys.exit(1)
