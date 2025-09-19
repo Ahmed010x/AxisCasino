@@ -1054,443 +1054,251 @@ Play again or try another game:
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
-# --- Deposit System ---
+# --- Deposit/Withdrawal Handlers ---
 
 async def deposit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle deposit requests"""
+    """Handle main deposit menu"""
     query = update.callback_query
     await query.answer()
-    user_id = query.from_user.id
-    user = await get_user(user_id)
-    balance_usd = await format_usd(user['balance'])
     
-    text = f"""
+    text = """
 💳 **DEPOSIT FUNDS** 💳
 
-💰 **Current Balance:** {balance_usd}
-👤 **Player:** {user['username']}
+Choose your cryptocurrency:
 
-🏦 **Supported Cryptocurrencies:**
+🏦 **Supported Assets:**
 • Litecoin (LTC) - Fast & low fees
-• Toncoin (TON) - Telegram native
-• Solana (SOL) - High speed network
-
-📋 **Deposit Process:**
-1. Choose cryptocurrency
-2. Enter amount in USD
-3. Pay the generated invoice
-4. Funds added instantly
+• Toncoin (TON) - Telegram native  
+• Solana (SOL) - High speed
 
 ⚡ **Instant deposits via CryptoBot**
 🔒 **Secure & anonymous**
 """
     
     keyboard = [
-        [
-            InlineKeyboardButton("Ł Litecoin (LTC)", callback_data="deposit_crypto_ltc"),
-            InlineKeyboardButton("🪙 Toncoin (TON)", callback_data="deposit_crypto_ton"),
-            InlineKeyboardButton("◎ Solana (SOL)", callback_data="deposit_crypto_sol")
-        ],
+        [InlineKeyboardButton("Ł Litecoin (LTC)", callback_data="deposit_ltc"),
+         InlineKeyboardButton("🪙 Toncoin (TON)", callback_data="deposit_ton")],
+        [InlineKeyboardButton("◎ Solana (SOL)", callback_data="deposit_sol")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
-async def deposit_crypto_ltc(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await ask_deposit_amount(update, context, asset="LTC")
-
-async def deposit_crypto_ton(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await ask_deposit_amount(update, context, asset="TON")
-
-async def deposit_crypto_sol(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await ask_deposit_amount(update, context, asset="SOL")
-
-async def ask_deposit_amount(update: Update, context: ContextTypes.DEFAULT_TYPE, asset: str):
-    context.user_data['deposit_asset'] = asset
-    user_id = update.effective_user.id
-    user = await get_user(user_id)
-    
-    asset_name = {"LTC": "Litecoin", "TON": "Toncoin", "SOL": "Solana"}.get(asset, asset)
-    asset_emoji = {"LTC": "Ł", "TON": "🪙", "SOL": "◎"}.get(asset, "💰")
-    
-    # Get current rate
-    asset_rate = await get_crypto_usd_rate(asset)
-    balance_usd = await format_usd(user['balance'])
-    
-    text = (
-        f"{asset_emoji} <b>{asset_name} Deposit</b>\n\n"
-        f"💰 <b>Current Balance:</b> {balance_usd}\n"
-        f"📊 <b>Current {asset} Rate:</b> ${asset_rate:.2f}\n\n"
-        f"💡 <b>Minimum deposit:</b> $0.50\n"
-        f"⚡ <b>Processing:</b> Instant via CryptoBot\n\n"
-        f"Enter the amount in <b>USD</b> you want to deposit:"
-    )
-    
-    await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML)
-    return DEPOSIT_LTC_AMOUNT
-
-async def deposit_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    asset = context.user_data.get('deposit_asset', 'LTC')
-    asset_name = {"LTC": "Litecoin", "TON": "Toncoin", "SOL": "Solana"}.get(asset, asset)
-    
-    try:
-        usd_amount = float(update.message.text.strip())
-        if usd_amount < 0.50:
-            await update.message.reply_text(f"❌ Minimum deposit is $0.50 for {asset_name}. Please enter a valid amount:")
-            return DEPOSIT_LTC_AMOUNT
-    except Exception:
-        await update.message.reply_text(f"❌ Invalid amount. Please enter a valid USD amount (min $0.50) for {asset_name}:")
-        return DEPOSIT_LTC_AMOUNT
-    
-    try:
-        # Get current rate for the selected asset
-        asset_usd_rate = await get_crypto_usd_rate(asset)
-        if asset_usd_rate == 0.0:
-            await update.message.reply_text(f"❌ {asset_name} rate unavailable. Please try again later.")
-            return ConversationHandler.END
-        
-        # Convert USD to asset amount
-        asset_amount = usd_amount / asset_usd_rate
-        
-        # Check required env vars
-        missing_env = []
-        if not CRYPTOBOT_API_TOKEN:
-            missing_env.append("CRYPTOBOT_API_TOKEN")
-        if not CRYPTOBOT_WEBHOOK_SECRET:
-            missing_env.append("CRYPTOBOT_WEBHOOK_SECRET")
-        
-        if missing_env:
-            await update.message.reply_text(f"❌ {asset_name} deposits temporarily unavailable. Missing: {', '.join(missing_env)}")
-            return ConversationHandler.END
-        
-        # Create invoice
-        payload = {"hidden_message": str(user_id), "asset": asset}
-        invoice = await create_crypto_invoice(asset, asset_amount, user_id, payload=payload)
-        
-        if invoice.get("ok"):
-            invoice_data = invoice.get("result", {})
-            pay_url = invoice_data.get("pay_url")
-            invoice_id = invoice_data.get("invoice_id")
-            
-            text = (
-                f"✅ <b>{asset_name} Deposit Invoice Created!</b>\n\n"
-                f"💰 <b>Amount:</b> ${usd_amount:.2f} (≈ {asset_amount:.8f} {asset})\n"
-                f"🆔 <b>Invoice ID:</b> <code>{invoice_id}</code>\n\n"
-                f"📱 <b>Pay using the button below or scan the QR code in CryptoBot</b>\n\n"
-                f"⏰ <b>Invoice expires in 1 hour</b>\n"
-                f"⚡ <b>Funds will be added instantly after payment</b>"
-            )
-            
-            keyboard = [
-                [InlineKeyboardButton(f"💳 Pay {asset_amount:.8f} {asset}", url=pay_url)],
-                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-            ]
-            
-            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-        else:
-            error_msg = invoice.get("error", {}).get("name", "Unknown error")
-            await update.message.reply_text(f"❌ Failed to create {asset_name} invoice: {error_msg}")
-            
-    except Exception as e:
-        logger.error(f"Deposit error for {asset}: {e}")
-        await update.message.reply_text(f"❌ {asset_name} deposit system temporarily unavailable. Please try again later.")
-    
-    return ConversationHandler.END
-
-# --- Withdrawal System ---
-
 async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle withdrawal requests - now supports multiple assets"""
+    """Handle main withdraw menu"""
     query = update.callback_query
     await query.answer()
-    user_id = query.from_user.id
-    user = await get_user(user_id)
-
-    # Get withdrawal history
-    recent_withdrawals = await get_user_withdrawals(user_id, 3)
-    pending_withdrawals = [w for w in recent_withdrawals if w['status'] == 'pending']
     
-    # Check for pending withdrawals
-    if pending_withdrawals:
-        await query.answer("❌ You have pending withdrawals. Please wait for them to complete.", show_alert=True)
-        return
-
-    balance_usd = await format_usd(user['balance'])
-    
-    # Show recent withdrawals if any
-    withdrawal_history = ""
-    if recent_withdrawals:
-        withdrawal_history = "\n📊 **Recent Withdrawals:**\n"
-        for w in recent_withdrawals[:3]:
-            status_emoji = {"completed": "✅", "pending": "⏳", "failed": "❌"}.get(w['status'], "❓")
-            withdrawal_history += f"• {status_emoji} ${w['amount'] * await get_crypto_usd_rate(w['asset']):.2f} {w['asset']} - {w['status']}\n"
-
-    text = f"""
+    text = """
 💸 **WITHDRAW FUNDS** 💸
 
-💰 **Available Balance:** {balance_usd}
-👤 **Player:** {user['username']}
+Choose your cryptocurrency:
 
-📋 **Withdrawal Requirements:**
-• Minimum: ${MIN_WITHDRAWAL_USD:.2f}
-• Daily Limit: ${MAX_WITHDRAWAL_USD_DAILY:.2f}
-• Fee: {WITHDRAWAL_FEE_PERCENT}% of amount
-• Processing: Instant via CryptoBot
-• Cooldown: {WITHDRAWAL_COOLDOWN_SECONDS//60} minutes between withdrawals
+📋 **Withdrawal Info:**
+• Minimum: $1.00 USD
+• Maximum: $10,000 USD daily
+• Fee: 2% of amount
+• Processing: Instant
 
-🏦 **Choose Withdrawal Method:**
-{withdrawal_history}
+🔒 **Secure withdrawals via CryptoBot**
 """
     
     keyboard = [
-        [
-            InlineKeyboardButton("Ł Litecoin (LTC)", callback_data="withdraw_crypto_ltc"),
-            InlineKeyboardButton("🪙 Toncoin (TON)", callback_data="withdraw_crypto_ton"),
-            InlineKeyboardButton("◎ Solana (SOL)", callback_data="withdraw_crypto_sol")
-        ],
-        [InlineKeyboardButton("📊 Withdrawal History", callback_data="withdrawal_history")],
+        [InlineKeyboardButton("Ł Litecoin (LTC)", callback_data="withdraw_ltc"),
+         InlineKeyboardButton("🪙 Toncoin (TON)", callback_data="withdraw_ton")],
+        [InlineKeyboardButton("◎ Solana (SOL)", callback_data="withdraw_sol")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
-async def withdraw_crypto_ltc(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await ask_withdraw_amount(update, context, asset="LTC")
-
-async def withdraw_crypto_ton(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await ask_withdraw_amount(update, context, asset="TON")
-
-async def withdraw_crypto_sol(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await ask_withdraw_amount(update, context, asset="SOL")
-
-async def ask_withdraw_amount(update: Update, context: ContextTypes.DEFAULT_TYPE, asset: str):
-    context.user_data['withdraw_asset'] = asset
-    user_id = update.effective_user.id
-    user = await get_user(user_id)
+async def deposit_ltc_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle LTC deposit"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
     
-    asset_name = {"LTC": "Litecoin", "TON": "Toncoin", "SOL": "Solana"}.get(asset, asset)
-    asset_emoji = {"LTC": "Ł", "TON": "🪙", "SOL": "◎"}.get(asset, "💰")
+    # Create crypto invoice for LTC
+    amount = 0.01  # Minimum deposit amount in LTC
+    invoice_result = await create_crypto_invoice('LTC', amount, user_id)
     
-    # Check withdrawal limits first
-    limits_check = await check_withdrawal_limits(user_id, MIN_WITHDRAWAL_USD)
-    if not limits_check['allowed']:
-        await update.callback_query.edit_message_text(f"❌ {limits_check['reason']}")
-        return ConversationHandler.END
-    
-    # Get current rate
-    asset_rate = await get_crypto_usd_rate(asset)
-    balance_usd = await format_usd(user['balance'])
-    max_withdraw_crypto = user['balance']
-    max_withdraw_usd = max_withdraw_crypto * asset_rate if asset_rate > 0 else 0
-    
-    # Calculate fees for display
-    example_fee_crypto = calculate_withdrawal_fee(0.1)
-    example_fee_usd = example_fee_crypto * asset_rate if asset_rate > 0 else 0
-    
-    text = (
-        f"{asset_emoji} <b>{asset_name} Withdrawal</b>\n\n"
-        f"💰 <b>Available Balance:</b> {balance_usd}\n"
-        f"📊 <b>Current {asset} Rate:</b> ${asset_rate:.2f}\n\n"
-        f"📋 <b>Withdrawal Details:</b>\n"
-        f"• Minimum: ${MIN_WITHDRAWAL_USD:.2f}\n"
-        f"• Maximum: ${min(max_withdraw_usd, MAX_WITHDRAWAL_USD_DAILY):.2f}\n"
-        f"• Fee: {WITHDRAWAL_FEE_PERCENT}% (Example: ${example_fee_usd:.4f})\n\n"
-        f"💡 <b>Note:</b> Fee is deducted from withdrawal amount\n\n"
-        f"Enter the amount in <b>USD</b> you want to withdraw:"
-    )
-    
-    await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML)
-    return WITHDRAW_LTC_AMOUNT
-
-async def withdraw_crypto_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    user = await get_user(user_id)
-    asset = context.user_data.get('withdraw_asset', 'LTC')
-    asset_name = {"LTC": "Litecoin", "TON": "Toncoin", "SOL": "Solana"}.get(asset, asset)
-    
-    try:
-        usd_amount = float(update.message.text.strip())
-        # Validate minimum amount
-        if usd_amount < MIN_WITHDRAWAL_USD:
-            await update.message.reply_text(f"❌ Minimum withdrawal is ${MIN_WITHDRAWAL_USD:.2f}. Please enter a valid amount:")
-            return WITHDRAW_LTC_AMOUNT
-            
-        # Check withdrawal limits
-        limits_check = await check_withdrawal_limits(user_id, usd_amount)
-        if not limits_check['allowed']:
-            await update.message.reply_text(f"❌ {limits_check['reason']}")
-            return ConversationHandler.END
-            
-        # Convert USD to asset amount
-        asset_usd_rate = await get_crypto_usd_rate(asset)
-        if asset_usd_rate == 0.0:
-            await update.message.reply_text(f"❌ {asset_name} rate unavailable. Please try again later.")
-            return ConversationHandler.END
-            
-        asset_amount = usd_amount / asset_usd_rate
+    if invoice_result.get('ok'):
+        pay_url = invoice_result['result']['pay_url']
+        invoice_id = invoice_result['result']['invoice_id']
         
-        # Check if user has sufficient balance
-        if user['balance'] < asset_amount:
-            available_usd = user['balance'] * asset_usd_rate
-            await update.message.reply_text(f"❌ Insufficient balance. Available: ${available_usd:.2f}")
-            return ConversationHandler.END
-            
-        # Calculate fees
-        fee_asset = calculate_withdrawal_fee(asset_amount)
-        fee_usd = fee_asset * asset_usd_rate
-        net_asset = asset_amount - fee_asset
-        net_usd = net_asset * asset_usd_rate
-        
-        # Validate that after fees, user still gets meaningful amount
-        if net_asset <= 0:
-            await update.message.reply_text(f"❌ Amount too small after fees. Minimum after fees: ${(MIN_WITHDRAWAL_FEE + 0.01) * asset_usd_rate:.2f}")
-            return WITHDRAW_LTC_AMOUNT
-            
-    except ValueError:
-        await update.message.reply_text(f"❌ Invalid amount. Please enter a valid USD amount:")
-        return WITHDRAW_LTC_AMOUNT
-    except Exception as e:
-        await update.message.reply_text("❌ Error processing amount. Please try again:")
-        return WITHDRAW_LTC_AMOUNT
-    
-    # Store withdrawal details
-    context.user_data['withdraw_amount_asset'] = asset_amount
-    context.user_data['withdraw_amount_usd'] = usd_amount
-    context.user_data['withdraw_fee_asset'] = fee_asset
-    context.user_data['withdraw_fee_usd'] = fee_usd
-    context.user_data['withdraw_net_asset'] = net_asset
-    context.user_data['withdraw_net_usd'] = net_usd
-    
-    # Address format examples based on asset
-    address_examples = {
-        "LTC": "• Legacy: L... or M...\n• SegWit: 3...\n• Bech32: ltc1...",
-        "TON": "• TON Address: UQ...\n• TON v4r2 Format",
-        "SOL": "• Solana Address: Base58 format\n• Example: 9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"
-    }
-    
-    text = (
-        f"💵 <b>{asset_name} Withdrawal Summary</b>\n\n"
-        f"📊 <b>Amount Details:</b>\n"
-        f"• Requested: <b>${usd_amount:.2f}</b> (≈ {asset_amount:.8f} {asset})\n"
-        f"• Fee ({WITHDRAWAL_FEE_PERCENT}%): <b>${fee_usd:.4f}</b> (≈ {fee_asset:.8f} {asset})\n"
-        f"• You'll receive: <b>${net_usd:.2f}</b> (≈ {net_asset:.8f} {asset})\n\n"
-        f"📍 <b>Next Step:</b>\n"
-        f"Enter your {asset_name} address:\n\n"
-        f"💡 <b>Supported formats:</b>\n"
-        f"{address_examples.get(asset, '• Standard format for this asset')}\n\n"
-        f"⚠️ <b>Warning:</b> Double-check your address!"
-    )
-    
-    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
-    return WITHDRAW_LTC_ADDRESS
+        text = f"""
+💳 **LTC DEPOSIT** 💳
 
-async def withdraw_crypto_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    user = await get_user(user_id)
-    address = update.message.text.strip()
-    asset = context.user_data.get('withdraw_asset', 'LTC')
-    asset_name = {"LTC": "Litecoin", "TON": "Toncoin", "SOL": "Solana"}.get(asset, asset)
-    
-    # Get withdrawal details from context
-    asset_amount = context.user_data.get('withdraw_amount_asset')
-    usd_amount = context.user_data.get('withdraw_amount_usd')
-    fee_asset = context.user_data.get('withdraw_fee_asset')
-    fee_usd = context.user_data.get('withdraw_fee_usd')
-    net_asset = context.user_data.get('withdraw_net_asset')
-    net_usd = context.user_data.get('withdraw_net_usd')
-    
-    if not all([asset_amount, usd_amount, fee_asset, fee_usd, net_asset, net_usd]):
-        await update.message.reply_text("❌ Session expired. Please start withdrawal again.")
-        return ConversationHandler.END
-    
-    # Basic address validation
-    if not validate_crypto_address(address, asset):
-        asset_format_msg = {
-            "LTC": "Please enter a valid Litecoin address:\n• Legacy: L... or M...\n• SegWit: 3...\n• Bech32: ltc1...",
-            "TON": "Please enter a valid TON address:\n• TON Address: UQ...",
-            "SOL": "Please enter a valid Solana address:\n• Base58 format"
-        }
-        await update.message.reply_text(
-            f"❌ Invalid {asset_name} address format.\n\n{asset_format_msg.get(asset, 'Invalid address format.')}"
-        )
-        return WITHDRAW_LTC_ADDRESS
-    
-    # Final validation
-    if user['balance'] < asset_amount:
-        await update.message.reply_text("❌ Insufficient balance.")
-        return ConversationHandler.END
-    
-    limits_check = await check_withdrawal_limits(user_id, usd_amount)
-    if not limits_check['allowed']:
-        await update.message.reply_text(f"❌ {limits_check['reason']}")
-        return ConversationHandler.END
-    
-    # Log withdrawal attempt
-    withdrawal_id = await log_withdrawal(
-        user_id, asset, asset_amount, address, fee_asset, net_asset
-    )
-    
-    try:
-        # Deduct full amount from balance (including fees)
-        if not await deduct_balance(user_id, asset_amount):
-            await update_withdrawal_status(withdrawal_id, 'failed', '', 'Failed to deduct balance')
-            await update.message.reply_text("❌ Failed to process withdrawal. Please try again.")
-            return ConversationHandler.END
-        
-        # Send crypto via CryptoBot (send net amount after fees)
-        result = await send_crypto(address, net_asset, f"Withdrawal for user {user_id}", asset=asset)
-        
-        if result.get("ok"):
-            # Successful withdrawal
-            transaction_id = result.get("result", {}).get("transfer_id", "unknown")
-            await update_withdrawal_status(withdrawal_id, 'completed', str(transaction_id))
-            await update_withdrawal_limits(user_id, usd_amount)
-            
-            success_text = (
-                f"✅ <b>{asset_name} Withdrawal Successful!</b>\n\n"
-                f"💰 <b>Amount:</b> ${net_usd:.2f} (≈ {net_asset:.8f} {asset})\n"
-                f"💸 <b>Fee:</b> ${fee_usd:.4f} (≈ {fee_asset:.8f} {asset})\n"
-                f"📍 <b>Address:</b> <code>{address}</code>\n"
-                f"🆔 <b>Transaction ID:</b> <code>{transaction_id}</code>\n\n"
-                f"💡 <b>Processing:</b> Your withdrawal has been processed via CryptoBot.\n"
-                f"🔍 <b>Confirmation:</b> Check your wallet in a few minutes."
-            )
-            
-            await update.message.reply_text(success_text, parse_mode=ParseMode.HTML)
-            logger.info(f"Withdrawal completed: {net_asset} {asset} to {address} for user {user_id}, TX: {transaction_id}")
-            
-        else:
-            # Failed withdrawal - refund user
-            await update_balance(user_id, asset_amount)  # Refund full amount
-            error_msg = result.get("error", {}).get("name", "Unknown error")
-            await update_withdrawal_status(withdrawal_id, 'failed', '', error_msg)
-            
-            await update.message.reply_text(
-                f"❌ <b>{asset_name} Withdrawal Failed</b>\n\n"
-                f"Your balance has been refunded.\n"
-                f"Error: {error_msg}\n\n"
-                f"Please try again later or contact support.",
-                parse_mode=ParseMode.HTML
-            )
-            logger.error(f"CryptoBot withdrawal failed for user {user_id}: {result}")
-            
-    except Exception as e:
-        # Exception occurred - refund user
-        await update_balance(user_id, asset_amount)  # Refund full amount
-        await update_withdrawal_status(withdrawal_id, 'failed', '', str(e))
-        
-        await update.message.reply_text(
-            f"❌ <b>{asset_name} Withdrawal Failed</b>\n\n"
-            "Your balance has been refunded.\n"
-            "Please try again later or contact support.",
-            parse_mode=ParseMode.HTML
-        )
-        logger.error(f"Withdrawal exception for user {user_id}: {e}")
-    
-    return ConversationHandler.END
+💰 **Amount:** {amount} LTC
+🔗 **Payment Link:** [Click here to pay]({pay_url})
+🆔 **Invoice ID:** `{invoice_id}`
 
-# --- Admin and Owner Panels ---
+⚡ Payment will be processed automatically
+🔄 Your balance will update instantly after confirmation
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("💳 Pay with CryptoBot", url=pay_url)],
+            [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit"),
+             InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+    else:
+        text = f"❌ **Error creating deposit invoice**\n\n{invoice_result.get('error', 'Unknown error')}"
+        keyboard = [
+            [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit"),
+             InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True)
+
+async def deposit_ton_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle TON deposit"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    # Create crypto invoice for TON
+    amount = 1.0  # Minimum deposit amount in TON
+    invoice_result = await create_crypto_invoice('TON', amount, user_id)
+    
+    if invoice_result.get('ok'):
+        pay_url = invoice_result['result']['pay_url']
+        invoice_id = invoice_result['result']['invoice_id']
+        
+        text = f"""
+💳 **TON DEPOSIT** 💳
+
+💰 **Amount:** {amount} TON
+🔗 **Payment Link:** [Click here to pay]({pay_url})
+🆔 **Invoice ID:** `{invoice_id}`
+
+⚡ Payment will be processed automatically
+🔄 Your balance will update instantly after confirmation
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("💳 Pay with CryptoBot", url=pay_url)],
+            [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit"),
+             InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+    else:
+        text = f"❌ **Error creating deposit invoice**\n\n{invoice_result.get('error', 'Unknown error')}"
+        keyboard = [
+            [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit"),
+             InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True)
+
+async def deposit_sol_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle SOL deposit"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    # Create crypto invoice for SOL
+    amount = 0.05  # Minimum deposit amount in SOL
+    invoice_result = await create_crypto_invoice('SOL', amount, user_id)
+    
+    if invoice_result.get('ok'):
+        pay_url = invoice_result['result']['pay_url']
+        invoice_id = invoice_result['result']['invoice_id']
+        
+        text = f"""
+💳 **SOL DEPOSIT** 💳
+
+💰 **Amount:** {amount} SOL
+🔗 **Payment Link:** [Click here to pay]({pay_url})
+🆔 **Invoice ID:** `{invoice_id}`
+
+⚡ Payment will be processed automatically
+🔄 Your balance will update instantly after confirmation
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("💳 Pay with CryptoBot", url=pay_url)],
+            [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit"),
+             InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+    else:
+        text = f"❌ **Error creating deposit invoice**\n\n{invoice_result.get('error', 'Unknown error')}"
+        keyboard = [
+            [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit"),
+             InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True)
+
+async def withdraw_ltc_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle LTC withdrawal"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = """
+💸 **LTC WITHDRAWAL** 💸
+
+🚧 **Coming Soon!**
+
+LTC withdrawal functionality will be available soon.
+For now, please contact support for manual withdrawals.
+
+📞 **Support:** @casino_support
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back to Withdraw", callback_data="withdraw"),
+         InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+
+async def withdraw_ton_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle TON withdrawal"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = """
+💸 **TON WITHDRAWAL** 💸
+
+🚧 **Coming Soon!**
+
+TON withdrawal functionality will be available soon.
+For now, please contact support for manual withdrawals.
+
+📞 **Support:** @casino_support
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back to Withdraw", callback_data="withdraw"),
+         InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+
+async def withdraw_sol_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle SOL withdrawal"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = """
+💸 **SOL WITHDRAWAL** 💸
+
+🚧 **Coming Soon!**
+
+SOL withdrawal functionality will be available soon.
+For now, please contact support for manual withdrawals.
+
+📞 **Support:** @casino_support
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back to Withdraw", callback_data="withdraw"),
+         InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+
+# --- Admin/Owner Panel Handlers ---
 
 async def show_balance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show the user's current balance"""
@@ -1581,6 +1389,254 @@ async def admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     
     if is_owner(user_id):
         keyboard.append([InlineKeyboardButton("👑 Owner Panel", callback_data="owner_panel")])
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def owner_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Owner panel with full administrative features"""
+    query = getattr(update, "callback_query", None)
+    user = update.effective_user
+    user_id = user.id if user else None
+
+    if not is_owner(user_id):
+        if query:
+            await query.answer("❌ Access denied. Owner only.", show_alert=True)
+        else:
+            await update.message.reply_text("❌ Access denied. Owner only.")
+        return
+
+    # Get comprehensive bot statistics
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Total users
+        cursor = await db.execute("SELECT COUNT(*) FROM users")
+        total_users = (await cursor.fetchone())[0]
+        
+        # Total balance
+        cursor = await db.execute("SELECT SUM(balance) FROM users")
+        total_balance = (await cursor.fetchone())[0] or 0.0
+        
+        # Total wagered
+        cursor = await db.execute("SELECT SUM(total_wagered) FROM users")
+        total_wagered = (await cursor.fetchone())[0] or 0.0
+        
+        # Total games
+        cursor = await db.execute("SELECT SUM(games_played) FROM users")
+        total_games = (await cursor.fetchone())[0] or 0
+        
+        # Withdrawals today
+        today = datetime.now().date()
+        cursor = await db.execute("""
+            SELECT COUNT(*), SUM(amount_usd) FROM withdrawals 
+            WHERE DATE(created_at) = ? AND status = 'completed'
+        """, (today,))
+        withdrawal_data = await cursor.fetchone()
+        withdrawals_today = withdrawal_data[0] or 0
+        withdrawal_amount_today = withdrawal_data[1] or 0.0
+
+    total_balance_usd = await format_usd(total_balance)
+    total_wagered_usd = await format_usd(total_wagered)
+
+    text = f"""
+👑 <b>OWNER CONTROL PANEL</b> 👑
+
+📊 <b>System Statistics:</b>
+• Total Users: {total_users:,}
+• Total Balance: {total_balance_usd}
+• Total Wagered: {total_wagered_usd}
+• Total Games: {total_games:,}
+• Demo Mode: {'ON' if DEMO_MODE else 'OFF'}
+
+💰 <b>Today's Activity:</b>
+• Withdrawals: {withdrawals_today} (${withdrawal_amount_today:.2f})
+
+🎮 <b>Bot Version:</b> {BOT_VERSION}
+"""
+    # Improved button layout with better organization
+    keyboard = [
+        [InlineKeyboardButton("📊 Detailed Stats", callback_data="owner_detailed_stats"), 
+         InlineKeyboardButton("👥 User Management", callback_data="owner_user_mgmt")],
+        [InlineKeyboardButton("💰 Financial Report", callback_data="owner_financial"), 
+         InlineKeyboardButton("📋 Withdrawal History", callback_data="owner_withdrawals")],
+        [InlineKeyboardButton("⚙️ System Health", callback_data="owner_system_health"), 
+         InlineKeyboardButton("🎮 Toggle Demo", callback_data="admin_toggle_demo")],
+        [InlineKeyboardButton("🔧 Bot Settings", callback_data="owner_bot_settings"), 
+         InlineKeyboardButton("📈 Analytics", callback_data="owner_analytics")],
+        [InlineKeyboardButton("🔄 Refresh Data", callback_data="owner_panel")],
+        [InlineKeyboardButton("👤 User Panel", callback_data="main_panel"), 
+         InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    # Add Admin Panel switch for owner
+    keyboard.append([InlineKeyboardButton("🔑 Admin Panel", callback_data="admin_panel")])
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def show_balance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show the user's current balance"""
+    user = update.effective_user
+    user_id = user.id
+    user_data = await get_user(user_id)
+    if not user_data:
+        await update.message.reply_text("❌ User not found. Please /start to register.")
+        return
+    balance_usd = await format_usd(user_data['balance'])
+    text = (
+        f"💰 <b>Your Balance</b>\n\n"
+        f"👤 <b>User:</b> {user_data['username']}\n"
+        f"💵 <b>Balance:</b> {balance_usd}\n"
+        f"🏆 <b>Games Played:</b> {user_data['games_played']}\n"
+    )
+    keyboard = [
+        [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre")],
+        [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
+        [InlineKeyboardButton("💸 Withdraw", callback_data="withdraw")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    if hasattr(update, 'callback_query') and update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    else:
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin panel with enhanced features"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    if not (is_admin(user_id) or is_owner(user_id)):
+        await query.edit_message_text("❌ Access denied. Admin privileges required.")
+        return
+    
+    # Get bot statistics
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Total users
+        cur = await db.execute("SELECT COUNT(*) FROM users")
+        total_users = (await cur.fetchone())[0]
+        
+        # Total balance
+        cur = await db.execute("SELECT SUM(balance) FROM users")
+        total_balance = (await cur.fetchone())[0] or 0.0
+        
+        # Total games played
+        cur = await db.execute("SELECT SUM(games_played) FROM users")
+        total_games = (await cur.fetchone())[0] or 0
+        
+        # Total wagered
+        cur = await db.execute("SELECT SUM(total_wagered) FROM users")
+        total_wagered = (await cur.fetchone())[0] or 0.0
+        
+        # Active users (played in last 24h)
+        yesterday = (datetime.now() - timedelta(days=1)).isoformat()
+        cur = await db.execute("SELECT COUNT(*) FROM users WHERE last_active > ?", (yesterday,))
+        active_users = (await cur.fetchone())[0]
+    
+    total_balance_usd = await format_usd(total_balance)
+    total_wagered_usd = await format_usd(total_wagered)
+    
+    status_badge = "👑 OWNER" if is_owner(user_id) else "🔑 ADMIN"
+    
+    text = (
+        f"⚙️ <b>{status_badge} PANEL</b> ⚙️\n\n"
+        f"📊 <b>Bot Statistics:</b>\n"
+        f"• Total Users: {total_users}\n"
+        f"• Total Balance: {total_balance_usd}\n"
+        f"• Total Games: {total_games}\n"
+        f"• Total Wagered: {total_wagered_usd}\n"
+        f"• Active Users (24h): {active_users}\n"
+        f"• Demo Mode: {'ON' if DEMO_MODE else 'OFF'}\n\n"
+        f"🎮 <b>Admin Commands:</b>\n"
+        f"• /admin - Check admin status\n"
+        f"• /demo - Toggle demo mode\n"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("🎮 Toggle Demo Mode", callback_data="admin_toggle_demo")],
+        [InlineKeyboardButton("📊 User Stats", callback_data="owner_user_stats")],
+        [InlineKeyboardButton("💰 Balance Report", callback_data="owner_financial")],
+        [InlineKeyboardButton("🔄 Refresh Stats", callback_data="admin_panel")],
+        [InlineKeyboardButton("👤 User Panel", callback_data="main_panel")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    if is_owner(user_id):
+        keyboard.append([InlineKeyboardButton("👑 Owner Panel", callback_data="owner_panel")])
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def owner_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Owner panel with full administrative features"""
+    query = getattr(update, "callback_query", None)
+    user = update.effective_user
+    user_id = user.id if user else None
+
+    if not is_owner(user_id):
+        if query:
+            await query.answer("❌ Access denied. Owner only.", show_alert=True)
+        else:
+            await update.message.reply_text("❌ Access denied. Owner only.")
+        return
+
+    # Get comprehensive bot statistics
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Total users
+        cursor = await db.execute("SELECT COUNT(*) FROM users")
+        total_users = (await cursor.fetchone())[0]
+        
+        # Total balance
+        cursor = await db.execute("SELECT SUM(balance) FROM users")
+        total_balance = (await cursor.fetchone())[0] or 0.0
+        
+        # Total wagered
+        cursor = await db.execute("SELECT SUM(total_wagered) FROM users")
+        total_wagered = (await cursor.fetchone())[0] or 0.0
+        
+        # Total games
+        cursor = await db.execute("SELECT SUM(games_played) FROM users")
+        total_games = (await cursor.fetchone())[0] or 0
+        
+        # Withdrawals today
+        today = datetime.now().date()
+        cursor = await db.execute("""
+            SELECT COUNT(*), SUM(amount_usd) FROM withdrawals 
+            WHERE DATE(created_at) = ? AND status = 'completed'
+        """, (today,))
+        withdrawal_data = await cursor.fetchone()
+        withdrawals_today = withdrawal_data[0] or 0
+        withdrawal_amount_today = withdrawal_data[1] or 0.0
+
+    total_balance_usd = await format_usd(total_balance)
+    total_wagered_usd = await format_usd(total_wagered)
+
+    text = f"""
+👑 <b>OWNER CONTROL PANEL</b> 👑
+
+📊 <b>System Statistics:</b>
+• Total Users: {total_users:,}
+• Total Balance: {total_balance_usd}
+• Total Wagered: {total_wagered_usd}
+• Total Games: {total_games:,}
+• Demo Mode: {'ON' if DEMO_MODE else 'OFF'}
+
+💰 <b>Today's Activity:</b>
+• Withdrawals: {withdrawals_today} (${withdrawal_amount_today:.2f})
+
+🎮 <b>Bot Version:</b> {BOT_VERSION}
+"""
+    # Improved button layout with better organization
+    keyboard = [
+        [InlineKeyboardButton("📊 Detailed Stats", callback_data="owner_detailed_stats"), 
+         InlineKeyboardButton("👥 User Management", callback_data="owner_user_mgmt")],
+        [InlineKeyboardButton("💰 Financial Report", callback_data="owner_financial"), 
+         InlineKeyboardButton("📋 Withdrawal History", callback_data="owner_withdrawals")],
+        [InlineKeyboardButton("⚙️ System Health", callback_data="owner_system_health"), 
+         InlineKeyboardButton("🎮 Toggle Demo", callback_data="admin_toggle_demo")],
+        [InlineKeyboardButton("🔧 Bot Settings", callback_data="owner_bot_settings"), 
+         InlineKeyboardButton("📈 Analytics", callback_data="owner_analytics")],
+        [InlineKeyboardButton("🔄 Refresh Data", callback_data="owner_panel")],
+        [InlineKeyboardButton("👤 User Panel", callback_data="main_panel"), 
+         InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    # Add Admin Panel switch for owner
+    keyboard.append([InlineKeyboardButton("🔑 Admin Panel", callback_data="admin_panel")])
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
@@ -1680,476 +1736,8 @@ async def owner_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         [InlineKeyboardButton("👤 User Panel", callback_data="main_panel"), 
          InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
-    
-    if query:
-        try:
-            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-        except BadRequest as e:
-            logger.error(f"[OWNER PANEL] BadRequest: {e}")
-            await query.answer("❌ Failed to update panel. Please try again.", show_alert=True)
-        except TelegramError as e:
-            logger.error(f"[OWNER PANEL] TelegramError: {e}")
-            await query.answer("❌ Telegram error. Please try again.", show_alert=True)
-        except Exception as e:
-            logger.error(f"[OWNER PANEL] Unexpected error: {e}")
-            await query.answer("❌ Unexpected error. Please try again.", show_alert=True)
-    else:
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-
-async def owner_detailed_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show detailed system statistics"""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    
-    if not is_owner(user_id):
-        await query.answer("❌ Access denied. Owner only.", show_alert=True)
-        return
-
-    async with aiosqlite.connect(DB_PATH) as db:
-        # User statistics
-        cursor = await db.execute("SELECT COUNT(*) FROM users")
-        total_users = (await cursor.fetchone())[0]
-        
-        cursor = await db.execute("SELECT COUNT(*) FROM users WHERE games_played > 0")
-        active_players = (await cursor.fetchone())[0]
-        
-        # Game statistics
-        cursor = await db.execute("SELECT SUM(games_played) FROM users")
-        total_games = (await cursor.fetchone())[0] or 0
-        
-        cursor = await db.execute("SELECT SUM(total_wagered), SUM(balance) FROM users")
-        result = await cursor.fetchone()
-        total_wagered = result[0] or 0.0
-        total_balance = result[1] or 0.0
-        
-        # Recent activity (last 24h)
-        yesterday = (datetime.now() - timedelta(days=1)).isoformat()
-        cursor = await db.execute("SELECT COUNT(*) FROM users WHERE last_active > ?", (yesterday,))
-        recent_active = (await cursor.fetchone())[0]
-        
-        # Top players by balance
-        cursor = await db.execute("SELECT username, balance FROM users ORDER BY balance DESC LIMIT 5")
-        top_players = await cursor.fetchall()
-
-    text = f"""
-📊 <b>DETAILED SYSTEM STATISTICS</b>
-
-👥 <b>User Metrics:</b>
-• Total Registered: {total_users:,}
-• Active Players: {active_players:,}
-• Recent Activity (24h): {recent_active:,}
-• Conversion Rate: {(active_players/max(total_users,1)*100):.1f}%
-
-🎮 <b>Game Metrics:</b>
-• Total Games Played: {total_games:,}
-• Total Wagered: {await format_usd(total_wagered)}
-• Current Balances: {await format_usd(total_balance)}
-• Avg Games/User: {(total_games/max(active_players,1)):.1f}
-
-💰 <b>Top Players by Balance:</b>
-"""
-    
-    for i, (username, balance) in enumerate(top_players, 1):
-        text += f"• #{i} {username}: {await format_usd(balance)}\n"
-
-    keyboard = [
-        [InlineKeyboardButton("🔙 Back to Owner Panel", callback_data="owner_panel")],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-
-async def owner_user_mgmt_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """User management panel"""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    
-    if not is_owner(user_id):
-        await query.answer("❌ Access denied. Owner only.", show_alert=True)
-        return
-
-    async with aiosqlite.connect(DB_PATH) as db:
-        # Recent users
-        cursor = await db.execute("""
-            SELECT user_id, username, balance, games_played, created_at 
-            FROM users ORDER BY created_at DESC LIMIT 10
-        """)
-        recent_users = await cursor.fetchall()
-        
-        # Problem users (high balance, no games)
-        cursor = await db.execute("""
-            SELECT user_id, username, balance FROM users 
-            WHERE balance > 0.1 AND games_played = 0 
-            ORDER BY balance DESC LIMIT 5
-        """)
-        problem_users = await cursor.fetchall()
-
-    text = f"""
-👥 <b>USER MANAGEMENT</b>
-
-📝 <b>Recent Registrations:</b>
-"""
-    
-    for user_data in recent_users[:5]:
-        user_id_db, username, balance, games, created = user_data
-        text += f"• {username} - {await format_usd(balance)} ({games} games)\n"
-    
-    text += f"\n⚠️ <b>High Balance, No Games:</b>\n"
-    for user_data in problem_users:
-        user_id_db, username, balance = user_data
-        text += f"• {username}: {await format_usd(balance)}\n"
-
-    keyboard = [
-        [InlineKeyboardButton("📊 Export Users", callback_data="owner_export_users"),
-         InlineKeyboardButton("🔍 User Search", callback_data="owner_user_search")],
-        [InlineKeyboardButton("⚠️ Problem Users", callback_data="owner_problem_users"),
-         InlineKeyboardButton("📈 User Analytics", callback_data="owner_user_analytics")],
-        [InlineKeyboardButton("🔙 Back to Owner Panel", callback_data="owner_panel")],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-
-async def owner_financial_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Financial report panel"""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    
-    if not is_owner(user_id):
-        await query.answer("❌ Access denied. Owner only.", show_alert=True)
-        return
-
-    async with aiosqlite.connect(DB_PATH) as db:
-        # Today's stats
-        today = datetime.now().date()
-        
-        # Withdrawals today
-        cursor = await db.execute("""
-            SELECT COUNT(*), COALESCE(SUM(amount_usd), 0) FROM withdrawals 
-            WHERE DATE(created_at) = ? AND status = 'completed'
-        """, (today,))
-        withdrawals_today = await cursor.fetchone()
-        
-        # This week's stats
-        week_ago = (datetime.now() - timedelta(days=7)).date()
-        cursor = await db.execute("""
-            SELECT COUNT(*), COALESCE(SUM(amount_usd), 0) FROM withdrawals 
-            WHERE DATE(created_at) >= ? AND status = 'completed'
-        """, (week_ago,))
-        withdrawals_week = await cursor.fetchone()
-        
-        # Current balances
-        cursor = await db.execute("SELECT SUM(balance) FROM users")
-        total_balance = (await cursor.fetchone())[0] or 0.0
-        
-        # Total wagered
-        cursor = await db.execute("SELECT SUM(total_wagered) FROM users")
-        total_wagered = (await cursor.fetchone())[0] or 0.0
-
-    text = f"""
-💰 <b>FINANCIAL REPORT</b>
-
-📊 <b>Today ({today}):</b>
-• Withdrawals: {withdrawals_today[0]} transactions
-• Withdrawal Amount: ${withdrawals_today[1]:.2f}
-
-📈 <b>This Week:</b>
-• Withdrawals: {withdrawals_week[0]} transactions  
-• Withdrawal Amount: ${withdrawals_week[1]:.2f}
-
-💵 <b>Current Status:</b>
-• Total User Balances: {await format_usd(total_balance)}
-• Total Wagered (All Time): {await format_usd(total_wagered)}
-• House Edge: {((total_wagered - total_balance)/max(total_wagered,1)*100):.2f}%
-
-📋 <b>Risk Assessment:</b>
-• Balance/Wagered Ratio: {(total_balance/max(total_wagered,1)*100):.1f}%
-• Status: {'🟢 Healthy' if total_balance/max(total_wagered,1) < 0.3 else '🟡 Monitor' if total_balance/max(total_wagered,1) < 0.5 else '🔴 High Risk'}
-"""
-
-    keyboard = [
-        [InlineKeyboardButton("📊 Export Report", callback_data="owner_export_financial"),
-         InlineKeyboardButton("💸 Withdrawal Details", callback_data="owner_withdrawals")],
-        [InlineKeyboardButton("📈 Revenue Chart", callback_data="owner_revenue_chart"),
-         InlineKeyboardButton("⚠️ Risk Analysis", callback_data="owner_risk_analysis")],
-        [InlineKeyboardButton("🔙 Back to Owner Panel", callback_data="owner_panel")],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-
-async def owner_withdrawals_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show withdrawal history and management"""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    
-    if not is_owner(user_id):
-        await query.answer("❌ Access denied. Owner only.", show_alert=True)
-        return
-
-    async with aiosqlite.connect(DB_PATH) as db:
-        # Recent withdrawals
-        cursor = await db.execute("""
-            SELECT user_id, asset, amount, amount_usd, address, status, created_at, transaction_hash
-            FROM withdrawals ORDER BY created_at DESC LIMIT 10
-        """)
-        recent_withdrawals = await cursor.fetchall()
-        
-        # Pending withdrawals
-        cursor = await db.execute("""
-            SELECT COUNT(*) FROM withdrawals WHERE status = 'pending'
-        """)
-        pending_count = (await cursor.fetchone())[0]
-
-    text = f"""
-💸 <b>WITHDRAWAL MANAGEMENT</b>
-
-⏳ <b>Pending Withdrawals:</b> {pending_count}
-
-📋 <b>Recent Withdrawals:</b>
-"""
-    
-    for withdrawal in recent_withdrawals[:8]:
-        user_id_w, asset, amount, amount_usd, address, status, created, tx_hash = withdrawal
-        status_emoji = {"completed": "✅", "pending": "⏳", "failed": "❌"}.get(status, "❓")
-        # Get user info
-        async with aiosqlite.connect(DB_PATH) as db2:
-            cursor2 = await db2.execute("SELECT username FROM users WHERE user_id = ?", (user_id_w,))
-            user_result = await cursor2.fetchone()
-            username = user_result[0] if user_result else f"ID:{user_id_w}"
-        
-        text += f"• {status_emoji} {username}: ${amount_usd:.2f} {asset}\n"
-        if tx_hash:
-            text += f"  TX: {tx_hash[:12]}...\n"
-
-    keyboard = [
-        [InlineKeyboardButton("⏳ Pending Only", callback_data="owner_pending_withdrawals"),
-         InlineKeyboardButton("✅ Completed Only", callback_data="owner_completed_withdrawals")],
-        [InlineKeyboardButton("❌ Failed Only", callback_data="owner_failed_withdrawals"),
-         InlineKeyboardButton("📊 Export All", callback_data="owner_export_withdrawals")],
-        [InlineKeyboardButton("🔙 Back to Owner Panel", callback_data="owner_panel")],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-
-async def owner_system_health_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """System health and diagnostics"""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    
-    if not is_owner(user_id):
-        await query.answer("❌ Access denied. Owner only.", show_alert=True)
-        return
-
-    # Check system health
-    health_status = []
-    
-    # Database check
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("SELECT 1")
-        health_status.append("✅ Database: Connected")
-    except Exception as e:
-        health_status.append(f"❌ Database: Error - {str(e)[:50]}")
-    
-    # CryptoBot API check
-    if CRYPTOBOT_API_TOKEN:
-        health_status.append("✅ CryptoBot: Token configured")
-    else:
-        health_status.append("❌ CryptoBot: No token")
-    
-    # Rate checking
-    try:
-        ltc_rate = await get_ltc_usd_rate()
-        if ltc_rate > 0:
-            health_status.append(f"✅ LTC Rate: ${ltc_rate:.2f}")
-        else:
-            health_status.append("⚠️ LTC Rate: Unable to fetch")
-    except Exception as e:
-        health_status.append("❌ LTC Rate: API Error")
-    
-    # Bot settings
-    health_status.append(f"🎮 Demo Mode: {'ON' if DEMO_MODE else 'OFF'}")
-    health_status.append(f"👑 Owner ID: {OWNER_USER_ID}")
-    health_status.append(f"🔧 Admin IDs: {len(ADMIN_USER_IDS)} configured")
-
-    text = f"""
-⚙️ <b>SYSTEM HEALTH CHECK</b>
-
-🔍 <b>System Status:</b>
-{chr(10).join(health_status)}
-
-📊 <b>Environment:</b>
-• Bot Version: {BOT_VERSION}
-• Python: {'3.13+' if hasattr(sys, 'version_info') else 'Unknown'}
-• Uptime: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-🛠️ <b>Configuration:</b>
-• Min Withdrawal: ${MIN_WITHDRAWAL_USD}
-• Max Daily Withdrawal: ${MAX_WITHDRAWAL_USD_DAILY}
-• Withdrawal Fee: {WITHDRAWAL_FEE_PERCENT}%
-• Withdrawal Cooldown: {WITHDRAWAL_COOLDOWN_SECONDS//60} minutes
-"""
-
-    keyboard = [
-        [InlineKeyboardButton("🔄 Refresh Health", callback_data="owner_system_health"),
-         InlineKeyboardButton("📋 Export Logs", callback_data="owner_export_logs")],
-        [InlineKeyboardButton("⚙️ Test APIs", callback_data="owner_test_apis"),
-         InlineKeyboardButton("🛠️ Config Check", callback_data="owner_config_check")],
-        [InlineKeyboardButton("🔙 Back to Owner Panel", callback_data="owner_panel")],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-
-async def owner_bot_settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Bot settings and configuration"""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    
-    if not is_owner(user_id):
-        await query.answer("❌ Access denied. Owner only.", show_alert=True)
-        return
-
-    text = f"""
-🔧 <b>BOT SETTINGS</b>
-
-⚙️ <b>Current Configuration:</b>
-• Demo Mode: {'🟢 ON' if DEMO_MODE else '🔴 OFF'}
-• Min Withdrawal: ${MIN_WITHDRAWAL_USD}
-• Max Daily Withdrawal: ${MAX_WITHDRAWAL_USD_DAILY}
-• Withdrawal Fee: {WITHDRAWAL_FEE_PERCENT}%
-• Cooldown Period: {WITHDRAWAL_COOLDOWN_SECONDS//60} minutes
-
-👑 <b>Access Control:</b>
-• Owner ID: {OWNER_USER_ID}
-• Admin Count: {len(ADMIN_USER_IDS)}
-
-🎮 <b>Game Settings:</b>
-• Slots RTP: 96.5%
-• Dice RTP: 98%
-• Coin Flip RTP: 98%
-
-💰 <b>Supported Assets:</b>
-• LTC (Litecoin)
-• TON (Toncoin)
-• SOL (Solana)
-"""
-
-    keyboard = [
-        [InlineKeyboardButton("🎮 Toggle Demo", callback_data="admin_toggle_demo"),
-         InlineKeyboardButton("💰 Withdrawal Settings", callback_data="owner_withdrawal_settings")],
-        [InlineKeyboardButton("👥 Admin Management", callback_data="owner_admin_mgmt"),
-         InlineKeyboardButton("🎯 Game Settings", callback_data="owner_game_settings")],
-        [InlineKeyboardButton("💸 Asset Settings", callback_data="owner_asset_settings"),
-         InlineKeyboardButton("📊 Rate Settings", callback_data="owner_rate_settings")],
-        [InlineKeyboardButton("🔙 Back to Owner Panel", callback_data="owner_panel")],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-
-async def owner_analytics_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Analytics and insights"""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    
-    if not is_owner(user_id):
-        await query.answer("❌ Access denied. Owner only.", show_alert=True)
-        return
-
-    async with aiosqlite.connect(DB_PATH) as db:
-        # User growth
-        cursor = await db.execute("""
-            SELECT DATE(created_at) as date, COUNT(*) as count 
-            FROM users 
-            WHERE created_at >= datetime('now', '-7 days')
-            GROUP BY DATE(created_at)
-            ORDER BY date DESC
-        """)
-        user_growth = await cursor.fetchall()
-        
-        # Game popularity
-        cursor = await db.execute("""
-            SELECT game_type, COUNT(*) as plays, SUM(bet_amount) as wagered
-            FROM game_sessions 
-            WHERE created_at >= datetime('now', '-7 days')
-            GROUP BY game_type
-            ORDER BY plays DESC
-        """)
-        game_stats = await cursor.fetchall()
-
-    text = f"""
-📈 <b>ANALYTICS & INSIGHTS</b>
-
-📊 <b>User Growth (Last 7 Days):</b>
-"""
-    
-    for date, count in user_growth[:5]:
-        text += f"• {date}: +{count} users\n"
-    
-    text += f"\n🎮 <b>Game Popularity (Last 7 Days):</b>\n"
-    
-    for game_type, plays, wagered in game_stats:
-        text += f"• {game_type.title()}: {plays} plays, {await format_usd(wagered)} wagered\n"
-
-    text += f"""
-
-🎯 <b>Key Metrics:</b>
-• Avg Daily Signups: {sum(count for _, count in user_growth)/max(len(user_growth), 1):.1f}
-• Most Popular Game: {game_stats[0][0].title() if game_stats else 'No data'}
-• Total Sessions (7d): {sum(plays for _, plays, _ in game_stats)}
-"""
-
-    keyboard = [
-        [InlineKeyboardButton("📊 Full Report", callback_data="owner_full_analytics"),
-         InlineKeyboardButton("📈 Growth Chart", callback_data="owner_growth_chart")],
-        [InlineKeyboardButton("🎮 Game Analytics", callback_data="owner_game_analytics"),
-         InlineKeyboardButton("👥 User Behavior", callback_data="owner_user_behavior")],
-        [InlineKeyboardButton("🔙 Back to Owner Panel", callback_data="owner_panel")],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-
-# Placeholder handlers for buttons that need more complex implementation
-async def owner_placeholder_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Placeholder for owner panel features that need more implementation"""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    
-    if not is_owner(user_id):
-        await query.answer("❌ Access denied. Owner only.", show_alert=True)
-        return
-
-    feature_name = query.data.replace("owner_", "").replace("_", " ").title()
-    
-    text = f"""
-🚧 <b>{feature_name}</b>
-
-This feature is currently under development.
-
-Available soon:
-• Advanced functionality
-• Detailed reports
-• Enhanced controls
-
-Please check back in future updates.
-"""
-
-    keyboard = [
-        [InlineKeyboardButton("🔙 Back to Owner Panel", callback_data="owner_panel")],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
+    # Add Admin Panel switch for owner
+    keyboard.append([InlineKeyboardButton("🔑 Admin Panel", callback_data="admin_panel")])
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
@@ -2275,6 +1863,86 @@ async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
     return ConversationHandler.END
 
+# --- Health Command ---
+
+async def health_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /health command - show bot status and system health"""
+    user_id = update.effective_user.id
+    
+    if not is_admin(user_id) and not is_owner(user_id):
+        await update.message.reply_text("❌ Access denied. Admin/Owner only.")
+        return
+    
+    # Get system health info
+    uptime_seconds = time.time() - start_time
+    uptime_str = f"{int(uptime_seconds//86400)}d {int((uptime_seconds%86400)//3600)}h {int((uptime_seconds%3600)//60)}m"
+    
+    # Get memory usage if psutil is available
+    try:
+        import psutil
+        memory = psutil.virtual_memory()
+        memory_percent = memory.percent
+        memory_available = f"{memory.available / (1024**3):.1f}GB"
+    except ImportError:
+        memory_percent = "N/A"
+        memory_available = "N/A"
+    
+    # Get database stats
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Total users
+        cur = await db.execute("SELECT COUNT(*) as count FROM users")
+        total_users = (await cur.fetchone())['count']
+        
+        # Active users (last 24h)
+        yesterday = (datetime.now() - timedelta(days=1)).isoformat()
+        cur = await db.execute("SELECT COUNT(*) as count FROM users WHERE last_active > ?", (yesterday,))
+        active_users = (await cur.fetchone())['count']
+    
+    # Health status
+    health_status = "🟢 Healthy"
+    if memory_percent != "N/A" and memory_percent > 90:
+        health_status = "🔴 High Memory Usage"
+    elif memory_percent != "N/A" and memory_percent > 75:
+        health_status = "🟡 Moderate Load"
+    
+    text = f"""
+🏥 **BOT HEALTH STATUS** 🏥
+
+**System Status:** {health_status}
+**Uptime:** {uptime_str}
+**Memory Usage:** {memory_percent}%
+**Available Memory:** {memory_available}
+
+**Database:**
+📊 Total Users: {total_users}
+🔥 Active Users (24h): {active_users}
+💾 Database: {DB_PATH}
+
+**Configuration:**
+🎮 Demo Mode: {'ON' if DEMO_MODE else 'OFF'}
+🔗 Keep-Alive: ON
+🌐 Port: {PORT}
+📦 Version: {BOT_VERSION}
+
+**Last Health Check:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔄 Refresh", callback_data="health_refresh")],
+        [InlineKeyboardButton("📊 Detailed Stats", callback_data="owner_detailed_stats")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+
+async def health_refresh_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle health refresh callback"""
+    query = update.callback_query
+    await query.answer("🔄 Refreshing health status...")
+    
+    # Simulate the health command for refresh
+    await health_command(update, context)
+
 # --- Main Bot Setup and Entry Point ---
 
 async def async_main():
@@ -2292,9 +1960,11 @@ async def async_main():
     
     # Command handlers
     application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("health", health_command))
     application.add_handler(CommandHandler("balance", show_balance_callback))
     application.add_handler(CommandHandler("app", mini_app_centre_command))
     application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("health", health_command))
     
     # Callback query handlers
     application.add_handler(CallbackQueryHandler(mini_app_centre_callback, pattern="^mini_app_centre$"))
@@ -2306,10 +1976,16 @@ async def async_main():
     application.add_handler(CallbackQueryHandler(handle_coinflip_bet, pattern="^coinflip_"))
     application.add_handler(CallbackQueryHandler(play_dice_callback, pattern="^play_dice$"))
     application.add_handler(CallbackQueryHandler(handle_dice_bet, pattern="^dice_"))
+    
+    # Deposit/Withdrawal handlers
+    application.add_handler(CallbackQueryHandler(deposit_callback, pattern="^deposit$"))
     application.add_handler(CallbackQueryHandler(withdraw_callback, pattern="^withdraw$"))
-    application.add_handler(CallbackQueryHandler(withdraw_crypto_ltc, pattern="^withdraw_crypto_ltc$"))
-    application.add_handler(CallbackQueryHandler(withdraw_crypto_ton, pattern="^withdraw_crypto_ton$"))
-    application.add_handler(CallbackQueryHandler(withdraw_crypto_sol, pattern="^withdraw_crypto_sol$"))
+    application.add_handler(CallbackQueryHandler(deposit_ltc_callback, pattern="^deposit_ltc$"))
+    application.add_handler(CallbackQueryHandler(deposit_ton_callback, pattern="^deposit_ton$"))
+    application.add_handler(CallbackQueryHandler(deposit_sol_callback, pattern="^deposit_sol$"))
+    application.add_handler(CallbackQueryHandler(withdraw_ltc_callback, pattern="^withdraw_ltc$"))
+    application.add_handler(CallbackQueryHandler(withdraw_ton_callback, pattern="^withdraw_ton$"))
+    application.add_handler(CallbackQueryHandler(withdraw_sol_callback, pattern="^withdraw_sol$"))
     application.add_handler(CallbackQueryHandler(start_command, pattern="^main_panel$"))
     application.add_handler(CallbackQueryHandler(redeem_panel_callback, pattern="^redeem_panel$"))
     application.add_handler(CallbackQueryHandler(help_command, pattern="^show_help$"))
@@ -2342,157 +2018,25 @@ async def async_main():
     for pattern in placeholder_patterns:
         application.add_handler(CallbackQueryHandler(owner_placeholder_callback, pattern=pattern))
     
-    # ...existing code...
     # Start keep-alive server in a separate thread for deployment platforms
     def start_keep_alive():
         app = Flask(__name__)
-        app.config['JSON_SORT_KEYS'] = False
-        
-        # Keep track of bot startup time for uptime calculation
-        startup_time = datetime.now()
         
         @app.route('/')
         def index():
-            uptime = datetime.now() - startup_time
             return {
                 "status": "running",
-                "bot_name": "Telegram Casino Bot",
                 "bot_version": BOT_VERSION,
-                "uptime_seconds": int(uptime.total_seconds()),
-                "uptime_human": str(uptime).split('.')[0],
                 "timestamp": datetime.now().isoformat(),
-                "demo_mode": DEMO_MODE,
-                "supported_assets": ["LTC", "TON", "SOL"],
-                "endpoints": {
-                    "health": "/health",
-                    "status": "/status",
-                    "metrics": "/metrics"
-                }
+                "demo_mode": DEMO_MODE
             }
         
         @app.route('/health')
         def health():
-            """Comprehensive health check endpoint"""
-            health_data = {
-                "status": "healthy",
-                "timestamp": datetime.now().isoformat(),
-                "checks": {}
-            }
+            return {"status": "healthy", "timestamp": datetime.now().isoformat()}
             
-            # Database health check
-            try:
-                import aiosqlite
-                # Simple sync check since this is a sync endpoint
-                health_data["checks"]["database"] = {
-                    "status": "healthy",
-                    "message": "Database connection available"
-                }
-            except Exception as e:
-                health_data["checks"]["database"] = {
-                    "status": "unhealthy", 
-                    "message": f"Database error: {str(e)}"
-                }
-                health_data["status"] = "degraded"
-            
-            # CryptoBot API check
-            if CRYPTOBOT_API_TOKEN:
-                health_data["checks"]["cryptobot"] = {
-                    "status": "configured",
-                    "message": "CryptoBot API token is configured"
-                }
-            else:
-                health_data["checks"]["cryptobot"] = {
-                    "status": "warning",
-                    "message": "CryptoBot API token not configured"
-                }
-            
-            # Bot configuration check
-            health_data["checks"]["configuration"] = {
-                "status": "healthy",
-                "demo_mode": DEMO_MODE,
-                "owner_configured": OWNER_USER_ID > 0,
-                "admin_count": len(ADMIN_USER_IDS)
-            }
-            
-            return health_data
-        
-        @app.route('/status')
-        def status():
-            """Bot status and basic metrics"""
-            uptime = datetime.now() - startup_time
-            return {
-                "bot_status": "running",
-                "version": BOT_VERSION,
-                "uptime": {
-                    "seconds": int(uptime.total_seconds()),
-                    "human": str(uptime).split('.')[0]
-                },
-                "configuration": {
-                    "demo_mode": DEMO_MODE,
-                    "withdrawal_limits": {
-                        "min_usd": MIN_WITHDRAWAL_USD,
-                        "max_daily_usd": MAX_WITHDRAWAL_USD_DAILY,
-                        "fee_percent": WITHDRAWAL_FEE_PERCENT
-                    },
-                    "supported_games": ["slots", "coinflip", "dice"],
-                    "supported_assets": ["LTC", "TON", "SOL"]
-                },
-                "environment": {
-                    "port": int(os.getenv('PORT', 8080)),
-                    "render_url": os.getenv('RENDER_EXTERNAL_URL', 'Not set')
-                }
-            }
-        
-        @app.route('/metrics')
-        def metrics():
-            """Basic metrics endpoint"""
-            uptime = datetime.now() - startup_time
-            return {
-                "uptime_seconds": int(uptime.total_seconds()),
-                "timestamp": datetime.now().isoformat(),
-                "version": BOT_VERSION,
-                "demo_mode": DEMO_MODE,
-                "configuration_status": {
-                    "bot_token": "configured" if BOT_TOKEN else "missing",
-                    "cryptobot_token": "configured" if CRYPTOBOT_API_TOKEN else "missing",
-                    "owner_id": "configured" if OWNER_USER_ID > 0 else "missing",
-                    "admin_count": len(ADMIN_USER_IDS)
-                }
-            }
-        
-        @app.route('/ping')
-        def ping():
-            """Simple ping endpoint"""
-            return {"pong": True, "timestamp": datetime.now().isoformat()}
-        
-        @app.errorhandler(404)
-        def not_found(error):
-            return {
-                "error": "Not Found",
-                "message": "The requested endpoint does not exist",
-                "available_endpoints": ["/", "/health", "/status", "/metrics", "/ping"]
-            }, 404
-        
-        @app.errorhandler(500)
-        def internal_error(error):
-            return {
-                "error": "Internal Server Error",
-                "message": "An unexpected error occurred",
-                "timestamp": datetime.now().isoformat()
-            }, 500
-            
-        # Start server with error handling
-        try:
-            logger.info(f"🌐 Starting keep-alive server on port {int(os.getenv('PORT', 8080))}")
-            serve(app, host='0.0.0.0', port=int(os.getenv('PORT', 8080)), threads=4)
-        except Exception as e:
-            logger.error(f"❌ Failed to start keep-alive server: {e}")
-            # Fallback to Flask development server
-            try:
-                logger.info("🔄 Falling back to Flask development server")
-                app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8080)), debug=False)
-            except Exception as fallback_error:
-                logger.error(f"❌ Fallback server also failed: {fallback_error}")
+        # Start server
+        serve(app, host='0.0.0.0', port=int(os.getenv('PORT', 8080)))
     
     # Start keep-alive server in background thread
     keep_alive_thread = threading.Thread(target=start_keep_alive, daemon=True)
