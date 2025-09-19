@@ -583,24 +583,28 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
 # --- Bot Handlers ---
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /start command"""
+    """Handle /start command and main_panel callback"""
     user = update.effective_user
     user_id = user.id
     username = user.username or user.first_name
     user_data = await get_user(user_id)
     if not user_data:
         user_data = await create_user(user_id, username)
-    
-    # If user is owner, show owner panel immediately
-    if is_owner(user_id):
+
+    # Determine if this is a /start command or a callback
+    is_callback = hasattr(update, 'callback_query') and update.callback_query
+    is_start_command = hasattr(update, 'message') and update.message and update.message.text and update.message.text.startswith("/start")
+
+    # If user is owner and this is a /start command, show owner panel immediately
+    if is_owner(user_id) and is_start_command:
         await owner_panel_callback(update, context)
         return
-    
+
     balance_usd = await format_usd(user_data['balance'])
     status_text = ""
     if is_admin(user_id):
         status_text = "🔑 Admin "
-    
+
     text = (
         f"🎰 <b>CASINO BOT v{BOT_VERSION}</b> 🎰\n\n"
         f"👋 Welcome, {status_text}{username}!\n\n"
@@ -619,8 +623,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="admin_panel")])
     if is_owner(user_id):
         keyboard.append([InlineKeyboardButton("👑 Owner Panel", callback_data="owner_panel")])
-    
-    if hasattr(update, 'callback_query') and update.callback_query:
+
+    if is_callback:
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     else:
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
