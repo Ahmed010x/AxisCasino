@@ -8,6 +8,7 @@ Stake-style interface with advanced game mechanics and user protection.
 import os
 import sys
 import time
+import json
 import random
 import asyncio
 import threading
@@ -83,6 +84,12 @@ DEMO_MODE = os.environ.get("DEMO_MODE", "false").lower() == "true"
 CRYPTOBOT_API_TOKEN = os.environ.get("CRYPTOBOT_API_TOKEN")
 CRYPTOBOT_USD_ASSET = os.environ.get("CRYPTOBOT_USD_ASSET", "USDT")
 CRYPTOBOT_WEBHOOK_SECRET = os.environ.get("CRYPTOBOT_WEBHOOK_SECRET")
+
+# Debug: Log CryptoBot token status
+if CRYPTOBOT_API_TOKEN:
+    logger.info(f"✅ CryptoBot API token loaded: {CRYPTOBOT_API_TOKEN[:20]}...")
+else:
+    logger.error("❌ CryptoBot API token not found in environment")
 
 # Render hosting configuration
 PORT = int(os.environ.get("PORT", "8001"))
@@ -165,37 +172,38 @@ async def create_crypto_payment(asset: str, amount: float, user_id: int, payload
         if payload:
             data.update(payload)
         
+        logger.info(f"Creating CryptoBot invoice for {amount} {asset} (user {user_id})")
+        logger.info(f"Using API token: {CRYPTOBOT_API_TOKEN[:20] if CRYPTOBOT_API_TOKEN else 'None'}...")
+        
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
             async with session.post('https://pay.crypt.bot/api/createInvoice', 
                                   headers=headers, json=data) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    if result.get('ok'):
-                        invoice_data = result.get('result')
-                        # Transform invoice response to match payment-like structure
-                        payment_response = {
-                            'ok': True,
-                            'result': {
-                                'payment_id': invoice_data.get('invoice_id'),
-                                'payment_url': invoice_data.get('pay_url'),
-                                'web_app_url': invoice_data.get('web_app_invoice_url'),
-                                'mini_app_url': invoice_data.get('mini_app_invoice_url'),
-                                'hash': invoice_data.get('hash'),
-                                'amount': amount,
-                                'asset': asset,
-                                'status': 'pending'
-                            }
+                result = await response.json()
+                logger.info(f"CryptoBot API response (status {response.status}): {result}")
+                
+                if response.status == 200 and result.get('ok'):
+                    invoice_data = result.get('result')
+                    # Transform invoice response to match payment-like structure
+                    payment_response = {
+                        'ok': True,
+                        'result': {
+                            'payment_id': invoice_data.get('invoice_id'),
+                            'payment_url': invoice_data.get('pay_url'),
+                            'web_app_url': invoice_data.get('web_app_invoice_url'),
+                            'mini_app_url': invoice_data.get('mini_app_invoice_url'),
+                            'hash': invoice_data.get('hash'),
+                            'amount': amount,
+                            'asset': asset,
+                            'status': 'pending'
                         }
-                        logger.info(f"CryptoBot invoice created successfully: {invoice_data.get('invoice_id')}")
-                        return payment_response
-                    else:
-                        error_msg = result.get('error', {}).get('name', 'Unknown error')
-                        logger.error(f"CryptoBot invoice creation failed: {error_msg}")
-                        return {"ok": False, "error": error_msg}
+                    }
+                    logger.info(f"✅ CryptoBot invoice created successfully: {invoice_data.get('invoice_id')}")
+                    return payment_response
                 else:
-                    error_text = await response.text()
-                    logger.error(f"CryptoBot API error {response.status}: {error_text}")
-                    return {"ok": False, "error": f"API error {response.status}: {error_text}"}
+                    error_code = result.get('error', {}).get('code', 'unknown')
+                    error_name = result.get('error', {}).get('name', 'Unknown error')
+                    logger.error(f"❌ CryptoBot API error {response.status}: {error_code} - {error_name}")
+                    return {"ok": False, "error": f"API error {error_code}: {error_name}"}
                 
     except asyncio.TimeoutError:
         logger.error("Timeout creating crypto payment")
