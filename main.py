@@ -1245,8 +1245,8 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
     # Show processing message
     processing_msg = await update.message.reply_text("⏳ Creating your deposit invoice...")
     
-    # Create invoice with USD amount (the number user sent)
-    invoice_result = await create_crypto_invoice('USDT', usd_amount, user_id)
+    # Create invoice with USD amount, but asset matches the selected button
+    invoice_result = await create_crypto_invoice(asset, usd_amount, user_id)
     if invoice_result.get('ok'):
         result = invoice_result['result']
         pay_url = result.get('pay_url')  # https://t.me/CryptoBot?start=...
@@ -1812,6 +1812,8 @@ If you just made a payment:
                 if description:
                     text += f"   _{description}_\n"
                 text += "\n"
+            
+           
             
             text += """
 🔄 **Payment Taking Long?**
