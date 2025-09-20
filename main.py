@@ -33,7 +33,8 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
-    User as TelegramUser
+    User as TelegramUser,
+    WebAppInfo
 )
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -1206,21 +1207,45 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
     invoice_result = await create_crypto_invoice(asset, crypto_amount, user_id)
     if invoice_result.get('ok'):
         result = invoice_result['result']
-        pay_url = result.get('pay_url')
-        mini_app_url = result.get('mini_app_invoice_url')
-        bot_invoice_url = result.get('bot_invoice_url')
-        web_app_url = result.get('web_app_invoice_url')
+        pay_url = result.get('pay_url')  # https://t.me/CryptoBot?start=...
+        mini_app_url = result.get('mini_app_invoice_url')  # CryptoBot Mini App URL
+        web_app_url = result.get('web_app_invoice_url')  # https://app.cr.bot/invoices/<hash>
+        invoice_hash = result.get('hash')  # Invoice hash for Mini App
         invoice_id = result.get('invoice_id')
         
         # Log available URLs for debugging
-        logger.info(f"Invoice URLs - pay_url: {pay_url}, mini_app: {mini_app_url}, bot: {bot_invoice_url}, web_app: {web_app_url}")
+        logger.info(f"Invoice URLs - pay_url: {pay_url}, mini_app: {mini_app_url}, web_app: {web_app_url}, hash: {invoice_hash}")
         
-        # Use regular URL button instead of web_app to avoid session issues
-        # CryptoBot handles the payment flow better through direct links
-        keyboard = [
-            [InlineKeyboardButton("💳 Pay with CryptoBot", url=pay_url)],
-            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-        ]
+        # Build keyboard with native Mini App integration
+        keyboard_rows = []
+        
+        # Priority 1: Use CryptoBot Mini App if available (native integration)
+        if mini_app_url:
+            keyboard_rows.append([
+                InlineKeyboardButton("💳 Pay in CryptoBot Mini App", web_app=WebAppInfo(url=mini_app_url))
+            ])
+        
+        # Priority 2: Use our own Mini App bridge if we have the hash
+        elif invoice_hash and RENDER_EXTERNAL_URL:
+            miniapp_bridge_url = f"{RENDER_EXTERNAL_URL}/miniapp/invoice/{invoice_hash}"
+            keyboard_rows.append([
+                InlineKeyboardButton("💳 Pay in Bot (Mini App)", web_app=WebAppInfo(url=miniapp_bridge_url))
+            ])
+        
+        # Priority 3: Direct CryptoBot web app URL
+        elif web_app_url:
+            keyboard_rows.append([
+                InlineKeyboardButton("💳 Pay in CryptoBot Web App", web_app=WebAppInfo(url=web_app_url))
+            ])
+        
+        # Fallback: Open CryptoBot directly (external)
+        if pay_url:
+            keyboard_rows.append([
+                InlineKeyboardButton("� Open in CryptoBot App", url=pay_url)
+            ])
+        
+        # Navigation
+        keyboard_rows.append([InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")])
         
         text = f"""
 💳 **{asset} DEPOSIT** 💳
@@ -1233,17 +1258,21 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
 ⏰ Invoice expires in 60 minutes
 
 💡 **Tips:**
-• Click the button below to pay
-• If you get "session expired", try the payment link again
-• Payment opens in CryptoBot (external app)
+• Use "Mini App" button for seamless in-bot payment
+• Payment is secure and processed by CryptoBot
 • Keep this chat open during payment
 • You'll receive confirmation when payment is complete
 
 📞 **Having issues?** Use /payment to check status
 
-🚀 **Ready to pay? Click the button below!**
+🚀 **Ready to pay? Use the Mini App button below!**
 """
-        await processing_msg.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True)
+        await processing_msg.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard_rows),
+            parse_mode=ParseMode.MARKDOWN,
+            disable_web_page_preview=True
+        )
         return ConversationHandler.END
     else:
         error_msg = invoice_result.get('error', 'Unknown error')
@@ -2009,6 +2038,72 @@ async def async_main():
                     }, 3000);
                 </script>
             </body>
+            </html>
+            """
+        
+        # Mini App bridge route that opens the CryptoBot invoice inside your bot's WebApp
+        @app.route('/miniapp/invoice/<invoice_hash>')
+        def miniapp_invoice(invoice_hash: str):
+            # CryptoBot web app invoice URL constructed from the invoice hash
+            web_invoice = f"https://app.cr.bot/invoices/{invoice_hash}"
+            # Minimal WebApp page that redirects inside Telegram's webview
+            return f"""
+            <!doctype html>
+            <html>
+              <head>
+                <meta charset="utf-8" />
+                <meta name="viewport" content="width=device-width, initial-scale=1" />
+                <title>Pay Invoice</title>
+                <script src="https://telegram.org/js/telegram-web-app.js"></script>
+                <style>
+                  body {{ 
+                    font-family: -apple-system, system-ui, Arial; 
+                    margin: 20px; 
+                    text-align: center; 
+                    background: #1a1a1a; 
+                    color: #ffffff;
+                  }}
+                  .btn {{ 
+                    display: inline-block; 
+                    padding: 12px 18px; 
+                    background: #2ea44f; 
+                    color: #fff; 
+                    border-radius: 8px; 
+                    text-decoration: none; 
+                    margin: 10px;
+                  }}
+                  .loading {{
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 20px 0;
+                  }}
+                </style>
+              </head>
+              <body>
+                <h3>🚀 Opening CryptoBot Payment...</h3>
+                <div class="loading">
+                  <p>Redirecting to secure payment page...</p>
+                </div>
+                <p>If the page does not open automatically, tap the button below.</p>
+                <p><a class="btn" href="{web_invoice}" target="_self">💳 Open Invoice</a></p>
+                <script>
+                  try {{
+                    // Initialize Telegram WebApp
+                    if (window.Telegram && window.Telegram.WebApp) {{
+                      window.Telegram.WebApp.ready();
+                      window.Telegram.WebApp.expand();
+                    }}
+                    
+                    // Auto-redirect to the invoice inside the same webview
+                    setTimeout(() => {{
+                      window.location.replace("{web_invoice}");
+                    }}, 1000);
+                  }} catch (e) {{
+                    console.error(e);
+                  }}
+                </script>
+              </body>
             </html>
             """
             
