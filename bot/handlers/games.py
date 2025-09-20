@@ -5,14 +5,13 @@ Handles all casino game commands.
 """
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, CommandHandler
+from telegram.ext import ContextTypes
 from bot.database.user import get_user
 from bot.games.slots import play_slots, handle_slots_callback
 from bot.games.blackjack import start_blackjack, handle_blackjack_callback
 from bot.games.roulette import show_roulette_menu, handle_roulette_callback
 from bot.games.dice import show_dice_menu, handle_dice_callback
 from bot.games.poker import show_poker_menu, handle_poker_callback
-from bot.games.monkey_stacks import play_monkey_stacks, MonkeyStacksResult
 
 
 async def slots(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -261,35 +260,3 @@ async def mini_casino_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.callback_query.edit_message_text("🏠 Main menu coming soon!")
     else:
         await query.answer("❌ Unknown mini app action!")
-
-
-# Handler for /monkeystacks command
-async def monkeystacks_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    args = context.args
-    if len(args) < 2:
-        await update.message.reply_text("Usage: /monkeystacks <bet> <easy|medium|hard>")
-        return
-    try:
-        bet = float(args[0])
-        difficulty = args[1].lower()
-        if difficulty not in ('easy','medium','hard'):
-            raise ValueError
-    except Exception:
-        await update.message.reply_text("Invalid input. Usage: /monkeystacks <bet> <easy|medium|hard>")
-        return
-    # TODO: Validate user balance and deduct bet atomically
-    result = await play_monkey_stacks(user_id, bet, difficulty)
-    await update.message.reply_text(result.message)
-    # TODO: If result.success, add reward to user balance atomically
-
-
-def register_game_handlers(application):
-    """Register all game command handlers."""
-    application.add_handler(CommandHandler("slots", slots))
-    application.add_handler(CommandHandler("blackjack", blackjack))
-    application.add_handler(CommandHandler("roulette", roulette))
-    application.add_handler(CommandHandler("dice", dice))
-    application.add_handler(CommandHandler("poker", poker))
-    application.add_handler(CommandHandler("achievements", achievements))
-    application.add_handler(CommandHandler("monkeystacks", monkeystacks_handler))

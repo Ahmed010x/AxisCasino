@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Slots | Casino WebApp</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="casino_webapp_styles.css">
+    <style>
+        body { background: #181818; color: #fff; font-family: 'Segoe UI', Arial, sans-serif; margin: 0; }
+        .header { display: flex; align-items: center; justify-content: space-between; padding: 18px 16px; background: #232323; }
+        .back-btn { background: none; border: none; color: #4ecdc4; font-size: 1.5em; cursor: pointer; }
+        .game-title { font-size: 1.2em; font-weight: bold; color: #4ecdc4; }
+        .main-content { padding: 24px 12px; max-width: 420px; margin: 0 auto; }
+        .game-icon { font-size: 3em; margin-bottom: 10px; text-align: center; }
+        .slots-area { display: flex; justify-content: center; align-items: center; gap: 18px; margin: 24px 0 18px 0; }
+        .slot-reel { width: 60px; height: 60px; background: #222; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 2.2em; box-shadow: 0 2px 8px #0006; border: 2px solid #333; transition: background 0.2s; }
+        .bet-section { margin: 18px 0; }
+        .bet-section label { color: #ccc; margin-bottom: 6px; display: block; }
+        .bet-section input { width: 120px; padding: 8px; border-radius: 8px; border: 1px solid #333; background: #222; color: white; text-align: center; font-size: 16px; }
+        .play-btn { background: linear-gradient(135deg, #4ecdc4, #44a08d); color: white; border: none; padding: 12px 30px; border-radius: 25px; font-size: 16px; font-weight: bold; cursor: pointer; margin-right: 10px; box-shadow: 0 4px 15px rgba(78,205,196,0.3); }
+        .result { margin-top: 24px; font-size: 1.1em; font-weight: bold; min-height: 32px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <button class="back-btn" onclick="goBack()">&larr;</button>
+        <div class="game-title">🎰 Slots</div>
+        <div style="width:32px;"></div>
+    </div>
+    <div class="main-content">
+        <div class="game-icon">🎰</div>
+        <div class="slots-area" id="slotsArea">
+            <div class="slot-reel" id="reel1">🍒</div>
+            <div class="slot-reel" id="reel2">🍋</div>
+            <div class="slot-reel" id="reel3">🔔</div>
+        </div>
+        <div class="bet-section">
+            <label for="betAmount">Bet Amount:</label>
+            <input type="number" id="betAmount" min="1" max="1000" value="10">
+        </div>
+        <button class="play-btn" onclick="playSlots()">Play Now</button>
+        <div id="result" class="result"></div>
+    </div>
+    <script>
+    function goBack() { window.history.back(); }
+    function animateReels(symbols) {
+        const icons = ['🍒','🍋','🔔','🍀','7️⃣','🍉','⭐️'];
+        let i = 0;
+        const reels = [document.getElementById('reel1'), document.getElementById('reel2'), document.getElementById('reel3')];
+        const interval = setInterval(() => {
+            reels.forEach(r => r.textContent = icons[Math.floor(Math.random()*icons.length)]);
+            i++;
+            if (i > 12) {
+                clearInterval(interval);
+                reels.forEach((r, idx) => r.textContent = symbols[idx] || icons[0]);
+            }
+        }, 70);
+    }
+    async function playSlots() {
+        const bet = parseInt(document.getElementById('betAmount').value);
+        const resultDiv = document.getElementById('result');
+        if (!bet || bet <= 0) {
+            resultDiv.innerHTML = '<span style="color:#ff6b6b;">Enter a valid bet!</span>';
+            return;
+        }
+        resultDiv.innerHTML = '<span style="color:#4ecdc4;">Spinning...</span>';
+        animateReels(['🍒','🍋','🔔']);
+        try {
+            const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
+            const userId = user ? user.id : 1;
+            const response = await fetch('/api/game', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId, game_type: 'slots', action: 'play', bet_amount: bet })
+            });
+            const data = await response.json();
+            setTimeout(() => {
+                animateReels(data.symbols || ['🍒','🍋','🔔']);
+                resultDiv.innerHTML = (data.win ? '🎉 <span style="color:#4ecdc4;">You Won!</span>' : '😞 <span style="color:#ff6b6b;">You Lost!</span>') +
+                    `<div style='color:#4ecdc4;'>New balance: ${data.new_balance} chips</div>`;
+            }, 1000);
+        } catch (e) {
+            resultDiv.innerHTML = '<span style="color:#ff6b6b;">Connection error!</span>';
+        }
+    }
+    </script>
+</body>
+</html>
