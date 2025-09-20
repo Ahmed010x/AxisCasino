@@ -32,6 +32,7 @@ from telegram import (
     Update,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    LabeledPrice,
     Message,
     User as TelegramUser
 )
@@ -43,6 +44,7 @@ from telegram.ext import (
     CallbackQueryHandler,
     ContextTypes,
     MessageHandler,
+    PreCheckoutQueryHandler,
     filters,
     ConversationHandler
 )
@@ -82,6 +84,10 @@ DEMO_MODE = os.environ.get("DEMO_MODE", "false").lower() == "true"
 CRYPTOBOT_API_TOKEN = os.environ.get("CRYPTOBOT_API_TOKEN")
 CRYPTOBOT_USD_ASSET = os.environ.get("CRYPTOBOT_USD_ASSET", "USDT")
 CRYPTOBOT_WEBHOOK_SECRET = os.environ.get("CRYPTOBOT_WEBHOOK_SECRET")
+
+# Telegram Payments configuration
+TELEGRAM_PAYMENT_PROVIDER_TOKEN = os.environ.get("TELEGRAM_PAYMENT_PROVIDER_TOKEN")
+USE_NATIVE_TELEGRAM_PAYMENTS = os.environ.get("USE_NATIVE_TELEGRAM_PAYMENTS", "false").lower() == "true"
 
 # Render hosting configuration
 PORT = int(os.environ.get("PORT", "8001"))
@@ -585,500 +591,6 @@ async def log_game_session(user_id: int, game_type: str, bet_amount: float, win_
     except Exception as e:
         logger.error(f"Error logging game session: {e}")
 
-# --- Global Error Handler ---
-async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Log and handle uncaught exceptions globally."""
-    logger.error(f"[GLOBAL ERROR] Exception: {context.error}")
-    try:
-        if update and hasattr(update, 'effective_user') and update.effective_user:
-            user_id = update.effective_user.id
-        else:
-            user_id = None
-        # Optionally, send a user-friendly error message
-        if update and hasattr(update, 'message') and update.message:
-            await update.message.reply_text("❌ An unexpected error occurred. Please try again later.")
-        elif update and hasattr(update, 'callback_query') and update.callback_query:
-            await update.callback_query.answer("❌ An unexpected error occurred.", show_alert=True)
-    except Exception as e:
-        logger.error(f"[GLOBAL ERROR] Failed to notify user: {e}")
-
-# --- Conversation States (must be defined before use) ---
-DEPOSIT_ASSET, DEPOSIT_AMOUNT = range(2)
-
-# --- Bot Handlers ---
-
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /start command and main_panel callback"""
-    user = update.effective_user
-    user_id = user.id
-    username = user.username or user.first_name
-    user_data = await get_user(user_id)
-    if not user_data:
-        user_data = await create_user(user_id, username)
-
-    # Determine if this is a /start command or a callback
-    is_callback = hasattr(update, 'callback_query') and update.callback_query
-    is_start_command = hasattr(update, 'message') and update.message and update.message.text and update.message.text.startswith("/start")
-
-    # If user is owner and this is a /start command, show owner panel immediately
-    if is_owner(user_id) and is_start_command:
-        await owner_panel_callback(update, context)
-        return
-
-    balance_usd = await format_usd(user_data['balance'])
-    status_text = ""
-    if is_admin(user_id):
-        status_text = "🔑 Admin "
-
-    text = (
-        f"🎰 <b>CASINO BOT v{BOT_VERSION}</b> 🎰\n\n"
-        f"👋 Welcome, {status_text}{username}!\n\n"
-        f"💰 <b>Balance:</b> {balance_usd}\n"
-        f"🏆 <b>Games Played:</b> {user_data['games_played']}\n"
-        f"🎮 <b>Supported Assets:</b> LTC, TON, SOL\n\n"
-        "Choose an action below:"
-    )
-    keyboard = [
-        [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"), InlineKeyboardButton("💰 Balance", callback_data="show_balance")],
-        [InlineKeyboardButton("💳 Deposit", callback_data="deposit"), InlineKeyboardButton("💸 Withdraw", callback_data="withdraw")],
-        [InlineKeyboardButton("🎁 Redeem", callback_data="redeem_panel"), InlineKeyboardButton("ℹ️ Help", callback_data="show_help")],
-        [InlineKeyboardButton("📊 Statistics", callback_data="show_stats")]
-    ]
-    if is_owner(user_id):
-        keyboard.append([InlineKeyboardButton("👑 Owner Panel", callback_data="owner_panel")])
-
-    if is_callback:
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-    else:
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-
-async def mini_app_centre_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show the simplified Mini App Centre with only an All Games button"""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    user = await get_user(user_id)
-    balance = user['balance']
-    total_games = user['games_played']
-    username = user['username']
-
-    text = f"""
-🎮 <b>CASINO MINI APP CENTRE</b> 🎮
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-👤 <b>{username}</b> | Balance: <b>{await format_usd(balance)}</b>
-🎯 <b>Games Played:</b> {total_games}
-
-Welcome to the Casino! Access all games below:
-"""
-
-    keyboard = [
-        [InlineKeyboardButton("🎮 All Games", callback_data="classic_casino")],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-
-async def mini_app_centre_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Command handler for /app"""
-    await mini_app_centre_callback(update, context)
-
-async def classic_casino_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle classic casino games callback"""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    user = await get_user(user_id)
-    
-    balance = user['balance']
-    username = user['username']
-    
-    text = f"""
-🎰 **CLASSIC CASINO GAMES** 🎰
-
-💰 **Your Balance:** {await format_usd(balance)}
-👤 **Player:** {username}
-
-🎮 **Traditional Casino Favorites:**
-
-**🎰 SLOT MACHINES**
-*Spin the reels for massive jackpots*
-• Classic 3-reel slots
-• Progressive jackpots
-• Bonus rounds & free spins
-• RTP: 96.5%
-
-**🎲 DICE GAMES**
-*Simple odds, instant results*
-• Even/odd predictions
-• High/low bets
-• Quick gameplay
-• RTP: 98%
-
-**🪙 COIN FLIP**
-*50/50 chance, double your money*
-• Heads or tails
-• Instant results
-• 2x payout
-• RTP: 98%
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("🎰 SLOTS", callback_data="play_slots"), InlineKeyboardButton("🎲 DICE", callback_data="play_dice")],
-        [InlineKeyboardButton("🪙 COIN FLIP", callback_data="coin_flip")],
-        [InlineKeyboardButton("🔙 Back to App Centre", callback_data="mini_app_centre")],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-async def play_slots_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle slots game"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = query.from_user.id
-    user = await get_user(user_id)
-    balance_usd = await format_usd(user['balance'])
-    
-    text = f"""
-🎰 **SLOT MACHINE** 🎰
-
-💰 **Your Balance:** {balance_usd}
-
-🎯 **How to Play:**
-• Choose your bet amount
-• Spin the reels
-• Match 3 symbols to win!
-
-💎 **Payouts:**
-• 💎💎💎 = 10x bet
-• 🔔🔔🔔 = 5x bet
-• 🍒🍒🍒 = 3x bet
-• 🍋🍋🍋 = 2x bet
-• 🍊🍊🍊 = 2x bet
-
-🎮 **Choose your bet:**
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("💰 $1", callback_data="slots_bet_1"), InlineKeyboardButton("💰 $5", callback_data="slots_bet_5")],
-        [InlineKeyboardButton("💰 $10", callback_data="slots_bet_10"), InlineKeyboardButton("💰 $25", callback_data="slots_bet_25")],
-        [InlineKeyboardButton("💰 $50", callback_data="slots_bet_50"), InlineKeyboardButton("💰 $100", callback_data="slots_bet_100")],
-        [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle slots betting"""
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-    user_id = query.from_user.id
-    
-    try:
-        bet = float(data.split("_")[-1])
-    except:
-        await query.answer("❌ Invalid bet amount", show_alert=True)
-        return
-    
-    user = await get_user(user_id)
-    # User balance is already in USD format, bet is in USD
-    bet_usd = bet
-    
-    # Check balance (allow admin to play with zero balance)
-    if user['balance'] < bet_usd and not is_admin(user_id):
-        if DEMO_MODE:
-            # Demo mode - allow play with zero balance, always win
-            win_amount = bet_usd * 3  # 3x win in demo
-            await update_balance(user_id, win_amount)
-            symbols = ["💎", "💎", "💎"]
-            result = "WIN"
-            multiplier = 3
-        else:
-            await query.answer("❌ Insufficient balance", show_alert=True)
-            return
-    else:
-        # Deduct bet amount
-        if not is_admin(user_id):  # Admins play for free
-            await deduct_balance(user_id, bet_usd)
-        
-        # Simple slots simulation
-        symbols = ["🍒", "🍋", "🍊", "🔔", "💎"]
-        reel = [random.choice(symbols) for _ in range(3)]
-        
-        if reel[0] == reel[1] == reel[2]:
-            # Win!
-            if reel[0] == "💎":
-                multiplier = 10
-            elif reel[0] == "🔔":
-                multiplier = 5
-            elif reel[0] == "🍒":
-                multiplier = 3
-            else:
-                multiplier = 2
-            
-            win_amount = bet_usd * multiplier
-            await update_balance(user_id, win_amount)
-            result = "WIN"
-        else:
-            multiplier = 0
-            win_amount = 0
-            result = "LOSE"
-    
-    # Log game session
-    await log_game_session(user_id, "slots", bet_usd, win_amount, result)
-    
-    user_after = await get_user(user_id)
-    
-    if result == "WIN":
-        text = f"""
-🎰 **SLOT MACHINE RESULT** 🎰
-
-{reel[0]} {reel[1]} {reel[2]}
-
-🎉 **WINNER!** 🎉
-💰 **Bet:** ${bet:.2f}
-💎 **Win:** ${win_amount:.2f} ({multiplier}x)
-
-💰 **New Balance:** {await format_usd(user_after['balance'])}
-"""
-    else:
-        text = f"""
-🎰 **SLOT MACHINE RESULT** 🎰
-
-{reel[0]} {reel[1]} {reel[2]}
-
-😔 **No match this time**
-💰 **Bet:** ${bet:.2f}
-
-💰 **Balance:** {await format_usd(user_after['balance'])}
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("🔄 Play Again", callback_data="play_slots"), InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino")],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-async def coin_flip_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle coin flip game"""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    user = await get_user(user_id)
-    
-    text = f"""
-🪙 **COIN FLIP** 🪙
-
-💰 **Your Balance:** {await format_usd(user['balance'])}
-
-⚡ **Quick & Simple:**
-• Choose Heads or Tails
-• 50/50 odds
-• Instant results
-• 2x payout on win
-
-🎯 **Betting Options:**
-Choose your bet amount (in USD) and side:
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("🟡 Heads - $10", callback_data="coinflip_heads_10"), InlineKeyboardButton("⚫ Tails - $10", callback_data="coinflip_tails_10")],
-        [InlineKeyboardButton("🟡 Heads - $25", callback_data="coinflip_heads_25"), InlineKeyboardButton("⚫ Tails - $25", callback_data="coinflip_tails_25")],
-        [InlineKeyboardButton("🟡 Heads - $50", callback_data="coinflip_heads_50"), InlineKeyboardButton("⚫ Tails - $50", callback_data="coinflip_tails_50")],
-        [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-async def handle_coinflip_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle coin flip bet"""
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-    user_id = query.from_user.id
-    
-    try:
-        parts = data.split("_")
-        choice = parts[1]  # heads or tails
-        bet = int(parts[2])
-    except:
-        await query.answer("Invalid bet format", show_alert=True)
-        return
-    
-    user = await get_user(user_id)
-    bet_usd = bet
-    
-    # Check balance (allow admin/demo mode to play with zero balance)
-    if user['balance'] < bet_usd and not is_admin(user_id) and not DEMO_MODE:
-        await query.answer("❌ Insufficient balance", show_alert=True)
-        return
-    
-    # Admin test mode - always win
-    if is_admin(user_id):
-        log_admin_action(user_id, f"Playing coin flip in test mode with ${bet} bet")
-        coin_result = choice
-        win_amount = bet_usd * 1.92
-        await update_balance(user_id, win_amount)
-        outcome = f"🧪 **TEST MODE (ADMIN)**\n🎉 **YOU WIN!**\n\n{'🟡' if choice == 'heads' else '⚫'} Coin landed on **{choice.upper()}**\n{'🟡' if choice == 'heads' else '⚫'} You chose **{choice.upper()}**\n\n💰 Won: **${bet * 1.92:.2f}**"
-    elif DEMO_MODE and user['balance'] < bet_usd:
-        # Demo mode - always win, no balance deduction
-        coin_result = choice
-        win_amount = bet_usd * 1.92
-        await update_balance(user_id, win_amount)
-        outcome = f"🧪 **DEMO MODE**\n🎉 **YOU WIN!**\n\n{'🟡' if choice == 'heads' else '⚫'} Coin landed on **{choice.upper()}**\n{'🟡' if choice == 'heads' else '⚫'} You chose **{choice.upper()}**\n\n💰 Won: **${bet * 1.92:.2f}**"
-    else:
-        # Normal game - deduct bet first
-        if not is_admin(user_id):  # Admins play for free
-            await deduct_balance(user_id, bet_usd)
-        
-        # Flip coin
-        coin_result = random.choice(["heads", "tails"])
-        coin_emoji = "🟡" if coin_result == "heads" else "⚫"
-        choice_emoji = "🟡" if choice == "heads" else "⚫"
-        
-        if choice == coin_result:
-            # Win - 1.92x payout
-            win_amount = bet_usd * 1.92
-            await update_balance(user_id, win_amount)
-            outcome = f"🎉 **YOU WIN!**\n\n{coin_emoji} Coin landed on **{coin_result.upper()}**\n{choice_emoji} You chose **{choice.upper()}**\n\n💰 Won: **${bet * 1.92:.2f}**"
-        else:
-            outcome = f"😢 **YOU LOSE!**\n\n{coin_emoji} Coin landed on **{coin_result.upper()}**\n{choice_emoji} You chose **{choice.upper()}**\n\n💸 Lost: **${bet}**"
-    
-    # Log game session
-    await log_game_session(user_id, "coinflip", bet_usd, win_amount if choice == coin_result else 0, "WIN" if choice == coin_result else "LOSE")
-    
-    user_after = await get_user(user_id)
-    
-    text = f"""
-🪙 **COIN FLIP RESULT** 🪙
-
-{outcome}
-
-💰 **New Balance:** {await format_usd(user_after['balance'])}
-
-Play again or try another game:
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("🔄 Flip Again", callback_data="coin_flip"), InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino")],
-        [InlineKeyboardButton("🎰 Slots", callback_data="play_slots"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-async def play_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle dice prediction game"""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.effective_user.id
-    user = await get_user(user_id)
-    balance = await format_usd(user['balance'])
-    
-    text = (
-        f"🎲 <b>DICE PREDICTION</b> 🎲\n\n"
-        f"💰 <b>Your Balance:</b> {balance}\n\n"
-        "Predict the outcome of a 6-sided dice roll.\n"
-        "Choose your prediction and bet amount:\n\n"
-        "<b>Payouts:</b>\n"
-        "• Correct Number (1-6): 6x\n"
-        "• Even/Odd: 2x\n"
-        "• High (4-6)/Low (1-3): 2x\n"
-    )
-    keyboard = [
-        [InlineKeyboardButton("1️⃣ ($10)", callback_data="dice_1_10"), InlineKeyboardButton("2️⃣ ($10)", callback_data="dice_2_10"), InlineKeyboardButton("3️⃣ ($10)", callback_data="dice_3_10")],
-        [InlineKeyboardButton("4️⃣ ($10)", callback_data="dice_4_10"), InlineKeyboardButton("5️⃣ ($10)", callback_data="dice_5_10"), InlineKeyboardButton("6️⃣ ($10)", callback_data="dice_6_10")],
-        [InlineKeyboardButton("Even ($25)", callback_data="dice_even_25"), InlineKeyboardButton("Odd ($25)", callback_data="dice_odd_25")],
-        [InlineKeyboardButton("High ($25)", callback_data="dice_high_25"), InlineKeyboardButton("Low ($25)", callback_data="dice_low_25")],
-        [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-
-async def handle_dice_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle dice bet"""
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-    user_id = query.from_user.id
-    
-    try:
-        parts = data.split("_")
-        prediction = parts[1]
-        bet = int(parts[2])
-    except:
-        await query.answer("Invalid bet format", show_alert=True)
-        return
-    
-    user = await get_user(user_id)
-    bet_usd = bet
-    
-    # Check balance (allow admin/demo mode to play with zero balance)
-    if user['balance'] < bet_usd and not is_admin(user_id) and not DEMO_MODE:
-        await query.answer("❌ Insufficient balance", show_alert=True)
-        return
-    
-    # Deduct bet (except for admins)
-    if not is_admin(user_id):
-        await deduct_balance(user_id, bet_usd)
-    
-    # Roll the dice
-    roll = random.randint(1, 6)
-    
-    # Determine if win
-    won = False
-    multiplier = 0
-    
-    if prediction.isdigit() and 1 <= int(prediction) <= 6:
-        # User guessed a specific number
-        if roll == int(prediction):
-            won = True
-            multiplier = 6
-    elif prediction == "even" and roll % 2 == 0:
-        won = True
-        multiplier = 2
-    elif prediction == "odd" and roll % 2 == 1:
-        won = True
-        multiplier = 2
-    elif prediction == "high" and roll >= 4:
-        won = True
-        multiplier = 2
-    elif prediction == "low" and roll <= 3:
-        won = True
-        multiplier = 2
-    
-    # Calculate payout
-    if won:
-        win_amount = bet_usd * multiplier
-        await update_balance(user_id, win_amount)
-        result_text = f"🎉 **YOU WIN!**\nDice rolled: **{roll}**\nYour prediction: **{prediction.title()}**\nPayout: **${bet * multiplier:.2f}**"
-    else:
-        win_amount = 0
-        result_text = f"😢 **YOU LOSE!**\nDice rolled: **{roll}**\nYour prediction: **{prediction.title()}**\nLost: **${bet}**"
-    
-    # Log game session
-    await log_game_session(user_id, "dice", bet_usd, win_amount, "WIN" if won else "LOSE")
-    
-    user_after = await get_user(user_id)
-    text = f"""
-🎲 **DICE RESULT** 🎲
-
-{result_text}
-
-💰 **New Balance:** {await format_usd(user_after['balance'])}
-
-Play again or try another game:
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("🔄 Play Again", callback_data="play_dice"), InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino")],
-        [InlineKeyboardButton("🎰 Slots", callback_data="play_slots"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
 # --- Deposit/Withdrawal Handlers ---
 
 async def deposit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1202,27 +714,48 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
         await processing_msg.edit_text("❌ Unable to get exchange rate. Please try again later.")
         return DEPOSIT_AMOUNT
     
-    # Create invoice with crypto amount
-    invoice_result = await create_crypto_invoice(asset, crypto_amount, user_id)
-    if invoice_result.get('ok'):
-        result = invoice_result['result']
-        pay_url = result.get('pay_url')
-        mini_app_url = result.get('mini_app_invoice_url')
-        bot_invoice_url = result.get('bot_invoice_url')
-        web_app_url = result.get('web_app_invoice_url')
-        invoice_id = result.get('invoice_id')
+    # Choose payment method based on configuration
+    if USE_NATIVE_TELEGRAM_PAYMENTS and TELEGRAM_PAYMENT_PROVIDER_TOKEN:
+        # Use native Telegram payments (appears within bot)
+        await processing_msg.delete()  # Remove processing message
         
-        # Log available URLs for debugging
-        logger.info(f"Invoice URLs - pay_url: {pay_url}, mini_app: {mini_app_url}, bot: {bot_invoice_url}, web_app: {web_app_url}")
+        # Create native Telegram invoice
+        invoice_result = await create_telegram_invoice(asset, usd_amount, crypto_amount, user_id, context)
         
-        # Use regular URL button instead of web_app to avoid session issues
-        # CryptoBot handles the payment flow better through direct links
-        keyboard = [
-            [InlineKeyboardButton("💳 Pay with CryptoBot", url=pay_url)],
-            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-        ]
-        
-        text = f"""
+        if invoice_result.get('ok'):
+            # Success message after invoice is sent
+            await update.message.reply_text(
+                f"✅ **Payment Invoice Sent!**\n\n"
+                f"💰 **Amount:** ${usd_amount:.2f} USD ({crypto_amount:.8f} {asset})\n"
+                f"📱 **Method:** Native Telegram Payment\n\n"
+                f"👆 **Tap 'Pay Now' on the invoice above to complete your deposit**\n"
+                f"⚡ Your balance will update instantly after payment confirmation",
+                parse_mode=ParseMode.MARKDOWN
+            )
+        else:
+            await update.message.reply_text(f"❌ Error creating payment invoice: {invoice_result.get('error', 'Unknown error')}")
+            
+    else:
+        # Fallback to external CryptoBot (original method)
+        invoice_result = await create_crypto_invoice(asset, crypto_amount, user_id)
+        if invoice_result.get('ok'):
+            result = invoice_result['result']
+            pay_url = result.get('pay_url')
+            mini_app_url = result.get('mini_app_invoice_url')
+            bot_invoice_url = result.get('bot_invoice_url')
+            web_app_url = result.get('web_app_invoice_url')
+            invoice_id = result.get('invoice_id')
+            
+            # Log available URLs for debugging
+            logger.info(f"Invoice URLs - pay_url: {pay_url}, mini_app: {mini_app_url}, bot: {bot_invoice_url}, web_app: {web_app_url}")
+            
+            # Use regular URL button instead of web_app to avoid session issues
+            keyboard = [
+                [InlineKeyboardButton("💳 Pay with CryptoBot", url=pay_url)],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+            ]
+            
+            text = f"""
 💳 **{asset} DEPOSIT** 💳
 
 💰 **Amount:** ${usd_amount:.2f} USD ({crypto_amount:.8f} {asset})
@@ -1243,12 +776,165 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
 
 🚀 **Ready to pay? Click the button below!**
 """
-        await processing_msg.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True)
-        return ConversationHandler.END
-    else:
-        error_msg = invoice_result.get('error', 'Unknown error')
-        await processing_msg.edit_text(f"❌ Error creating deposit invoice: {error_msg}\n\nPlease try again or contact support if the issue persists.")
-        return DEPOSIT_AMOUNT
+            await processing_msg.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True)
+        else:
+            error_msg = invoice_result.get('error', 'Unknown error')
+            await processing_msg.edit_text(f"❌ Error creating deposit invoice: {error_msg}\n\nPlease try again or contact support if the issue persists.")
+    
+    return ConversationHandler.END
+
+async def create_telegram_invoice(asset: str, usd_amount: float, crypto_amount: float, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> dict:
+    """Create a native Telegram invoice using CryptoBot as payment provider"""
+    try:
+        if not TELEGRAM_PAYMENT_PROVIDER_TOKEN:
+            return {"ok": False, "error": "Payment provider token not configured"}
+        
+        # Create invoice description
+        title = f"{asset} Deposit"
+        description = f"Deposit ${usd_amount:.2f} USD ({crypto_amount:.8f} {asset}) to your casino balance"
+        
+        # Convert USD to cents (Telegram uses smallest currency unit)
+        amount_cents = int(usd_amount * 100)
+        
+        # Create labeled price
+        prices = [LabeledPrice(label=f"{asset} Deposit", amount=amount_cents)]
+        
+        # Create payload with user and transaction info
+        payload = f"deposit_{user_id}_{asset}_{usd_amount}_{crypto_amount}"
+        
+        # Send invoice directly in chat
+        await context.bot.send_invoice(
+            chat_id=user_id,
+            title=title,
+            description=description,
+            payload=payload,
+            provider_token=TELEGRAM_PAYMENT_PROVIDER_TOKEN,
+            currency="USD",
+            prices=prices,
+            start_parameter=f"deposit_{user_id}",
+            photo_url="https://i.imgur.com/CryptoBot.png",  # Optional: Add crypto icon
+            photo_size=512,
+            is_flexible=False,
+            disable_notification=False,
+            protect_content=False,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("💳 Pay Now", pay=True)],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+            ])
+        )
+        
+        return {"ok": True, "message": "Invoice sent successfully"}
+        
+    except Exception as e:
+        logger.error(f"Error creating Telegram invoice: {e}")
+        return {"ok": False, "error": str(e)}
+
+# --- Telegram Payment Handlers ---
+async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle pre-checkout query for Telegram payments"""
+    query = update.pre_checkout_query
+    
+    try:
+        # Parse payload to get payment details
+        payload_parts = query.invoice_payload.split('_')
+        if len(payload_parts) >= 5 and payload_parts[0] == 'deposit':
+            user_id = int(payload_parts[1])
+            asset = payload_parts[2]
+            usd_amount = float(payload_parts[3])
+            crypto_amount = float(payload_parts[4])
+            
+            # Verify user exists and has valid session
+            user = await get_user(user_id)
+            if not user:
+                await query.answer(ok=False, error_message="User not found. Please start the bot first.")
+                return
+            
+            # Verify amount matches what user requested
+            expected_amount_cents = int(usd_amount * 100)
+            if query.total_amount != expected_amount_cents:
+                await query.answer(ok=False, error_message="Payment amount mismatch. Please try again.")
+                return
+            
+            # All checks passed, approve the payment
+            await query.answer(ok=True)
+            logger.info(f"Pre-checkout approved for user {user_id}: ${usd_amount} USD ({asset})")
+            
+        else:
+            await query.answer(ok=False, error_message="Invalid payment payload.")
+            
+    except Exception as e:
+        logger.error(f"Pre-checkout error: {e}")
+        await query.answer(ok=False, error_message="Payment verification failed. Please try again.")
+
+async def successful_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle successful Telegram payment"""
+    payment = update.message.successful_payment
+    user_id = update.effective_user.id
+    
+    try:
+        # Parse payload to get payment details
+        payload_parts = payment.invoice_payload.split('_')
+        if len(payload_parts) >= 5 and payload_parts[0] == 'deposit':
+            asset = payload_parts[2]
+            usd_amount = float(payload_parts[3])
+            crypto_amount = float(payload_parts[4])
+            
+            # Update user balance
+            async with aiosqlite.connect(DB_PATH) as db:
+                # Add to balance
+                await db.execute("""
+                    UPDATE users SET balance = balance + ? 
+                    WHERE user_id = ?
+                """, (usd_amount, user_id))
+                
+                # Log transaction
+                await db.execute("""
+                    INSERT INTO transactions (user_id, type, amount, description, timestamp)
+                    VALUES (?, 'deposit', ?, ?, ?)
+                """, (user_id, usd_amount, f"Telegram payment deposit ({asset}): ${usd_amount:.2f} USD", datetime.now().isoformat()))
+                
+                await db.commit()
+            
+            # Get updated balance
+            user = await get_user(user_id)
+            
+            # Send success message
+            success_text = f"""
+✅ **Payment Successful!** ✅
+
+💰 **Deposited:** ${usd_amount:.2f} USD
+🪙 **Crypto Equivalent:** {crypto_amount:.8f} {asset}
+💳 **Payment ID:** `{payment.telegram_payment_charge_id}`
+💼 **New Balance:** {await format_usd(user['balance'])}
+
+🎮 **Ready to play!** Your balance has been updated instantly.
+"""
+            
+            keyboard = [
+                [InlineKeyboardButton("🎮 Play Games", callback_data="classic_casino")],
+                [InlineKeyboardButton("💰 Check Balance", callback_data="show_balance")],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+            ]
+            
+            await update.message.reply_text(
+                success_text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode=ParseMode.MARKDOWN
+            )
+            
+            logger.info(f"Successful payment processed: User {user_id}, Amount: ${usd_amount} USD ({asset}), Charge ID: {payment.telegram_payment_charge_id}")
+            
+        else:
+            logger.error(f"Invalid payment payload: {payment.invoice_payload}")
+            await update.message.reply_text("❌ Payment processing error. Please contact support.")
+            
+    except Exception as e:
+        logger.error(f"Successful payment processing error: {e}")
+        await update.message.reply_text("❌ Error processing payment. Please contact support if your payment was charged.")
+
+# --- Conversation States ---
+DEPOSIT_ASSET = "DEPOSIT_ASSET"
+DEPOSIT_AMOUNT = "DEPOSIT_AMOUNT"
 
 # --- Register Deposit ConversationHandler ---
 deposit_conv_handler = ConversationHandler(
@@ -1875,6 +1561,10 @@ async def async_main():
     # Add owner panel and owner demo toggle only
     application.add_handler(CallbackQueryHandler(owner_panel_callback, pattern="^owner_panel$"))
     application.add_handler(CallbackQueryHandler(owner_toggle_demo_callback, pattern="^owner_toggle_demo$"))
+
+    # Add Telegram payment handlers (for native invoices)
+    application.add_handler(PreCheckoutQueryHandler(precheckout_callback))
+    application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
 
     # Add deposit ConversationHandler (this enables the coin selection -> amount prompt flow)
     application.add_handler(deposit_conv_handler)
