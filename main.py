@@ -1266,18 +1266,11 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
         # Log available URLs for debugging
         logger.info(f"Invoice URLs - pay_url: {pay_url}, mini_app: {mini_app_url}, web_app: {web_app_url}, hash: {invoice_hash}")
         
-        # Build keyboard with valid Web App integration
+        # Build keyboard with external payment links only
         keyboard_rows = []
         
-        # Priority 1: Use our own Mini App bridge if we have the hash (valid Web App URL)
-        if invoice_hash and RENDER_EXTERNAL_URL:
-            miniapp_bridge_url = f"{RENDER_EXTERNAL_URL}/miniapp/invoice/{invoice_hash}"
-            keyboard_rows.append([
-                InlineKeyboardButton("💳 Pay in Bot (Mini App)", web_app=WebAppInfo(url=miniapp_bridge_url))
-            ])
-        
-        # Priority 2: Direct CryptoBot web app URL (if it's a valid HTTPS URL)
-        elif web_app_url and web_app_url.startswith('https://app.cr.bot'):
+        # Priority 1: Direct CryptoBot web app URL (if it's a valid HTTPS URL)
+        if web_app_url and web_app_url.startswith('https://app.cr.bot'):
             keyboard_rows.append([
                 InlineKeyboardButton("💳 Pay in CryptoBot Web App", web_app=WebAppInfo(url=web_app_url))
             ])
