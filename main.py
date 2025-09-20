@@ -618,7 +618,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     keyboard = [
         [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"), InlineKeyboardButton("💰 Balance", callback_data="show_balance")],
-        [InlineKeyboardButton("💳 Deposit", callback_data="withdraw"), InlineKeyboardButton("💸 Withdraw", callback_data="withdraw")],
+        [InlineKeyboardButton("💳 Deposit", callback_data="deposit"), InlineKeyboardButton("💸 Withdraw", callback_data="withdraw")],
         [InlineKeyboardButton("🎁 Redeem", callback_data="redeem_panel"), InlineKeyboardButton("ℹ️ Help", callback_data="show_help")],
         [InlineKeyboardButton("📊 Statistics", callback_data="show_stats")]
     ]
@@ -1659,12 +1659,7 @@ async def async_main():
     application.add_handler(CallbackQueryHandler(play_dice_callback, pattern="^play_dice$"))
     application.add_handler(CallbackQueryHandler(handle_dice_bet, pattern="^dice_"))
     # Deposit/Withdrawal handlers
-    application.add_handler(CallbackQueryHandler(deposit_callback, pattern="^deposit$"))
     application.add_handler(CallbackQueryHandler(withdraw_callback, pattern="^withdraw$"))
-    # Remove old deposit handlers if present
-    # application.add_handler(CallbackQueryHandler(deposit_ltc_callback, pattern="^deposit_ltc$"))
-    # application.add_handler(CallbackQueryHandler(deposit_ton_callback, pattern="^deposit_ton$"))
-    # application.add_handler(CallbackQueryHandler(deposit_sol_callback, pattern="^deposit_sol$"))
     application.add_handler(CallbackQueryHandler(withdraw_ltc_callback, pattern="^withdraw_ltc$"))
     application.add_handler(CallbackQueryHandler(withdraw_ton_callback, pattern="^withdraw_ton$"))
     application.add_handler(CallbackQueryHandler(withdraw_sol_callback, pattern="^withdraw_sol$"))
@@ -1677,6 +1672,9 @@ async def async_main():
     # Add owner panel and owner demo toggle only
     application.add_handler(CallbackQueryHandler(owner_panel_callback, pattern="^owner_panel$"))
     application.add_handler(CallbackQueryHandler(owner_toggle_demo_callback, pattern="^owner_toggle_demo$"))
+
+    # Add deposit ConversationHandler (this enables the coin selection -> amount prompt flow)
+    application.add_handler(deposit_conv_handler)
 
     # Add global error handler
     application.add_error_handler(global_error_handler)
