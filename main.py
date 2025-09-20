@@ -1269,12 +1269,7 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
         # Build keyboard with external payment links only
         keyboard_rows = []
         
-        # Priority 1: Direct CryptoBot web app URL (if it's a valid HTTPS URL)
-        if web_app_url and web_app_url.startswith('https://app.cr.bot'):
-            keyboard_rows.append([
-                InlineKeyboardButton("💳 Pay in CryptoBot Web App", web_app=WebAppInfo(url=web_app_url))
-            ])
-        
+
         # External links (t.me URLs and regular links)
         if mini_app_url and mini_app_url.startswith('https://t.me'):
             keyboard_rows.append([
@@ -1284,7 +1279,7 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
         # Fallback: Open CryptoBot directly (external)
         if pay_url:
             keyboard_rows.append([
-                InlineKeyboardButton("Open in CryptoBot App", url=pay_url)
+                InlineKeyboardButton("💳 Pay in CryptoBot App", url=pay_url)
             ])
         # Navigation
         keyboard_rows.append([InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")])
@@ -1300,14 +1295,13 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
 ⏰ Invoice expires in 60 minutes
 
 💡 **Tips:**
-• Use "Mini App" button for seamless in-bot payment
 • Payment is secure and processed by CryptoBot
 • Keep this chat open during payment
 • You'll receive confirmation when payment is complete
 
 📞 **Having issues?** Use /payment to check status
 
-🚀 **Ready to pay? Use the Mini App button below!**
+🚀 **Ready to pay? Click one of the payment buttons below!**
 """
         await processing_msg.edit_text(
             text,
