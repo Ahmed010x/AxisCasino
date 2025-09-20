@@ -137,8 +137,58 @@ CRYPTO_ADDRESS_PATTERNS = {
     'SOL': r'^[1-9A-HJ-NP-Za-km-z]{32,44}$',
 }
 
+async def create_crypto_payment(asset: str, amount: float, user_id: int, payload: dict = None) -> dict:
+    """Create a Crypto Pay payment using CryptoBot's native payment system"""
+    try:
+        if not CRYPTOBOT_API_TOKEN:
+            return {"ok": False, "error": "API token not configured"}
+        
+        headers = {
+            'Crypto-Pay-API-Token': CRYPTOBOT_API_TOKEN,
+            'Content-Type': 'application/json'
+        }
+        
+        # Set webhook URL for payment notifications
+        webhook_url = f'{RENDER_EXTERNAL_URL}/webhook/cryptobot' if RENDER_EXTERNAL_URL else 'https://axiscasino.onrender.com/webhook/cryptobot'
+        
+        # Generate unique payment ID
+        payment_id = f"casino_deposit_{user_id}_{int(time.time())}"
+        
+        data = {
+            'asset': asset,
+            'amount': f"{amount:.8f}",
+            'payment_id': payment_id,
+            'description': f'Casino deposit for user {user_id}',
+            'webhook_url': webhook_url,
+            'expires_in': 3600,  # 1 hour expiration
+            'hide_message': True,  # Hide payment in chat
+            'pay_anonymously': False
+        }
+        
+        if payload:
+            data.update(payload)
+        
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+            async with session.post('https://pay.crypt.bot/api/createPayment', 
+                                  headers=headers, json=data) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    logger.info(f"Crypto Pay payment created successfully: {result.get('result', {}).get('payment_id')}")
+                    return result
+                else:
+                    error_text = await response.text()
+                    logger.error(f"Crypto Pay API error {response.status}: {error_text}")
+                    return {"ok": False, "error": f"API error {response.status}: {error_text}"}
+                
+    except asyncio.TimeoutError:
+        logger.error("Timeout creating crypto payment")
+        return {"ok": False, "error": "Request timeout - please try again"}
+    except Exception as e:
+        logger.error(f"Error creating crypto payment: {e}")
+        return {"ok": False, "error": str(e)}
+
 async def create_crypto_invoice(asset: str, amount: float, user_id: int, payload: dict = None) -> dict:
-    """Create a crypto invoice using CryptoBot API"""
+    """Create a crypto invoice using CryptoBot API (fallback for compatibility)"""
     try:
         if not CRYPTOBOT_API_TOKEN:
             return {"ok": False, "error": "API token not configured"}
@@ -1203,45 +1253,30 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
         await processing_msg.edit_text("❌ Unable to get exchange rate. Please try again later.")
         return DEPOSIT_AMOUNT
     
-    # Create invoice with crypto amount
-    invoice_result = await create_crypto_invoice(asset, crypto_amount, user_id)
-    if invoice_result.get('ok'):
-        result = invoice_result['result']
-        pay_url = result.get('pay_url')  # https://t.me/CryptoBot?start=...
-        mini_app_url = result.get('mini_app_invoice_url')  # CryptoBot Mini App URL
-        web_app_url = result.get('web_app_invoice_url')  # https://app.cr.bot/invoices/<hash>
-        invoice_hash = result.get('hash')  # Invoice hash for Mini App
-        invoice_id = result.get('invoice_id')
+    # Create Crypto Pay payment (more reliable than invoices)
+    payment_result = await create_crypto_payment(asset, crypto_amount, user_id)
+    if payment_result.get('ok'):
+        result = payment_result['result']
+        payment_id = result.get('payment_id')
+        payment_url = result.get('payment_url')  # Direct payment URL
         
-        # Log available URLs for debugging
-        logger.info(f"Invoice URLs - pay_url: {pay_url}, mini_app: {mini_app_url}, web_app: {web_app_url}, hash: {invoice_hash}")
+        # Log payment details
+        logger.info(f"Crypto Pay payment created - ID: {payment_id}, URL: {payment_url}")
         
-        # Build keyboard with native Mini App integration
+        # Build keyboard with safe Mini App integration
         keyboard_rows = []
         
-        # Priority 1: Use CryptoBot Mini App if available (native integration)
-        if mini_app_url:
+        # Use our own Mini App for payment handling (safe and whitelisted)
+        if RENDER_EXTERNAL_URL:
+            miniapp_payment_url = f"{RENDER_EXTERNAL_URL}/miniapp/payment/{payment_id}"
             keyboard_rows.append([
-                InlineKeyboardButton("💳 Pay in CryptoBot Mini App", web_app=WebAppInfo(url=mini_app_url))
+                InlineKeyboardButton("💳 Pay with Crypto Pay", web_app=WebAppInfo(url=miniapp_payment_url))
             ])
         
-        # Priority 2: Use our own Mini App bridge if we have the hash
-        elif invoice_hash and RENDER_EXTERNAL_URL:
-            miniapp_bridge_url = f"{RENDER_EXTERNAL_URL}/miniapp/invoice/{invoice_hash}"
+        # Direct payment link for external access
+        if payment_url:
             keyboard_rows.append([
-                InlineKeyboardButton("💳 Pay in Bot (Mini App)", web_app=WebAppInfo(url=miniapp_bridge_url))
-            ])
-        
-        # Priority 3: Direct CryptoBot web app URL
-        elif web_app_url:
-            keyboard_rows.append([
-                InlineKeyboardButton("💳 Pay in CryptoBot Web App", web_app=WebAppInfo(url=web_app_url))
-            ])
-        
-        # Fallback: Open CryptoBot directly (external)
-        if pay_url:
-            keyboard_rows.append([
-                InlineKeyboardButton("� Open in CryptoBot App", url=pay_url)
+                InlineKeyboardButton("🔗 Open Payment Link", url=payment_url)
             ])
         
         # Navigation
@@ -1251,14 +1286,14 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
 💳 **{asset} DEPOSIT** 💳
 
 💰 **Amount:** ${usd_amount:.2f} USD ({crypto_amount:.8f} {asset})
-🆔 **Invoice ID:** `{invoice_id}`
+🆔 **Payment ID:** `{payment_id}`
 
 ⚡ Payment will be processed automatically
 🔄 Your balance will update instantly after confirmation
-⏰ Invoice expires in 60 minutes
+⏰ Payment expires in 1 hour
 
 💡 **Tips:**
-• Use "Mini App" button for seamless in-bot payment
+• Use "Pay with Crypto Pay" button for seamless in-bot payment
 • Payment is secure and processed by CryptoBot
 • Keep this chat open during payment
 • You'll receive confirmation when payment is complete
@@ -1275,8 +1310,8 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
         )
         return ConversationHandler.END
     else:
-        error_msg = invoice_result.get('error', 'Unknown error')
-        await processing_msg.edit_text(f"❌ Error creating deposit invoice: {error_msg}\n\nPlease try again or contact support if the issue persists.")
+        error_msg = payment_result.get('error', 'Unknown error')
+        await processing_msg.edit_text(f"❌ Error creating deposit payment: {error_msg}\n\nPlease try again or contact support if the issue persists.")
         return DEPOSIT_AMOUNT
 
 # --- Register Deposit ConversationHandler ---
@@ -1782,7 +1817,7 @@ If you just made a payment:
             
             text += """
 🔄 **Payment Taking Long?**
-• CryptoBot payments usually confirm within 1-5 minutes
+• CryptoBot payments usually confirm within  1-5 minutes
 • Check your CryptoBot app for payment status
 • Contact support if payment completed but balance missing
 
@@ -1949,75 +1984,96 @@ async def async_main():
                         logger.warning("Invalid webhook signature")
                         return {"status": "invalid_signature"}, 401
                 
-                # Process payment
-                if data and data.get('update_type') == 'invoice_paid':
+                # Process payment - handle both invoice_paid and payment events
+                payment_data = None
+                user_id = None
+                amount = 0
+                asset = 'USDT'
+                transaction_id = None
+                
+                if data.get('update_type') == 'invoice_paid':
+                    # Handle legacy invoice payments
                     invoice_data = data.get('payload')
                     user_id_str = invoice_data.get('hidden_message')
                     amount = float(invoice_data.get('amount', 0))
                     asset = invoice_data.get('asset', 'USDT')
-                    invoice_id = invoice_data.get('invoice_id')
+                    transaction_id = invoice_data.get('invoice_id')
+                    if user_id_str:
+                        user_id = int(user_id_str)
+                        
+                elif data.get('update_type') == 'payment_completed':
+                    # Handle Crypto Pay payments
+                    payment_data = data.get('payload')
+                    amount = float(payment_data.get('amount', 0))
+                    asset = payment_data.get('asset', 'USDT')
+                    transaction_id = payment_data.get('payment_id')
                     
-                    if user_id_str and amount > 0:
+                    # Extract user_id from payment_id (format: casino_deposit_{user_id}_{timestamp})
+                    if transaction_id and transaction_id.startswith('casino_deposit_'):
+                        parts = transaction_id.split('_')
+                        if len(parts) >= 3:
+                            user_id = int(parts[2])
+                
+                if user_id and amount > 0:
+                    try:
+                        # Convert crypto amount to USD for balance update
+                        usd_amount = amount
+                        if asset != 'USDT':
+                            # Get current rate and convert to USD
+                            rate = 65.0 if asset == 'LTC' else (2.5 if asset == 'TON' else 23.0)
+                            usd_amount = amount * rate
+                        
+                        # Update user balance synchronously (we'll use a thread-safe approach)
+                        import sqlite3
                         try:
-                            user_id = int(user_id_str)
-                            # Convert crypto amount to USD for balance update
-                            usd_amount = amount
-                            if asset != 'USDT':
-                                # Get current rate and convert to USD
-                                rate = 65.0 if asset == 'LTC' else (2.5 if asset == 'TON' else 23.0)
-                                usd_amount = amount * rate
+                            conn = sqlite3.connect(DB_PATH)
+                            cursor = conn.cursor()
                             
-                            # Update user balance synchronously (we'll use a thread-safe approach)
-                            import sqlite3
+                            # Update balance
+                            cursor.execute("""
+                                UPDATE users SET balance = balance + ? 
+                                WHERE user_id = ?
+                            """, (usd_amount, user_id))
+                            
+                            # Log transaction
+                            cursor.execute("""
+                                INSERT INTO transactions (user_id, type, amount, description, timestamp)
+                                VALUES (?, 'deposit', ?, ?, ?)
+                            """, (user_id, usd_amount, f"Crypto deposit ({asset}): {amount} -> ${usd_amount:.2f}", datetime.now().isoformat()))
+                            
+                            conn.commit()
+                            conn.close()
+                            
+                            logger.info(f"Payment processed: User {user_id}, Amount: {amount} {asset} (${usd_amount:.2f} USD), Transaction: {transaction_id}")
+                            
+                            # Try to notify user (best effort)
                             try:
-                                conn = sqlite3.connect(DB_PATH)
-                                cursor = conn.cursor()
+                                import asyncio
+                                loop = asyncio.new_event_loop()
+                                asyncio.set_event_loop(loop)
                                 
-                                # Update balance
-                                cursor.execute("""
-                                    UPDATE users SET balance = balance + ? 
-                                    WHERE user_id = ?
-                                """, (usd_amount, user_id))
+                                async def notify_user():
+                                    try:
+                                        await application.bot.send_message(
+                                            chat_id=user_id,
+                                            text=f"✅ **Deposit Successful!**\n\n💰 **Amount:** ${usd_amount:.2f} USD\n🔗 **Transaction:** {transaction_id}\n\n🎮 Your balance has been updated. Ready to play!",
+                                            parse_mode=ParseMode.MARKDOWN
+                                        )
+                                    except Exception as e:
+                                        logger.error(f"Could not notify user {user_id}: {e}")
                                 
-                                # Log transaction
-                                cursor.execute("""
-                                    INSERT INTO transactions (user_id, type, amount, description, timestamp)
-                                    VALUES (?, 'deposit', ?, ?, ?)
-                                """, (user_id, usd_amount, f"Crypto deposit ({asset}): {amount} -> ${usd_amount:.2f}", datetime.now().isoformat()))
-                                
-                                conn.commit()
-                                conn.close()
-                                
-                                logger.info(f"Payment processed: User {user_id}, Amount: {amount} {asset} (${usd_amount:.2f} USD), Invoice: {invoice_id}")
-                                
-                                # Try to notify user (best effort)
-                                try:
-                                    import asyncio
-                                    loop = asyncio.new_event_loop()
-                                    asyncio.set_event_loop(loop)
-                                    
-                                    async def notify_user():
-                                        try:
-                                            await application.bot.send_message(
-                                                chat_id=user_id,
-                                                text=f"✅ **Deposit Successful!**\n\n💰 **Amount:** ${usd_amount:.2f} USD\n🔗 **Transaction:** {invoice_id}\n\n🎮 Your balance has been updated. Ready to play!",
-                                                parse_mode=ParseMode.MARKDOWN
-                                            )
-                                        except Exception as e:
-                                            logger.error(f"Could not notify user {user_id}: {e}")
-                                    
-                                    loop.run_until_complete(notify_user())
-                                    loop.close()
-                                except Exception as e:
-                                    logger.error(f"Could not send notification: {e}")
-                                
+                                loop.run_until_complete(notify_user())
+                                loop.close()
                             except Exception as e:
-                                logger.error(f"Database error processing payment: {e}")
-                                return {"status": "db_error"}, 500
-                                
-                        except ValueError:
-                            logger.error(f"Invalid user_id in webhook: {user_id_str}")
-                            return {"status": "invalid_user_id"}, 400
+                                logger.error(f"Could not send notification: {e}")
+                            
+                        except Exception as e:
+                            logger.error(f"Database error processing payment: {e}")
+                            return {"status": "db_error"}, 500
+                            
+                    except ValueError:
+                        logger.error(f"Invalid user_id in webhook: {user_id}")
+                        return {"status": "invalid_user_id"}, 400
                     
                 return {"status": "ok"}
             except Exception as e:
@@ -2106,7 +2162,218 @@ async def async_main():
               </body>
             </html>
             """
+        
+        @app.route('/miniapp/payment/<payment_id>')
+        def miniapp_payment(payment_id):
+            """Mini App interface for Crypto Pay payment processing"""
+            try:
+                return f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Pay Payment</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {{
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+        }}
+        .container {{
+            max-width: 400px;
+            margin: 0 auto;
+            text-align: center;
+        }}
+        .payment-card {{
+            background: var(--tg-theme-secondary-bg-color, #f8f8f8);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }}
+        .payment-id {{
+            font-family: monospace;
+            background: var(--tg-theme-hint-color, #999999);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin: 10px 0;
+            word-break: break-all;
+        }}
+        .btn {{
+            background: var(--tg-theme-button-color, #0088cc);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+            width: 100%;
+            max-width: 200px;
+        }}
+        .btn:hover {{
+            opacity: 0.8;
+        }}
+        .status {{
+            margin: 20px 0;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: bold;
+        }}
+        .status.loading {{
+            background: #fff3cd;
+            color: #856404;
+        }}
+        .status.success {{
+            background: #d4edda;
+            color: #155724;
+        }}
+        .status.error {{
+            background: #f8d7da;
+            color: #721c24;
+        }}
+        .spinner {{
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid var(--tg-theme-button-color, #0088cc);
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+        }}
+        @keyframes spin {{
+            0% {{ transform: rotate(0deg); }}
+            100% {{ transform: rotate(360deg); }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>💳 Crypto Pay Payment</h2>
+        
+        <div class="payment-card">
+            <h3>Payment Details</h3>
+            <div>Payment ID:</div>
+            <div class="payment-id">{payment_id}</div>
             
+            <div id="status" class="status loading">
+                <div class="spinner"></div>
+                Loading payment details...
+            </div>
+            
+            <button id="payBtn" class="btn" onclick="processPayment()" style="display: none;">
+                🚀 Pay Now
+            </button>
+            
+            <button id="checkBtn" class="btn" onclick="checkPaymentStatus()" style="display: none;">
+                🔄 Check Status
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        const paymentId = '{payment_id}';
+        let paymentData = null;
+        
+        // Initialize Telegram WebApp
+        tg.ready();
+        tg.expand();
+        
+        // Load payment details
+        async function loadPaymentDetails() {{
+            try {{
+                const response = await fetch(`/api/payment/${{paymentId}}`);
+                const data = await response.json();
+                
+                if (data.ok) {{
+                    paymentData = data.payment;
+                    showPaymentReady();
+                }} else {{
+                    showError('Failed to load payment details: ' + (data.error || 'Unknown error'));
+                }}
+            }} catch (error) {{
+                showError('Network error: ' + error.message);
+            }}
+        }}
+        
+        function showPaymentReady() {{
+            document.getElementById('status').innerHTML = '✅ Payment ready! Click "Pay Now" to proceed.';
+            document.getElementById('status').className = 'status success';
+            document.getElementById('payBtn').style.display = 'block';
+            document.getElementById('checkBtn').style.display = 'block';
+        }}
+        
+        function showError(message) {{
+            document.getElementById('status').innerHTML = '❌ ' + message;
+            document.getElementById('status').className = 'status error';
+            document.getElementById('checkBtn').style.display = 'block';
+        }}
+        
+        async function processPayment() {{
+            if (!paymentData || !paymentData.payment_url) {{
+                showError('Payment URL not available');
+                return;
+            }}
+            
+            // Open payment in external browser
+            tg.openLink(paymentData.payment_url);
+            
+            // Start status checking
+            document.getElementById('status').innerHTML = '⏳ Payment opened. Complete the payment and check status.';
+            document.getElementById('status').className = 'status loading';
+        }}
+        
+        async function checkPaymentStatus() {{
+            try {{
+                document.getElementById('status').innerHTML = '<div class="spinner"></div>Checking payment status...';
+                document.getElementById('status').className = 'status loading';
+                
+                const response = await fetch(`/api/payment/${{paymentId}}/status`);
+                const data = await response.json();
+                
+                if (data.ok) {{
+                    if (data.status === 'paid') {{
+                        document.getElementById('status').innerHTML = '🎉 Payment successful! Your deposit has been processed.';
+                        document.getElementById('status').className = 'status success';
+                        
+                        // Close Mini App after success
+                        setTimeout(() => {{
+                            tg.close();
+                        }}, 2000);
+                    }} else if (data.status === 'expired') {{
+                        showError('Payment expired. Please create a new deposit.');
+                    }} else {{
+                        document.getElementById('status').innerHTML = '⏳ Payment pending. Please complete the payment.';
+                        document.getElementById('status').className = 'status loading';
+                    }}
+                }} else {{
+                    showError('Status check failed: ' + (data.error || 'Unknown error'));
+                }}
+            }} catch (error) {{
+                showError('Network error: ' + error.message);
+            }}
+        }}
+        
+        // Auto-load payment details when page loads
+        loadPaymentDetails();
+        
+        // Auto-check status every 10 seconds
+        setInterval(checkPaymentStatus, 10000);
+    </script>
+</body>
+</html>
+                """
+            except Exception as e:
+                logger.error(f"Error rendering payment Mini App for payment_id {payment_id}: {e}")
+                return "Error loading payment interface", 500
+    
         # Start Flask server
         port = int(os.getenv('PORT', 8080))
         app.run(host='0.0.0.0', port=port, debug=False, threaded=True)

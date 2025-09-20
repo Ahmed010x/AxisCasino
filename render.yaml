@@ -1,43 +1,31 @@
 services:
   - type: web
-    name: casino-bot
+    name: telegram-casino-bot
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python start_bot.py
-    plan: starter
-    autoDeploy: true
-    healthCheckPath: /health
+    startCommand: python main.py
+    plan: free
+    autoDeploy: false
     envVars:
       - key: BOT_TOKEN
         sync: false
-      - key: CRYPTOBOT_API_TOKEN
+      - key: WEBAPP_URL
+        value: https://your-casino-webapp.vercel.app
+      - key: WEBAPP_ENABLED
+        value: true
+      - key: WEBAPP_SECRET_KEY
         sync: false
-      - key: CRYPTOBOT_WEBHOOK_SECRET
-        sync: false
+      - key: PORT
+        value: 10000
       - key: RENDER_EXTERNAL_URL
         sync: false
-      - key: WEBAPP_URL
-        value: https://axiscasino.onrender.com/casino_webapp_new.html
-      - key: WEBHOOK_ENABLED
-        value: true
-      - key: WEBHOOK_PORT
-        value: 5000
-      - key: DB_PATH
+      - key: HEARTBEAT_INTERVAL
+        value: 300
+      - key: CASINO_DB
         value: casino.db
-      - key: LTC_USD_RATE
-        value: 65.0
-      - key: TON_USD_RATE
-        value: 2.5
-      - key: SOL_USD_RATE
-        value: 23.0
-      - key: USDT_USD_RATE
-        value: 1.0
-      - key: MIN_DEPOSIT_LTC_USD
-        value: 1.00
-      - key: MIN_DEPOSIT_TON_USD
-        value: 2.50
-      - key: MIN_DEPOSIT_SOL_USD
-        value: 1.15
-      - key: MIN_DEPOSIT_USDT_USD
-        value: 1.00
+      - key: VIP_SILVER_REQUIRED
+        value: 1000
+      - key: VIP_GOLD_REQUIRED
+        value: 5000
+      - key: VIP_DIAMOND_REQUIRED
         value: 10000
