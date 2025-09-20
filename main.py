@@ -1150,9 +1150,9 @@ Choose your cryptocurrency:
 🔒 **Secure & anonymous**
 """
     keyboard = [
-        [InlineKeyboardButton("Ł Litecoin (LTC)", callback_data="deposit_ltc"),
-         InlineKeyboardButton("🪙 Toncoin (TON)", callback_data="deposit_ton")],
-        [InlineKeyboardButton("◎ Solana (SOL)", callback_data="deposit_sol")],
+        [InlineKeyboardButton("Litecoin (LTC)", callback_data="deposit_ltc"),
+         InlineKeyboardButton("Toncoin (TON)", callback_data="deposit_ton")],
+        [InlineKeyboardButton("Solana (SOL)", callback_data="deposit_sol")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
@@ -1167,7 +1167,7 @@ async def deposit_ltc_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     min_deposit_usd = float(os.environ.get("MIN_DEPOSIT_LTC_USD", "1.00"))
     
     text = f"""
-Ł **Litecoin (LTC) Deposit**
+**Litecoin (LTC) Deposit**
 
 Enter the amount in USD you want to deposit:
 (Minimum: ${min_deposit_usd:.2f} USD)
@@ -1187,7 +1187,7 @@ async def deposit_ton_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     min_deposit_usd = float(os.environ.get("MIN_DEPOSIT_TON_USD", "2.50"))
     
     text = f"""
-🪙 **Toncoin (TON) Deposit**
+**Toncoin (TON) Deposit**
 
 Enter the amount in USD you want to deposit:
 (Minimum: ${min_deposit_usd:.2f} USD)
@@ -1207,7 +1207,7 @@ async def deposit_sol_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     min_deposit_usd = float(os.environ.get("MIN_DEPOSIT_SOL_USD", "1.15"))
     
     text = f"""
-◎ **Solana (SOL) Deposit**
+**Solana (SOL) Deposit**
 
 Enter the amount in USD you want to deposit:
 (Minimum: ${min_deposit_usd:.2f} USD)
@@ -1245,16 +1245,8 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
     # Show processing message
     processing_msg = await update.message.reply_text("⏳ Creating your deposit invoice...")
     
-    # Convert USD to crypto amount
-    crypto_rate = await get_crypto_usd_rate(asset)
-    crypto_amount = usd_amount / crypto_rate if crypto_rate > 0 else 0
-    
-    if crypto_amount <= 0:
-        await processing_msg.edit_text("❌ Unable to get exchange rate. Please try again later.")
-        return DEPOSIT_AMOUNT
-    
-    # Create invoice with crypto amount
-    invoice_result = await create_crypto_invoice(asset, crypto_amount, user_id)
+    # Create invoice with USD amount (the number user sent)
+    invoice_result = await create_crypto_invoice('USDT', usd_amount, user_id)
     if invoice_result.get('ok'):
         result = invoice_result['result']
         pay_url = result.get('pay_url')  # https://t.me/CryptoBot?start=...
@@ -1262,6 +1254,10 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
         web_app_url = result.get('web_app_invoice_url')  # https://app.cr.bot/invoices/<hash>
         invoice_hash = result.get('hash')  # Invoice hash for Mini App
         invoice_id = result.get('invoice_id')
+        
+        # Get crypto equivalent for display purposes
+        crypto_rate = await get_crypto_usd_rate(asset)
+        crypto_amount = usd_amount / crypto_rate if crypto_rate > 0 else 0
         
         # Log available URLs for debugging
         logger.info(f"Invoice URLs - pay_url: {pay_url}, mini_app: {mini_app_url}, web_app: {web_app_url}, hash: {invoice_hash}")
@@ -1287,8 +1283,9 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
         text = f"""
 💳 **{asset} DEPOSIT** 💳
 
-💰 **Amount:** ${usd_amount:.2f} USD ({crypto_amount:.8f} {asset})
+💰 **Amount:** ${usd_amount:.2f} USD
 🆔 **Invoice ID:** `{invoice_id}`
+💱 **Crypto Equivalent:** ~{crypto_amount:.8f} {asset}
 
 ⚡ Payment will be processed automatically
 🔄 Your balance will update instantly after confirmation
@@ -1353,9 +1350,9 @@ Choose your cryptocurrency:
 """
     
     keyboard = [
-        [InlineKeyboardButton("Ł Litecoin (LTC)", callback_data="withdraw_ltc"),
-         InlineKeyboardButton("🪙 Toncoin (TON)", callback_data="withdraw_ton")],
-        [InlineKeyboardButton("◎ Solana (SOL)", callback_data="withdraw_sol")],
+        [InlineKeyboardButton("Litecoin (LTC)", callback_data="withdraw_ltc"),
+         InlineKeyboardButton("Toncoin (TON)", callback_data="withdraw_ton")],
+        [InlineKeyboardButton("Solana (SOL)", callback_data="withdraw_sol")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
