@@ -576,9 +576,6 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
     except Exception as e:
         logger.error(f"[GLOBAL ERROR] Failed to notify user: {e}")
 
-# --- Conversation States (must be defined before use) ---
-DEPOSIT_ASSET, DEPOSIT_AMOUNT = range(2)
-
 # --- Handler Definitions ---
 # (All handler functions are now defined above async_main)
 
@@ -718,6 +715,107 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     except Exception as e:
         logger.error(f"Error processing successful payment: {e}")
         await update.message.reply_text("❌ Error processing your deposit. Please contact support.")
+
+# --- Other Handler Definitions (stubs to fix undefined errors) ---
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Welcome to the Casino Bot! Use the menu below to get started.")
+
+async def health_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Bot is healthy and running.")
+
+async def show_balance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Your balance: (stub)")
+
+async def mini_app_centre_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Mini App Centre (stub)")
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Help: Use the menu to play games, deposit, or withdraw.")
+
+async def mini_app_centre_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text("Mini App Centre (stub)")
+
+async def classic_casino_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text("Classic Casino (stub)")
+
+async def play_slots_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text("Slots Game (stub)")
+
+async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text("Slots Bet (stub)")
+
+async def coin_flip_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text("Coin Flip (stub)")
+
+async def handle_coinflip_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text("Coin Flip Bet (stub)")
+
+async def play_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text("Dice Game (stub)")
+
+async def handle_dice_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text("Dice Bet (stub)")
+
+async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text("Withdraw (stub)")
+
+async def withdraw_ltc_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text("Withdraw LTC (stub)")
+
+async def withdraw_ton_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text("Withdraw TON (stub)")
+
+async def withdraw_sol_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text("Withdraw SOL (stub)")
+
+async def redeem_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text("Redeem Panel (stub)")
+
+async def show_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text("Stats (stub)")
+
+async def owner_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text("Owner Panel (stub)")
+
+async def owner_toggle_demo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text("Owner Demo Toggle (stub)")
+
+# --- Conversation States for Deposit Flow ---
+DEPOSIT_ASSET, DEPOSIT_AMOUNT = range(2)
+
+# --- ConversationHandler for Deposit (move below all handler definitions) ---
+deposit_conv_handler = ConversationHandler(
+    entry_points=[CallbackQueryHandler(deposit_callback, pattern="^deposit$")],
+    states={
+        DEPOSIT_ASSET: [
+            CallbackQueryHandler(deposit_ltc_callback, pattern="^deposit_ltc$"),
+            CallbackQueryHandler(deposit_ton_callback, pattern="^deposit_ton$"),
+            CallbackQueryHandler(deposit_sol_callback, pattern="^deposit_sol$")
+        ],
+        DEPOSIT_AMOUNT: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, deposit_amount_handler),
+            CallbackQueryHandler(deposit_callback, pattern="^deposit$")
+        ],
+    },
+    fallbacks=[CallbackQueryHandler(deposit_callback, pattern="^deposit$")],
+    allow_reentry=True
+)
 
 # --- Main Bot Setup and Entry Point ---
 async def async_main():
