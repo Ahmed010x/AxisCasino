@@ -138,7 +138,7 @@ CRYPTO_ADDRESS_PATTERNS = {
 }
 
 async def create_crypto_payment(asset: str, amount: float, user_id: int, payload: dict = None) -> dict:
-    """Create a Crypto Pay payment using CryptoBot's native payment system"""
+    """Create a Crypto Pay payment using CryptoBot's createInvoice endpoint"""
     try:
         if not CRYPTOBOT_API_TOKEN:
             return {"ok": False, "error": "API token not configured"}
@@ -151,38 +151,58 @@ async def create_crypto_payment(asset: str, amount: float, user_id: int, payload
         # Set webhook URL for payment notifications
         webhook_url = f'{RENDER_EXTERNAL_URL}/webhook/cryptobot' if RENDER_EXTERNAL_URL else 'https://axiscasino.onrender.com/webhook/cryptobot'
         
-        # Generate unique payment ID
-        payment_id = f"casino_deposit_{user_id}_{int(time.time())}"
-        
         data = {
             'asset': asset,
             'amount': f"{amount:.8f}",
-            'payment_id': payment_id,
             'description': f'Casino deposit for user {user_id}',
+            'hidden_message': str(user_id),  # Store user_id for webhook processing
             'webhook_url': webhook_url,
             'expires_in': 3600,  # 1 hour expiration
-            'hide_message': True,  # Hide payment in chat
-            'pay_anonymously': False
+            'allow_comments': False,
+            'allow_anonymous': False
         }
         
         if payload:
             data.update(payload)
         
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
-            async with session.post('https://pay.crypt.bot/api/createPayment', 
+            async with session.post('https://pay.crypt.bot/api/createInvoice', 
                                   headers=headers, json=data) as response:
                 if response.status == 200:
                     result = await response.json()
-                    logger.info(f"Crypto Pay payment created successfully: {result.get('result', {}).get('payment_id')}")
-                    return result
+                    if result.get('ok'):
+                        invoice_data = result.get('result')
+                        # Transform invoice response to match payment-like structure
+                        payment_response = {
+                            'ok': True,
+                            'result': {
+                                'payment_id': invoice_data.get('invoice_id'),
+                                'payment_url': invoice_data.get('pay_url'),
+                                'web_app_url': invoice_data.get('web_app_invoice_url'),
+                                'mini_app_url': invoice_data.get('mini_app_invoice_url'),
+                                'hash': invoice_data.get('hash'),
+                                'amount': amount,
+                                'asset': asset,
+                                'status': 'pending'
+                            }
+                        }
+                        logger.info(f"CryptoBot invoice created successfully: {invoice_data.get('invoice_id')}")
+                        return payment_response
+                    else:
+                        error_msg = result.get('error', {}).get('name', 'Unknown error')
+                        logger.error(f"CryptoBot invoice creation failed: {error_msg}")
+                        return {"ok": False, "error": error_msg}
                 else:
                     error_text = await response.text()
-                    logger.error(f"Crypto Pay API error {response.status}: {error_text}")
+                    logger.error(f"CryptoBot API error {response.status}: {error_text}")
                     return {"ok": False, "error": f"API error {response.status}: {error_text}"}
                 
     except asyncio.TimeoutError:
         logger.error("Timeout creating crypto payment")
         return {"ok": False, "error": "Request timeout - please try again"}
+    except Exception as e:
+        logger.error(f"Error creating crypto payment: {e}")
+        return {"ok": False, "error": str(e)}
     except Exception as e:
         logger.error(f"Error creating crypto payment: {e}")
         return {"ok": False, "error": str(e)}
@@ -1253,30 +1273,39 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
         await processing_msg.edit_text("❌ Unable to get exchange rate. Please try again later.")
         return DEPOSIT_AMOUNT
     
-    # Create Crypto Pay payment (more reliable than invoices)
+    # Create Crypto Pay payment using createInvoice endpoint
     payment_result = await create_crypto_payment(asset, crypto_amount, user_id)
     if payment_result.get('ok'):
         result = payment_result['result']
-        payment_id = result.get('payment_id')
-        payment_url = result.get('payment_url')  # Direct payment URL
+        payment_id = result.get('payment_id')  # This is actually invoice_id
+        payment_url = result.get('payment_url')  # CryptoBot pay_url
+        web_app_url = result.get('web_app_url')  # CryptoBot web app URL
+        invoice_hash = result.get('hash')  # Invoice hash for our bridge
         
         # Log payment details
-        logger.info(f"Crypto Pay payment created - ID: {payment_id}, URL: {payment_url}")
+        logger.info(f"CryptoBot invoice created - ID: {payment_id}, Hash: {invoice_hash}")
+        logger.info(f"URLs - pay_url: {payment_url}, web_app: {web_app_url}")
         
-        # Build keyboard with safe Mini App integration
+        # Build keyboard with safe URLs only (no Button_url_invalid errors)
         keyboard_rows = []
         
-        # Use our own Mini App for payment handling (safe and whitelisted)
-        if RENDER_EXTERNAL_URL:
-            miniapp_payment_url = f"{RENDER_EXTERNAL_URL}/miniapp/payment/{payment_id}"
+        # Priority 1: Use our own Mini App bridge (always safe and whitelisted)
+        if invoice_hash and RENDER_EXTERNAL_URL:
+            miniapp_bridge_url = f"{RENDER_EXTERNAL_URL}/miniapp/invoice/{invoice_hash}"
             keyboard_rows.append([
-                InlineKeyboardButton("💳 Pay with Crypto Pay", web_app=WebAppInfo(url=miniapp_payment_url))
+                InlineKeyboardButton("💳 Pay in Bot (Mini App)", web_app=WebAppInfo(url=miniapp_bridge_url))
             ])
         
-        # Direct payment link for external access
+        # Priority 2: CryptoBot web app URL (safe for web_app buttons)
+        elif web_app_url:
+            keyboard_rows.append([
+                InlineKeyboardButton("💳 Pay via CryptoBot Web", web_app=WebAppInfo(url=web_app_url))
+            ])
+        
+        # Fallback: External CryptoBot link (always works)
         if payment_url:
             keyboard_rows.append([
-                InlineKeyboardButton("🔗 Open Payment Link", url=payment_url)
+                InlineKeyboardButton("🔗 Open in CryptoBot App", url=payment_url)
             ])
         
         # Navigation
@@ -1286,14 +1315,14 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
 💳 **{asset} DEPOSIT** 💳
 
 💰 **Amount:** ${usd_amount:.2f} USD ({crypto_amount:.8f} {asset})
-🆔 **Payment ID:** `{payment_id}`
+🆔 **Invoice ID:** `{payment_id}`
 
 ⚡ Payment will be processed automatically
 🔄 Your balance will update instantly after confirmation
-⏰ Payment expires in 1 hour
+⏰ Invoice expires in 1 hour
 
 💡 **Tips:**
-• Use "Pay with Crypto Pay" button for seamless in-bot payment
+• Use "Pay in Bot" button for seamless in-bot payment
 • Payment is secure and processed by CryptoBot
 • Keep this chat open during payment
 • You'll receive confirmation when payment is complete
@@ -1984,7 +2013,7 @@ async def async_main():
                         logger.warning("Invalid webhook signature")
                         return {"status": "invalid_signature"}, 401
                 
-                # Process payment - handle both invoice_paid and payment events
+                # Process payment - handle invoice_paid events (since we use createInvoice)
                 payment_data = None
                 user_id = None
                 amount = 0
@@ -1992,27 +2021,19 @@ async def async_main():
                 transaction_id = None
                 
                 if data.get('update_type') == 'invoice_paid':
-                    # Handle legacy invoice payments
+                    # Handle CryptoBot invoice payments
                     invoice_data = data.get('payload')
                     user_id_str = invoice_data.get('hidden_message')
                     amount = float(invoice_data.get('amount', 0))
                     asset = invoice_data.get('asset', 'USDT')
                     transaction_id = invoice_data.get('invoice_id')
-                    if user_id_str:
-                        user_id = int(user_id_str)
-                        
-                elif data.get('update_type') == 'payment_completed':
-                    # Handle Crypto Pay payments
-                    payment_data = data.get('payload')
-                    amount = float(payment_data.get('amount', 0))
-                    asset = payment_data.get('asset', 'USDT')
-                    transaction_id = payment_data.get('payment_id')
                     
-                    # Extract user_id from payment_id (format: casino_deposit_{user_id}_{timestamp})
-                    if transaction_id and transaction_id.startswith('casino_deposit_'):
-                        parts = transaction_id.split('_')
-                        if len(parts) >= 3:
-                            user_id = int(parts[2])
+                    if user_id_str:
+                        try:
+                            user_id = int(user_id_str)
+                        except ValueError:
+                            logger.error(f"Invalid user_id in webhook: {user_id_str}")
+                            return {"status": "invalid_user_id"}, 400
                 
                 if user_id and amount > 0:
                     try:
