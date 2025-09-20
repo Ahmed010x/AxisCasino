@@ -15,24 +15,14 @@ import json
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
-# Load environment variables first
-from dotenv import load_dotenv
-load_dotenv()
-load_dotenv("env.litecoin")
-
-# Logging setup
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
-
 # Telegram imports
 from telegram import (
     Update, 
     InlineKeyboardButton, 
     InlineKeyboardMarkup, 
-    BotCommand
+    WebApp, 
+    BotCommand,
+    MenuButtonWebApp
 )
 from telegram.ext import (
     Application,
@@ -46,32 +36,19 @@ from telegram.ext import (
 )
 from telegram.constants import ParseMode
 
-# Try to import WebApp components - handle version compatibility
-try:
-    from telegram import WebApp, MenuButtonWebApp
-    WEBAPP_IMPORTS_AVAILABLE = True
-    logger.info("✅ WebApp imports available")
-except ImportError:
-    # Fallback for older versions
-    WEBAPP_IMPORTS_AVAILABLE = False
-    logger.warning("⚠️ WebApp imports not available - using compatibility mode")
-    
-    # Create dummy classes for compatibility
-    class WebApp:
-        def __init__(self, url):
-            self.url = url
-    
-    class MenuButtonWebApp:
-        def __init__(self, text, web_app):
-            self.text = text
-            self.web_app = web_app
-
 # Flask for webhooks
 from flask import Flask, request
 import nest_asyncio
 
 # Enable nested event loops
 nest_asyncio.apply()
+
+# Logging setup
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
 # --- Environment Configuration ---
 BOT_TOKEN = os.getenv('BOT_TOKEN', 'your_bot_token_here')
@@ -102,6 +79,14 @@ USDT_USD_RATE = float(os.getenv('USDT_USD_RATE', '1.0'))
 
 # Database
 DB_PATH = os.getenv('DB_PATH', 'casino.db')
+
+# Check if WebApp is available
+try:
+    from telegram import WebApp
+    WEBAPP_IMPORTS_AVAILABLE = True
+except ImportError:
+    WEBAPP_IMPORTS_AVAILABLE = False
+    logger.warning("WebApp imports not available")
 
 # --- Database Functions ---
 async def init_db():
@@ -993,15 +978,6 @@ async def setup_cryptobot_webhook_server():
         </body>
         </html>
         """
-    
-    @app.route('/health')
-    def health_check():
-        return {
-            "status": "healthy",
-            "timestamp": datetime.now().isoformat(),
-            "service": "casino-bot",
-            "version": "1.0.0"
-        }
     
     return app
 
