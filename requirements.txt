@@ -10,6 +10,7 @@ Werkzeug==3.0.1
 # Web server for health checks and keep-alive
 aiohttp==3.9.1
 requests==2.31.0
+waitress==3.0.0
 
 # Environment and configuration
 python-dotenv==1.0.0
