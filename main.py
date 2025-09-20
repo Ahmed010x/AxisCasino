@@ -1174,13 +1174,26 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
     # Create invoice with crypto amount
     invoice_result = await create_crypto_invoice(asset, crypto_amount, user_id)
     if invoice_result.get('ok'):
-        pay_url = invoice_result['result']['pay_url']
-        invoice_id = invoice_result['result']['invoice_id']
-        # Send as a mini app (Web App) button inside the bot
-        keyboard = [
-            [InlineKeyboardButton("💳 Pay with CryptoBot", web_app={'url': pay_url})],
-            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-        ]
+        result = invoice_result['result']
+        pay_url = result.get('pay_url')
+        mini_app_url = result.get('mini_app_invoice_url')
+        web_app_url = result.get('web_app_invoice_url')
+        invoice_id = result.get('invoice_id')
+        
+        # Use web_app_invoice_url for Web App (this is the proper format for Telegram Web Apps)
+        if web_app_url and web_app_url.startswith('https://'):
+            keyboard = [
+                [InlineKeyboardButton("💳 Pay with CryptoBot", web_app={'url': web_app_url})],
+                [InlineKeyboardButton("🔗 Open Payment Link", url=pay_url)],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+            ]
+        else:
+            # Fallback to regular URL button if Web App URL is not available
+            keyboard = [
+                [InlineKeyboardButton("💳 Pay with CryptoBot", url=pay_url)],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+            ]
+        
         text = f"""
 💳 **{asset} DEPOSIT** 💳
 
