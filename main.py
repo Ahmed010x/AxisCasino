@@ -580,6 +580,9 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
     except Exception as e:
         logger.error(f"[GLOBAL ERROR] Failed to notify user: {e}")
 
+# --- Conversation States (must be defined before use) ---
+DEPOSIT_ASSET, DEPOSIT_AMOUNT = range(2)
+
 # --- Bot Handlers ---
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -615,7 +618,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     keyboard = [
         [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"), InlineKeyboardButton("💰 Balance", callback_data="show_balance")],
-        [InlineKeyboardButton("💳 Deposit", callback_data="deposit"), InlineKeyboardButton("💸 Withdraw", callback_data="withdraw")],
+        [InlineKeyboardButton("💳 Deposit", callback_data="withdraw"), InlineKeyboardButton("💸 Withdraw", callback_data="withdraw")],
         [InlineKeyboardButton("🎁 Redeem", callback_data="redeem_panel"), InlineKeyboardButton("ℹ️ Help", callback_data="show_help")],
         [InlineKeyboardButton("📊 Statistics", callback_data="show_stats")]
     ]
@@ -1060,10 +1063,9 @@ Play again or try another game:
 # --- Deposit/Withdrawal Handlers ---
 
 async def deposit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle main deposit menu"""
+    """Handle main deposit menu and start deposit conversation"""
     query = update.callback_query
     await query.answer()
-    
     text = """
 💳 **DEPOSIT FUNDS** 💳
 
@@ -1077,15 +1079,113 @@ Choose your cryptocurrency:
 ⚡ **Instant deposits via CryptoBot**
 🔒 **Secure & anonymous**
 """
-    
     keyboard = [
         [InlineKeyboardButton("Ł Litecoin (LTC)", callback_data="deposit_ltc"),
          InlineKeyboardButton("🪙 Toncoin (TON)", callback_data="deposit_ton")],
         [InlineKeyboardButton("◎ Solana (SOL)", callback_data="deposit_sol")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
-    
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    return DEPOSIT_ASSET
+
+async def deposit_ltc_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data['deposit_asset'] = 'LTC'
+    text = """
+Ł **Litecoin (LTC) Deposit**
+
+Enter the amount of LTC you want to deposit:
+(Minimum: 0.01 LTC)
+"""
+    keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="deposit")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    return DEPOSIT_AMOUNT
+
+async def deposit_ton_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data['deposit_asset'] = 'TON'
+    text = """
+🪙 **Toncoin (TON) Deposit**
+
+Enter the amount of TON you want to deposit:
+(Minimum: 1 TON)
+"""
+    keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="deposit")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    return DEPOSIT_AMOUNT
+
+async def deposit_sol_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data['deposit_asset'] = 'SOL'
+    text = """
+◎ **Solana (SOL) Deposit**
+
+Enter the amount of SOL you want to deposit:
+(Minimum: 0.05 SOL)
+"""
+    keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="deposit")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    return DEPOSIT_AMOUNT
+
+async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    asset = context.user_data.get('deposit_asset')
+    amount_text = update.message.text.strip()
+    try:
+        amount = float(amount_text)
+    except ValueError:
+        await update.message.reply_text("❌ Invalid amount. Please enter a valid number.")
+        return DEPOSIT_AMOUNT
+    # Minimums
+    min_amounts = {'LTC': 0.01, 'TON': 1.0, 'SOL': 0.05}
+    min_amt = min_amounts.get(asset, 0.01)
+    if amount < min_amt:
+        await update.message.reply_text(f"❌ Minimum deposit for {asset} is {min_amt} {asset}. Please enter a higher amount.")
+        return DEPOSIT_AMOUNT
+    invoice_result = await create_crypto_invoice(asset, amount, user_id)
+    if invoice_result.get('ok'):
+        pay_url = invoice_result['result']['pay_url']
+        invoice_id = invoice_result['result']['invoice_id']
+        text = f"""
+💳 **{asset} DEPOSIT** 💳
+
+💰 **Amount:** {amount} {asset}
+🔗 **Payment Link:** [Click here to pay]({pay_url})
+🆔 **Invoice ID:** `{invoice_id}`
+
+⚡ Payment will be processed automatically
+🔄 Your balance will update instantly after confirmation
+"""
+        keyboard = [
+            [InlineKeyboardButton("💳 Pay with CryptoBot", url=pay_url)],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True)
+        return ConversationHandler.END
+    else:
+        await update.message.reply_text(f"❌ Error creating deposit invoice: {invoice_result.get('error', 'Unknown error')}")
+        return DEPOSIT_AMOUNT
+
+# --- Register Deposit ConversationHandler ---
+deposit_conv_handler = ConversationHandler(
+    entry_points=[CallbackQueryHandler(deposit_callback, pattern="^deposit$")],
+    states={
+        DEPOSIT_ASSET: [
+            CallbackQueryHandler(deposit_ltc_callback, pattern="^deposit_ltc$"),
+            CallbackQueryHandler(deposit_ton_callback, pattern="^deposit_ton$"),
+            CallbackQueryHandler(deposit_sol_callback, pattern="^deposit_sol$"),
+        ],
+        DEPOSIT_AMOUNT: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, deposit_amount_handler),
+            CallbackQueryHandler(deposit_callback, pattern="^deposit$")
+        ],
+    },
+    fallbacks=[CallbackQueryHandler(deposit_callback, pattern="^deposit$")],
+    allow_reentry=True
+)
 
 async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle main withdraw menu"""
@@ -1119,118 +1219,58 @@ async def deposit_ltc_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     """Handle LTC deposit"""
     query = update.callback_query
     await query.answer()
-    user_id = query.from_user.id
     
-    # Create crypto invoice for LTC
-    amount = 0.01  # Minimum deposit amount in LTC
-    invoice_result = await create_crypto_invoice('LTC', amount, user_id)
-    
-    if invoice_result.get('ok'):
-        pay_url = invoice_result['result']['pay_url']
-        invoice_id = invoice_result['result']['invoice_id']
-        
-        text = f"""
+    text = """
 💳 **LTC DEPOSIT** 💳
 
-💰 **Amount:** {amount} LTC
-🔗 **Payment Link:** [Click here to pay]({pay_url})
-🆔 **Invoice ID:** `{invoice_id}`
-
-⚡ Payment will be processed automatically
-🔄 Your balance will update instantly after confirmation
+Enter the amount of LTC you want to deposit:
+(Minimum: 0.01 LTC)
 """
-        
-        keyboard = [
-            [InlineKeyboardButton("💳 Pay with CryptoBot", url=pay_url)],
-            [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit"),
-             InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-        ]
-    else:
-        text = f"❌ **Error creating deposit invoice**\n\n{invoice_result.get('error', 'Unknown error')}"
-        keyboard = [
-            [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit"),
-             InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-        ]
     
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True)
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit"),
+         InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
 async def deposit_ton_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle TON deposit"""
     query = update.callback_query
     await query.answer()
-    user_id = query.from_user.id
     
-    # Create crypto invoice for TON
-    amount = 1.0  # Minimum deposit amount in TON
-    invoice_result = await create_crypto_invoice('TON', amount, user_id)
-    
-    if invoice_result.get('ok'):
-        pay_url = invoice_result['result']['pay_url']
-        invoice_id = invoice_result['result']['invoice_id']
-        
-        text = f"""
+    text = """
 💳 **TON DEPOSIT** 💳
 
-💰 **Amount:** {amount} TON
-🔗 **Payment Link:** [Click here to pay]({pay_url})
-🆔 **Invoice ID:** `{invoice_id}`
-
-⚡ Payment will be processed automatically
-🔄 Your balance will update instantly after confirmation
+Enter the amount of TON you want to deposit:
+(Minimum: 1 TON)
 """
-        
-        keyboard = [
-            [InlineKeyboardButton("💳 Pay with CryptoBot", url=pay_url)],
-            [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit"),
-             InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-        ]
-    else:
-        text = f"❌ **Error creating deposit invoice**\n\n{invoice_result.get('error', 'Unknown error')}"
-        keyboard = [
-            [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit"),
-             InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-        ]
     
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True)
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit"),
+         InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
 async def deposit_sol_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle SOL deposit"""
     query = update.callback_query
     await query.answer()
-    user_id = query.from_user.id
     
-    # Create crypto invoice for SOL
-    amount = 0.05  # Minimum deposit amount in SOL
-    invoice_result = await create_crypto_invoice('SOL', amount, user_id)
-    
-    if invoice_result.get('ok'):
-        pay_url = invoice_result['result']['pay_url']
-        invoice_id = invoice_result['result']['invoice_id']
-        
-        text = f"""
+    text = """
 💳 **SOL DEPOSIT** 💳
 
-💰 **Amount:** {amount} SOL
-🔗 **Payment Link:** [Click here to pay]({pay_url})
-🆔 **Invoice ID:** `{invoice_id}`
-
-⚡ Payment will be processed automatically
-🔄 Your balance will update instantly after confirmation
+Enter the amount of SOL you want to deposit:
+(Minimum: 0.05 SOL)
 """
-        
-        keyboard = [
-            [InlineKeyboardButton("💳 Pay with CryptoBot", url=pay_url)],
-            [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit"),
-             InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-        ]
-    else:
-        text = f"❌ **Error creating deposit invoice**\n\n{invoice_result.get('error', 'Unknown error')}"
-        keyboard = [
-            [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit"),
-             InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-        ]
     
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True)
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit"),
+         InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
 async def withdraw_ltc_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle LTC withdrawal"""
@@ -1621,9 +1661,10 @@ async def async_main():
     # Deposit/Withdrawal handlers
     application.add_handler(CallbackQueryHandler(deposit_callback, pattern="^deposit$"))
     application.add_handler(CallbackQueryHandler(withdraw_callback, pattern="^withdraw$"))
-    application.add_handler(CallbackQueryHandler(deposit_ltc_callback, pattern="^deposit_ltc$"))
-    application.add_handler(CallbackQueryHandler(deposit_ton_callback, pattern="^deposit_ton$"))
-    application.add_handler(CallbackQueryHandler(deposit_sol_callback, pattern="^deposit_sol$"))
+    # Remove old deposit handlers if present
+    # application.add_handler(CallbackQueryHandler(deposit_ltc_callback, pattern="^deposit_ltc$"))
+    # application.add_handler(CallbackQueryHandler(deposit_ton_callback, pattern="^deposit_ton$"))
+    # application.add_handler(CallbackQueryHandler(deposit_sol_callback, pattern="^deposit_sol$"))
     application.add_handler(CallbackQueryHandler(withdraw_ltc_callback, pattern="^withdraw_ltc$"))
     application.add_handler(CallbackQueryHandler(withdraw_ton_callback, pattern="^withdraw_ton$"))
     application.add_handler(CallbackQueryHandler(withdraw_sol_callback, pattern="^withdraw_sol$"))
