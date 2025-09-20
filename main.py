@@ -7,15 +7,17 @@ Stake-style interface with advanced game mechanics and user protection.
 
 import os
 import sys
-import logging
-import asyncio
-import threading
 import time
 import random
+import asyncio
+import threading
+import logging
 import hashlib
 import uuid
 import re
+import aiosqlite
 import aiohttp
+import nest_asyncio
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
@@ -24,9 +26,7 @@ from datetime import datetime, timedelta
 from collections import defaultdict, deque
 from flask import Flask
 from waitress import serve
-import nest_asyncio
 
-import aiosqlite
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -756,15 +756,14 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     user = await get_user(user_id)
-    ltc_usd_rate = await get_ltc_usd_rate()
-    # Fix inline if-else syntax
-    bet_ltc = bet / ltc_usd_rate if ltc_usd_rate > 0 else 0
+    # User balance is already in USD format, bet is in USD
+    bet_usd = bet
     
     # Check balance (allow admin to play with zero balance)
-    if user['balance'] < bet_ltc and not is_admin(user_id):
+    if user['balance'] < bet_usd and not is_admin(user_id):
         if DEMO_MODE:
             # Demo mode - allow play with zero balance, always win
-            win_amount = bet_ltc * 3  # 3x win in demo
+            win_amount = bet_usd * 3  # 3x win in demo
             await update_balance(user_id, win_amount)
             symbols = ["💎", "💎", "💎"]
             result = "WIN"
@@ -775,7 +774,7 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         # Deduct bet amount
         if not is_admin(user_id):  # Admins play for free
-            await deduct_balance(user_id, bet_ltc)
+            await deduct_balance(user_id, bet_usd)
         
         # Simple slots simulation
         symbols = ["🍒", "🍋", "🍊", "🔔", "💎"]
@@ -792,7 +791,7 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 multiplier = 2
             
-            win_amount = bet_ltc * multiplier
+            win_amount = bet_usd * multiplier
             await update_balance(user_id, win_amount)
             result = "WIN"
         else:
@@ -801,7 +800,7 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
             result = "LOSE"
     
     # Log game session
-    await log_game_session(user_id, "slots", bet_ltc, win_amount, result)
+    await log_game_session(user_id, "slots", bet_usd, win_amount, result)
     
     user_after = await get_user(user_id)
     
@@ -813,7 +812,7 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 🎉 **WINNER!** 🎉
 💰 **Bet:** ${bet:.2f}
-💎 **Win:** ${win_amount * ltc_usd_rate:.2f} ({multiplier}x)
+💎 **Win:** ${win_amount:.2f} ({multiplier}x)
 
 💰 **New Balance:** {await format_usd(user_after['balance'])}
 """
@@ -883,11 +882,10 @@ async def handle_coinflip_bet(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     user = await get_user(user_id)
-    ltc_usd_rate = await get_ltc_usd_rate()
-    bet_ltc = bet / ltc_usd_rate if ltc_usd_rate > 0 else 0
+    bet_usd = bet
     
     # Check balance (allow admin/demo mode to play with zero balance)
-    if user['balance'] < bet_ltc and not is_admin(user_id) and not DEMO_MODE:
+    if user['balance'] < bet_usd and not is_admin(user_id) and not DEMO_MODE:
         await query.answer("❌ Insufficient balance", show_alert=True)
         return
     
@@ -895,19 +893,19 @@ async def handle_coinflip_bet(update: Update, context: ContextTypes.DEFAULT_TYPE
     if is_admin(user_id):
         log_admin_action(user_id, f"Playing coin flip in test mode with ${bet} bet")
         coin_result = choice
-        win_amount = bet_ltc * 1.92
+        win_amount = bet_usd * 1.92
         await update_balance(user_id, win_amount)
         outcome = f"🧪 **TEST MODE (ADMIN)**\n🎉 **YOU WIN!**\n\n{'🟡' if choice == 'heads' else '⚫'} Coin landed on **{choice.upper()}**\n{'🟡' if choice == 'heads' else '⚫'} You chose **{choice.upper()}**\n\n💰 Won: **${bet * 1.92:.2f}**"
-    elif DEMO_MODE and user['balance'] < bet_ltc:
+    elif DEMO_MODE and user['balance'] < bet_usd:
         # Demo mode - always win, no balance deduction
         coin_result = choice
-        win_amount = bet_ltc * 1.92
+        win_amount = bet_usd * 1.92
         await update_balance(user_id, win_amount)
         outcome = f"🧪 **DEMO MODE**\n🎉 **YOU WIN!**\n\n{'🟡' if choice == 'heads' else '⚫'} Coin landed on **{choice.upper()}**\n{'🟡' if choice == 'heads' else '⚫'} You chose **{choice.upper()}**\n\n💰 Won: **${bet * 1.92:.2f}**"
     else:
         # Normal game - deduct bet first
         if not is_admin(user_id):  # Admins play for free
-            await deduct_balance(user_id, bet_ltc)
+            await deduct_balance(user_id, bet_usd)
         
         # Flip coin
         coin_result = random.choice(["heads", "tails"])
@@ -916,14 +914,14 @@ async def handle_coinflip_bet(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         if choice == coin_result:
             # Win - 1.92x payout
-            win_amount = bet_ltc * 1.92
+            win_amount = bet_usd * 1.92
             await update_balance(user_id, win_amount)
             outcome = f"🎉 **YOU WIN!**\n\n{coin_emoji} Coin landed on **{coin_result.upper()}**\n{choice_emoji} You chose **{choice.upper()}**\n\n💰 Won: **${bet * 1.92:.2f}**"
         else:
             outcome = f"😢 **YOU LOSE!**\n\n{coin_emoji} Coin landed on **{coin_result.upper()}**\n{choice_emoji} You chose **{choice.upper()}**\n\n💸 Lost: **${bet}**"
     
     # Log game session
-    await log_game_session(user_id, "coinflip", bet_ltc, win_amount if choice == coin_result else 0, "WIN" if choice == coin_result else "LOSE")
+    await log_game_session(user_id, "coinflip", bet_usd, win_amount if choice == coin_result else 0, "WIN" if choice == coin_result else "LOSE")
     
     user_after = await get_user(user_id)
     
@@ -987,17 +985,16 @@ async def handle_dice_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     user = await get_user(user_id)
-    ltc_usd_rate = await get_ltc_usd_rate()
-    bet_ltc = bet / ltc_usd_rate if ltc_usd_rate > 0 else 0
+    bet_usd = bet
     
     # Check balance (allow admin/demo mode to play with zero balance)
-    if user['balance'] < bet_ltc and not is_admin(user_id) and not DEMO_MODE:
+    if user['balance'] < bet_usd and not is_admin(user_id) and not DEMO_MODE:
         await query.answer("❌ Insufficient balance", show_alert=True)
         return
     
     # Deduct bet (except for admins)
     if not is_admin(user_id):
-        await deduct_balance(user_id, bet_ltc)
+        await deduct_balance(user_id, bet_usd)
     
     # Roll the dice
     roll = random.randint(1, 6)
@@ -1026,7 +1023,7 @@ async def handle_dice_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Calculate payout
     if won:
-        win_amount = bet_ltc * multiplier
+        win_amount = bet_usd * multiplier
         await update_balance(user_id, win_amount)
         result_text = f"🎉 **YOU WIN!**\nDice rolled: **{roll}**\nYour prediction: **{prediction.title()}**\nPayout: **${bet * multiplier:.2f}**"
     else:
@@ -1034,7 +1031,7 @@ async def handle_dice_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         result_text = f"😢 **YOU LOSE!**\nDice rolled: **{roll}**\nYour prediction: **{prediction.title()}**\nLost: **${bet}**"
     
     # Log game session
-    await log_game_session(user_id, "dice", bet_ltc, win_amount, "WIN" if won else "LOSE")
+    await log_game_session(user_id, "dice", bet_usd, win_amount, "WIN" if won else "LOSE")
     
     user_after = await get_user(user_id)
     text = f"""
