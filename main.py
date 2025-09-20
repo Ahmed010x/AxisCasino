@@ -365,15 +365,9 @@ async def get_ltc_usd_rate() -> float:
     """Get current LTC to USD rate"""
     return await get_crypto_usd_rate('LTC')
 
-async def format_usd(ltc_amount: float) -> str:
-    """Format LTC amount with USD equivalent"""
-    if ltc_amount == 0:
-        return "$0.00 USD (0.00000000 LTC)"
-    rate = await get_ltc_usd_rate()
-    if rate == 0.0:
-        return f"{ltc_amount:.8f} LTC (Rate unavailable)"
-    usd = ltc_amount * rate
-    return f"${usd:.2f} USD ({ltc_amount:.8f} LTC)"
+async def format_usd(amount: float) -> str:
+    """Format a float amount as USD string."""
+    return f"${amount:,.2f} USD"
 
 async def format_crypto_usd(crypto_amount: float, asset: str) -> str:
     """Format crypto amount with USD equivalent"""
