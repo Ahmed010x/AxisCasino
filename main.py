@@ -157,8 +157,6 @@ async def create_crypto_invoice(asset: str, amount: float, user_id: int, payload
             'amount': f"{amount:.8f}",
             'description': f'Casino deposit for user {user_id}',
             'hidden_message': str(user_id),
-            'paid_btn_name': 'callback',
-            'paid_btn_url': success_url,
             'webhook_url': webhook_url,
             'expires_in': 3600,  # 1 hour expiration
             'allow_comments': False,
@@ -1211,22 +1209,19 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
         result = invoice_result['result']
         pay_url = result.get('pay_url')
         mini_app_url = result.get('mini_app_invoice_url')
+        bot_invoice_url = result.get('bot_invoice_url')
         web_app_url = result.get('web_app_invoice_url')
         invoice_id = result.get('invoice_id')
         
-        # Use web_app_invoice_url for Web App (this is the proper format for Telegram Web Apps)
-        if web_app_url and web_app_url.startswith('https://'):
-            keyboard = [
-                [InlineKeyboardButton("💳 Pay with CryptoBot", web_app={'url': web_app_url})],
-                [InlineKeyboardButton("🔗 Open Payment Link", url=pay_url)],
-                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-            ]
-        else:
-            # Fallback to regular URL button if Web App URL is not available
-            keyboard = [
-                [InlineKeyboardButton("💳 Pay with CryptoBot", url=pay_url)],
-                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-            ]
+        # Log available URLs for debugging
+        logger.info(f"Invoice URLs - pay_url: {pay_url}, mini_app: {mini_app_url}, bot: {bot_invoice_url}, web_app: {web_app_url}")
+        
+        # Use regular URL button instead of web_app to avoid session issues
+        # CryptoBot handles the payment flow better through direct links
+        keyboard = [
+            [InlineKeyboardButton("💳 Pay with CryptoBot", url=pay_url)],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
         
         text = f"""
 💳 **{asset} DEPOSIT** 💳
@@ -1239,10 +1234,13 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
 ⏰ Invoice expires in 60 minutes
 
 💡 **Tips:**
-• Complete payment within 1 hour
+• Click the button below to pay
+• If you get "session expired", try the payment link again
+• Payment opens in CryptoBot (external app)
 • Keep this chat open during payment
 • You'll receive confirmation when payment is complete
-• Balance updates automatically - no manual action needed
+
+📞 **Having issues?** Use /payment to check status
 
 🚀 **Ready to pay? Click the button below!**
 """
@@ -1778,29 +1776,57 @@ If you just made a payment:
         logger.error(f"Error checking payments for user {user_id}: {e}")
         await update.message.reply_text("❌ Error checking payment status. Please try again or contact support.")
 
-# --- Add webhook handler for CryptoBot payments ---
-async def cryptobot_webhook_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle CryptoBot payment webhooks"""
+async def test_cryptobot_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Test CryptoBot invoice creation (for debugging)"""
+    user = update.effective_user
+    user_id = user.id
+    
+    # Only allow owner to use this command
+    if not is_owner(user_id):
+        await update.message.reply_text("❌ This command is only available to the owner.")
+        return
+    
     try:
-        # This would be called by CryptoBot when payment is completed
-        # For now, we'll add a simple payment verification endpoint
-        logger.info("CryptoBot webhook received")
-        return {"status": "ok"}
-    except Exception as e:
-        logger.error(f"Webhook error: {e}")
-        return {"status": "error"}
+        # Create a test invoice
+        test_result = await create_crypto_invoice('USDT', 1.0, user_id)
+        
+        if test_result.get('ok'):
+            result = test_result['result']
+            
+            # Show all available URLs for debugging
+            debug_info = f"""
+🔧 **CryptoBot Test Invoice Created**
 
-# Add payment success handler
-async def handle_payment_success(request):
-    """Handle successful payment callback from CryptoBot"""
-    try:
-        # Extract payment data from the request
-        # This is a placeholder - you'd implement actual payment verification here
-        logger.info("Payment success callback received")
-        return {"status": "success"}
+**Available URLs:**
+• pay_url: `{result.get('pay_url', 'N/A')}`
+• mini_app_invoice_url: `{result.get('mini_app_invoice_url', 'N/A')}`
+• web_app_invoice_url: `{result.get('web_app_invoice_url', 'N/A')}`
+• bot_invoice_url: `{result.get('bot_invoice_url', 'N/A')}`
+
+**Invoice Details:**
+• ID: `{result.get('invoice_id', 'N/A')}`
+• Amount: {result.get('amount', 'N/A')} {result.get('asset', 'N/A')}
+• Status: {result.get('status', 'N/A')}
+
+**Raw Response:**
+```json
+{test_result}
+```
+"""
+            
+            # Create test button
+            keyboard = [
+                [InlineKeyboardButton("🧪 Test Payment", url=result.get('pay_url'))],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+            ]
+            
+            await update.message.reply_text(debug_info, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+        else:
+            await update.message.reply_text(f"❌ Test failed: {test_result.get('error', 'Unknown error')}")
+            
     except Exception as e:
-        logger.error(f"Payment success handler error: {e}")
-        return {"status": "error"}
+        logger.error(f"Test CryptoBot error: {e}")
+        await update.message.reply_text(f"❌ Test error: {str(e)}")
 
 # --- Main Bot Setup and Entry Point ---
 async def async_main():
@@ -1824,6 +1850,7 @@ async def async_main():
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("payment", check_payment_command))
     application.add_handler(CommandHandler("checkpayment", check_payment_command))
+    application.add_handler(CommandHandler("testcrypto", test_cryptobot_command))
     
     # Callback query handlers
     application.add_handler(CallbackQueryHandler(mini_app_centre_callback, pattern="^mini_app_centre$"))
