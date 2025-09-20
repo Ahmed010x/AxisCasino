@@ -1291,9 +1291,8 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
         # Fallback: Open CryptoBot directly (external)
         if pay_url:
             keyboard_rows.append([
-                InlineKeyboardButton("� Open in CryptoBot App", url=pay_url)
+                InlineKeyboardButton("Open in CryptoBot App", url=pay_url)
             ])
-        
         # Navigation
         keyboard_rows.append([InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")])
         
