@@ -1083,11 +1083,17 @@ async def deposit_ltc_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     await query.answer()
     context.user_data['deposit_asset'] = 'LTC'
-    text = """
+    
+    # Get minimum deposit in USD from environment
+    min_deposit_usd = float(os.environ.get("MIN_DEPOSIT_LTC_USD", "1.00"))
+    
+    text = f"""
 Ł **Litecoin (LTC) Deposit**
 
-Enter the amount of LTC you want to deposit:
-(Minimum: 0.01 LTC)
+Enter the amount in USD you want to deposit:
+(Minimum: ${min_deposit_usd:.2f} USD)
+
+💡 Your USD amount will be converted to LTC automatically
 """
     keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="deposit")]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
@@ -1097,11 +1103,17 @@ async def deposit_ton_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     await query.answer()
     context.user_data['deposit_asset'] = 'TON'
-    text = """
+    
+    # Get minimum deposit in USD from environment
+    min_deposit_usd = float(os.environ.get("MIN_DEPOSIT_TON_USD", "2.50"))
+    
+    text = f"""
 🪙 **Toncoin (TON) Deposit**
 
-Enter the amount of TON you want to deposit:
-(Minimum: 1 TON)
+Enter the amount in USD you want to deposit:
+(Minimum: ${min_deposit_usd:.2f} USD)
+
+💡 Your USD amount will be converted to TON automatically
 """
     keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="deposit")]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
@@ -1111,11 +1123,17 @@ async def deposit_sol_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     await query.answer()
     context.user_data['deposit_asset'] = 'SOL'
-    text = """
+    
+    # Get minimum deposit in USD from environment
+    min_deposit_usd = float(os.environ.get("MIN_DEPOSIT_SOL_USD", "1.15"))
+    
+    text = f"""
 ◎ **Solana (SOL) Deposit**
 
-Enter the amount of SOL you want to deposit:
-(Minimum: 0.05 SOL)
+Enter the amount in USD you want to deposit:
+(Minimum: ${min_deposit_usd:.2f} USD)
+
+💡 Your USD amount will be converted to SOL automatically
 """
     keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="deposit")]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
@@ -1125,18 +1143,36 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
     user_id = update.effective_user.id
     asset = context.user_data.get('deposit_asset')
     amount_text = update.message.text.strip()
+    
     try:
-        amount = float(amount_text)
+        # User enters USD amount
+        usd_amount = float(amount_text)
     except ValueError:
-        await update.message.reply_text("❌ Invalid amount. Please enter a valid number.")
+        await update.message.reply_text("❌ Invalid amount. Please enter a valid USD amount.")
         return DEPOSIT_AMOUNT
-    # Minimums
-    min_amounts = {'LTC': 0.01, 'TON': 1.0, 'SOL': 0.05}
-    min_amt = min_amounts.get(asset, 0.01)
-    if amount < min_amt:
-        await update.message.reply_text(f"❌ Minimum deposit for {asset} is {min_amt} {asset}. Please enter a higher amount.")
+    
+    # Get minimum amounts from environment
+    min_amounts = {
+        'LTC': float(os.environ.get("MIN_DEPOSIT_LTC_USD", "1.00")),
+        'TON': float(os.environ.get("MIN_DEPOSIT_TON_USD", "2.50")),
+        'SOL': float(os.environ.get("MIN_DEPOSIT_SOL_USD", "1.15"))
+    }
+    
+    min_usd = min_amounts.get(asset, 1.00)
+    if usd_amount < min_usd:
+        await update.message.reply_text(f"❌ Minimum deposit for {asset} is ${min_usd:.2f} USD. Please enter a higher amount.")
         return DEPOSIT_AMOUNT
-    invoice_result = await create_crypto_invoice(asset, amount, user_id)
+    
+    # Convert USD to crypto amount
+    crypto_rate = await get_crypto_usd_rate(asset)
+    crypto_amount = usd_amount / crypto_rate if crypto_rate > 0 else 0
+    
+    if crypto_amount <= 0:
+        await update.message.reply_text("❌ Unable to get exchange rate. Please try again later.")
+        return DEPOSIT_AMOUNT
+    
+    # Create invoice with crypto amount
+    invoice_result = await create_crypto_invoice(asset, crypto_amount, user_id)
     if invoice_result.get('ok'):
         pay_url = invoice_result['result']['pay_url']
         invoice_id = invoice_result['result']['invoice_id']
@@ -1148,7 +1184,7 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
         text = f"""
 💳 **{asset} DEPOSIT** 💳
 
-💰 **Amount:** {amount} {asset}
+💰 **Amount:** ${usd_amount:.2f} USD ({crypto_amount:.8f} {asset})
 🆔 **Invoice ID:** `{invoice_id}`
 
 ⚡ Payment will be processed automatically
