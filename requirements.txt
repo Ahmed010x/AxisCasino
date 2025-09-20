@@ -10,7 +10,6 @@ Werkzeug==3.0.1
 # Web server for health checks and keep-alive
 aiohttp==3.9.1
 requests==2.31.0
-waitress>=2.1.0
 
 # Environment and configuration
 python-dotenv==1.0.0
@@ -20,6 +19,3 @@ nest-asyncio==1.5.8
 
 # Additional utilities for production
 python-dateutil==2.8.2
-
-# Additional server options
-gunicorn>=21.0.0
