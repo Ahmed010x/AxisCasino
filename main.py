@@ -27,7 +27,20 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from collections import defaultdict, deque
 from flask import Flask, request
-from waitress import serve
+try:
+    from waitress import serve
+    WAITRESS_AVAILABLE = True
+except ImportError:
+    WAITRESS_AVAILABLE = False
+
+try:
+    import gunicorn
+    GUNICORN_AVAILABLE = True
+except ImportError:
+    GUNICORN_AVAILABLE = False
+
+if not WAITRESS_AVAILABLE and not GUNICORN_AVAILABLE:
+    print("Warning: Neither waitress nor gunicorn available, will use Flask dev server")
 
 from telegram import (
     Update,
@@ -2013,8 +2026,14 @@ async def async_main():
             </html>
             """
             
-        # Start server
-        serve(app, host='0.0.0.0', port=int(os.getenv('PORT', 8080)))
+        # Start server with fallback
+        port = int(os.getenv('PORT', 8080))
+        if WAITRESS_AVAILABLE:
+            logger.info("Starting server with waitress")
+            serve(app, host='0.0.0.0', port=port)
+        else:
+            logger.warning("Waitress not available, using Flask dev server")
+            app.run(host='0.0.0.0', port=port, debug=False)
     
     # Start the Flask server in a separate thread
     flask_thread = threading.Thread(target=start_keep_alive, daemon=True)
