@@ -497,6 +497,12 @@ async def init_db():
             
             # Withdrawals table
             await db.execute("""
+                CREATE TABLE IF NOT EXISTS withdrawals (
+                    withdrawal_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    asset TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    address TEXT NOT NULL,
                     fee REAL NOT NULL,
                     net_amount REAL NOT NULL,
                     rate_usd REAL NOT NULL,
@@ -1721,7 +1727,7 @@ async def show_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Format leaderboard text
     lb_text = ""
     for i, (username, balance) in enumerate(leaderboard, start=1):
-        lb_text += f"{i}. {username}: {await format_usd(balance)}\n"
+        lb_text += f"{i}. {username:} - {await format_usd(balance)}\n"
     
     text = f"""
 📊 **STATISTICS & LEADERBOARD** 📊
