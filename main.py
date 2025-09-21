@@ -1245,8 +1245,15 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
     # Show processing message
     processing_msg = await update.message.reply_text("⏳ Creating your deposit invoice...")
     
-    # Create invoice with USD amount, but asset matches the selected button
-    invoice_result = await create_crypto_invoice(asset, usd_amount, user_id)
+    # Convert USD to crypto amount for the invoice
+    crypto_rate = await get_crypto_usd_rate(asset)
+    crypto_amount = usd_amount / crypto_rate if crypto_rate > 0 else 0
+    if crypto_amount <= 0:
+        await processing_msg.edit_text("❌ Unable to get exchange rate. Please try again later.")
+        return DEPOSIT_AMOUNT
+
+    # Create invoice with crypto amount in the selected asset
+    invoice_result = await create_crypto_invoice(asset, crypto_amount, user_id)
     if invoice_result.get('ok'):
         result = invoice_result['result']
         pay_url = result.get('pay_url')  # https://t.me/CryptoBot?start=...
@@ -1254,10 +1261,6 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
         web_app_url = result.get('web_app_invoice_url')  # https://app.cr.bot/invoices/<hash>
         invoice_hash = result.get('hash')  # Invoice hash for Mini App
         invoice_id = result.get('invoice_id')
-        
-        # Get crypto equivalent for display purposes
-        crypto_rate = await get_crypto_usd_rate(asset)
-        crypto_amount = usd_amount / crypto_rate if crypto_rate > 0 else 0
         
         # Log available URLs for debugging
         logger.info(f"Invoice URLs - pay_url: {pay_url}, mini_app: {mini_app_url}, web_app: {web_app_url}, hash: {invoice_hash}")
