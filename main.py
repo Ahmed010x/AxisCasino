@@ -79,6 +79,10 @@ DB_PATH = os.environ.get("CASINO_DB", "casino.db")
 # Global demo mode flag
 DEMO_MODE = os.environ.get("DEMO_MODE", "false").lower() == "true"
 
+# Conversation states for custom betting
+WAITING_FOR_BET_AMOUNT = range(1)
+SLOTS_BET, COINFLIP_BET, DICE_BET, BLACKJACK_BET, ROULETTE_BET, CRASH_BET = range(6)
+
 # CryptoBot configuration
 CRYPTOBOT_API_TOKEN = os.environ.get("CRYPTOBOT_API_TOKEN")
 CRYPTOBOT_USD_ASSET = os.environ.get("CRYPTOBOT_USD_ASSET", "USDT")
@@ -857,7 +861,7 @@ async def play_slots_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 💰 **Your Balance:** {balance_usd}
 
 🎯 **How to Play:**
-• Choose your bet amount
+• Enter your custom bet amount (0-1000 USD)
 • Spin the reels
 • Match 3 symbols to win BIG!
 
@@ -869,13 +873,11 @@ async def play_slots_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 • 🍋🍋🍋 = 5x bet
 • 🍊🍊🍊 = 3x bet
 
-🎮 **Choose your bet:**
+💰 **Enter your bet amount (0-1000 USD):**
 """
     
     keyboard = [
-        [InlineKeyboardButton("💰 $1", callback_data="slots_bet_1"), InlineKeyboardButton("💰 $5", callback_data="slots_bet_5")],
-        [InlineKeyboardButton("💰 $10", callback_data="slots_bet_10"), InlineKeyboardButton("💰 $25", callback_data="slots_bet_25")],
-        [InlineKeyboardButton("💰 $50", callback_data="slots_bet_50"), InlineKeyboardButton("💰 $100", callback_data="slots_bet_100")],
+        [InlineKeyboardButton("💰 Custom Bet", callback_data="slots_custom_bet")],
         [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
@@ -999,14 +1001,14 @@ async def coin_flip_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 • Instant results
 • 2x payout on win
 
-🎯 **Betting Options:**
-Choose your bet amount (in USD) and side:
+🎯 **How to Play:**
+1. Click the side you want to bet on
+2. Enter your custom bet amount (0-1000 USD)
+3. Watch the coin flip!
 """
     
     keyboard = [
-        [InlineKeyboardButton("🟡 Heads - $10", callback_data="coinflip_heads_10"), InlineKeyboardButton("⚫ Tails - $10", callback_data="coinflip_tails_10")],
-        [InlineKeyboardButton("🟡 Heads - $25", callback_data="coinflip_heads_25"), InlineKeyboardButton("⚫ Tails - $25", callback_data="coinflip_tails_25")],
-        [InlineKeyboardButton("🟡 Heads - $50", callback_data="coinflip_heads_50"), InlineKeyboardButton("⚫ Tails - $50", callback_data="coinflip_tails_50")],
+        [InlineKeyboardButton("🟡 Bet on Heads", callback_data="coinflip_heads"), InlineKeyboardButton("⚫ Bet on Tails", callback_data="coinflip_tails")],
         [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
@@ -1100,17 +1102,17 @@ async def play_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"🎲 <b>DICE PREDICTION</b> 🎲\n\n"
         f"💰 <b>Your Balance:</b> {balance}\n\n"
         "Predict the outcome of a 6-sided dice roll.\n"
-        "Choose your prediction and bet amount:\n\n"
+        "Choose your prediction type:\n\n"
         "<b>Payouts:</b>\n"
         "• Correct Number (1-6): 6x\n"
         "• Even/Odd: 2x\n"
         "• High (4-6)/Low (1-3): 2x\n"
     )
     keyboard = [
-        [InlineKeyboardButton("1️⃣ ($10)", callback_data="dice_1_10"), InlineKeyboardButton("2️⃣ ($10)", callback_data="dice_2_10"), InlineKeyboardButton("3️⃣ ($10)", callback_data="dice_3_10")],
-        [InlineKeyboardButton("4️⃣ ($10)", callback_data="dice_4_10"), InlineKeyboardButton("5️⃣ ($10)", callback_data="dice_5_10"), InlineKeyboardButton("6️⃣ ($10)", callback_data="dice_6_10")],
-        [InlineKeyboardButton("Even ($25)", callback_data="dice_even_25"), InlineKeyboardButton("Odd ($25)", callback_data="dice_odd_25")],
-        [InlineKeyboardButton("High ($25)", callback_data="dice_high_25"), InlineKeyboardButton("Low ($25)", callback_data="dice_low_25")],
+        [InlineKeyboardButton("1️⃣", callback_data="dice_1"), InlineKeyboardButton("2️⃣", callback_data="dice_2"), InlineKeyboardButton("3️⃣", callback_data="dice_3")],
+        [InlineKeyboardButton("4️⃣", callback_data="dice_4"), InlineKeyboardButton("5️⃣", callback_data="dice_5"), InlineKeyboardButton("6️⃣", callback_data="dice_6")],
+        [InlineKeyboardButton("📈 Even", callback_data="dice_even"), InlineKeyboardButton("📉 Odd", callback_data="dice_odd")],
+        [InlineKeyboardButton("🔺 High (4-6)", callback_data="dice_high"), InlineKeyboardButton("🔻 Low (1-3)", callback_data="dice_low")],
         [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
@@ -1221,13 +1223,11 @@ async def play_blackjack_callback(update: Update, context: ContextTypes.DEFAULT_
 • Beat dealer: 2x
 • Push (tie): 1x (money back)
 
-🎮 **Choose your bet:**
+💰 **Enter your bet amount (0-1000 USD):**
 """
     
     keyboard = [
-        [InlineKeyboardButton("💰 $5", callback_data="blackjack_bet_5"), InlineKeyboardButton("💰 $10", callback_data="blackjack_bet_10")],
-        [InlineKeyboardButton("💰 $25", callback_data="blackjack_bet_25"), InlineKeyboardButton("💰 $50", callback_data="blackjack_bet_50")],
-        [InlineKeyboardButton("💰 $100", callback_data="blackjack_bet_100")],
+        [InlineKeyboardButton("💰 Custom Bet", callback_data="blackjack_custom_bet")],
         [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
@@ -1380,13 +1380,13 @@ async def play_roulette_callback(update: Update, context: ContextTypes.DEFAULT_T
 • **1-18/19-36:** 2x payout
 • **Single Number:** 35x payout!
 
-🎮 **Choose your bet type and amount:**
+🎮 **Choose your bet type:**
 """
     
     keyboard = [
-        [InlineKeyboardButton("🔴 Red ($10)", callback_data="roulette_red_10"), InlineKeyboardButton("⚫ Black ($10)", callback_data="roulette_black_10")],
-        [InlineKeyboardButton("📈 Even ($15)", callback_data="roulette_even_15"), InlineKeyboardButton("📉 Odd ($15)", callback_data="roulette_odd_15")],
-        [InlineKeyboardButton("🔢 Lucky Number ($25)", callback_data="roulette_number_25"), InlineKeyboardButton("💰 High Roller ($50)", callback_data="roulette_red_50")],
+        [InlineKeyboardButton("🔴 Red", callback_data="roulette_red"), InlineKeyboardButton("⚫ Black", callback_data="roulette_black")],
+        [InlineKeyboardButton("📈 Even", callback_data="roulette_even"), InlineKeyboardButton("📉 Odd", callback_data="roulette_odd")],
+        [InlineKeyboardButton("🔢 Lucky Number", callback_data="roulette_number")],
         [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
@@ -1527,8 +1527,8 @@ async def play_crash_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 """
     
     keyboard = [
-        [InlineKeyboardButton("🛡️ Safe ($10)", callback_data="crash_safe_10"), InlineKeyboardButton("⚖️ Medium ($20)", callback_data="crash_medium_20")],
-        [InlineKeyboardButton("🎲 Risky ($30)", callback_data="crash_risky_30"), InlineKeyboardButton("🚀 YOLO ($50)", callback_data="crash_yolo_50")],
+        [InlineKeyboardButton("🛡️ Safe", callback_data="crash_safe"), InlineKeyboardButton("⚖️ Medium", callback_data="crash_medium")],
+        [InlineKeyboardButton("🎲 Risky", callback_data="crash_risky"), InlineKeyboardButton("🚀 YOLO", callback_data="crash_yolo")],
         [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
@@ -1920,6 +1920,11 @@ withdraw_conv_handler = ConversationHandler(
     fallbacks=[CallbackQueryHandler(start_command, pattern="^main_panel$")],
     allow_reentry=True
 )
+
+# --- Custom Bet Conversation Handlers ---
+
+# Conversation states for custom betting
+SLOTS_BET, COINFLIP_BET, DICE_BET, BLACKJACK_BET, ROULETTE_BET, CRASH_BET = range(6)
 
 # --- Admin Panel Handlers ---
 async def show_balance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
