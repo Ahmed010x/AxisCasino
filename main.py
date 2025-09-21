@@ -688,6 +688,14 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
 DEPOSIT_ASSET, DEPOSIT_AMOUNT = range(2)
 WITHDRAW_ASSET, WITHDRAW_AMOUNT, WITHDRAW_ADDRESS, WITHDRAW_CONFIRM = range(10, 14)
 
+# Game betting conversation states
+SLOTS_BET_AMOUNT = 20
+COINFLIP_CHOICE, COINFLIP_BET_AMOUNT = range(21, 23)
+DICE_CHOICE, DICE_BET_AMOUNT = range(23, 25)
+BLACKJACK_BET_AMOUNT = 25
+ROULETTE_CHOICE, ROULETTE_BET_AMOUNT = range(26, 28)
+CRASH_STRATEGY, CRASH_BET_AMOUNT = range(28, 30)
+
 # --- Bot Handlers ---
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -857,7 +865,7 @@ async def play_slots_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 💰 **Your Balance:** {balance_usd}
 
 🎯 **How to Play:**
-• Choose your bet amount
+• Enter your custom bet amount
 • Spin the reels
 • Match 3 symbols to win BIG!
 
@@ -869,31 +877,57 @@ async def play_slots_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 • 🍋🍋🍋 = 5x bet
 • 🍊🍊🍊 = 3x bet
 
-🎮 **Choose your bet:**
+💵 **Enter your bet amount in USD:**
+(Minimum: $1, Maximum: $500)
+
+💡 **Examples:** 1, 5, 10, 25, 50, 100
 """
     
     keyboard = [
-        [InlineKeyboardButton("💰 $1", callback_data="slots_bet_1"), InlineKeyboardButton("💰 $5", callback_data="slots_bet_5")],
-        [InlineKeyboardButton("💰 $10", callback_data="slots_bet_10"), InlineKeyboardButton("💰 $25", callback_data="slots_bet_25")],
-        [InlineKeyboardButton("💰 $50", callback_data="slots_bet_50"), InlineKeyboardButton("💰 $100", callback_data="slots_bet_100")],
         [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    return SLOTS_BET_AMOUNT
 
-async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle slots betting"""
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-    user_id = query.from_user.id
+async def handle_slots_bet_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle custom slots bet amount input"""
+    user_id = update.effective_user.id
+    amount_text = update.message.text.strip()
     
     try:
-        bet = float(data.split("_")[-1])
-    except:
-        await query.answer("❌ Invalid bet amount", show_alert=True)
-        return
+        bet = float(amount_text)
+        if bet <= 0:
+            raise ValueError("Bet must be positive")
+    except ValueError:
+        await update.message.reply_text(
+            "❌ **Invalid bet amount!**\n\n"
+            "Please enter a valid USD amount (numbers only).\n"
+            "💡 **Examples:** 1, 5, 10, 25, 50, 100",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return SLOTS_BET_AMOUNT
     
+    # Validate bet limits
+    if bet < 1:
+        await update.message.reply_text(
+            "❌ **Bet too small!**\n\nMinimum bet is **$1.00**.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return SLOTS_BET_AMOUNT
+    
+    if bet > 500:
+        await update.message.reply_text(
+            "❌ **Bet too large!**\n\nMaximum bet is **$500.00**.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return SLOTS_BET_AMOUNT
+    
+    # Now execute the slots game logic
+    return await execute_slots_game(update, user_id, bet)
+
+async def execute_slots_game(update, user_id, bet):
+    """Execute the slots game with the given bet amount"""
     user = await get_user(user_id)
     # User balance is already in USD format, bet is in USD
     bet_usd = bet
@@ -904,12 +938,12 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Demo mode - allow play with zero balance, always win
             win_amount = bet_usd * 3  # 3x win in demo
             await update_balance(user_id, win_amount)
-            symbols = ["💎", "💎", "💎"]
+            reel = ["💎", "💎", "💎"]
             result = "WIN"
             multiplier = 3
         else:
-            await query.answer("❌ Insufficient balance", show_alert=True)
-            return
+            await update.message.reply_text("❌ Insufficient balance")
+            return ConversationHandler.END
     else:
         # Deduct bet amount
         if not is_admin(user_id):  # Admins play for free
@@ -979,7 +1013,8 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    return ConversationHandler.END
 
 async def coin_flip_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle coin flip game"""
@@ -999,41 +1034,91 @@ async def coin_flip_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 • Instant results
 • 2x payout on win
 
-🎯 **Betting Options:**
-Choose your bet amount (in USD) and side:
+🎯 **Choose your side:**
 """
     
     keyboard = [
-        [InlineKeyboardButton("🟡 Heads - $10", callback_data="coinflip_heads_10"), InlineKeyboardButton("⚫ Tails - $10", callback_data="coinflip_tails_10")],
-        [InlineKeyboardButton("🟡 Heads - $25", callback_data="coinflip_heads_25"), InlineKeyboardButton("⚫ Tails - $25", callback_data="coinflip_tails_25")],
-        [InlineKeyboardButton("🟡 Heads - $50", callback_data="coinflip_heads_50"), InlineKeyboardButton("⚫ Tails - $50", callback_data="coinflip_tails_50")],
+        [InlineKeyboardButton("🟡 Heads", callback_data="coinflip_heads"), InlineKeyboardButton("⚫ Tails", callback_data="coinflip_tails")],
         [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    return COINFLIP_CHOICE
 
-async def handle_coinflip_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle coin flip bet"""
+async def handle_coinflip_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle coinflip side choice (heads or tails)"""
     query = update.callback_query
     await query.answer()
-    data = query.data
+    choice = query.data.split("_")[1]  # heads or tails
+    context.user_data['coinflip_choice'] = choice
+    
     user_id = query.from_user.id
+    user = await get_user(user_id)
+    
+    emoji = "🟡" if choice == "heads" else "⚫"
+    text = f"""
+🪙 **COIN FLIP - {choice.upper()}** {emoji}
+
+💰 **Your Balance:** {await format_usd(user['balance'])}
+
+You chose: **{choice.upper()}** {emoji}
+
+💵 **Enter your bet amount in USD:**
+(Minimum: $1, Maximum: $100)
+
+💡 **Examples:** 1, 5, 10, 25, 50
+🎯 **Win:** 2x your bet amount
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back", callback_data="coin_flip")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    return COINFLIP_BET_AMOUNT
+
+async def handle_coinflip_bet_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle custom coinflip bet amount input"""
+    user_id = update.effective_user.id
+    amount_text = update.message.text.strip()
+    choice = context.user_data.get('coinflip_choice')
     
     try:
-        parts = data.split("_")
-        choice = parts[1]  # heads or tails
-        bet = int(parts[2])
-    except:
-        await query.answer("Invalid bet format", show_alert=True)
-        return
+        bet = float(amount_text)
+        if bet <= 0:
+            raise ValueError("Bet must be positive")
+    except ValueError:
+        await update.message.reply_text(
+            "❌ **Invalid bet amount!**\n\n"
+            "Please enter a valid USD amount (numbers only).\n"
+            "💡 **Examples:** 1, 5, 10, 25, 50",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return COINFLIP_BET_AMOUNT
+    
+    # Validate bet limits
+    if bet < 1:
+        await update.message.reply_text("❌ **Bet too small!** Minimum bet is $1.00.", parse_mode=ParseMode.MARKDOWN)
+        return COINFLIP_BET_AMOUNT
+    
+    if bet > 100:
+        await update.message.reply_text("❌ **Bet too large!** Maximum bet is $100.00.", parse_mode=ParseMode.MARKDOWN)
+        return COINFLIP_BET_AMOUNT
+    
+    # Execute the coinflip game
+    return await execute_coinflip_game(update, user_id, choice, bet)
+
+async def execute_coinflip_game(update, user_id, choice, bet):
+    """Execute the coinflip game with the given choice and bet amount"""
     
     user = await get_user(user_id)
     bet_usd = bet
     
     # Check balance (allow admin/demo mode to play with zero balance)
     if user['balance'] < bet_usd and not is_admin(user_id) and not DEMO_MODE:
-        await query.answer("❌ Insufficient balance", show_alert=True)
-        return
+        await update.message.reply_text("❌ Insufficient balance")
+        return ConversationHandler.END
     
     # Admin test mode - always win
     if is_admin(user_id):
@@ -1086,7 +1171,8 @@ Play again or try another game:
         [InlineKeyboardButton("🎰 Slots", callback_data="play_slots"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    return ConversationHandler.END
 
 async def play_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle dice prediction game"""
@@ -2010,6 +2096,33 @@ withdraw_conv_handler = ConversationHandler(
     allow_reentry=True
 )
 
+# --- Game Conversation Handlers ---
+slots_conv_handler = ConversationHandler(
+    entry_points=[CallbackQueryHandler(play_slots_callback, pattern="^play_slots$")],
+    states={
+        SLOTS_BET_AMOUNT: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_slots_bet_amount),
+        ],
+    },
+    fallbacks=[CallbackQueryHandler(play_slots_callback, pattern="^play_slots$")],
+    allow_reentry=True
+)
+
+coinflip_conv_handler = ConversationHandler(
+    entry_points=[CallbackQueryHandler(coin_flip_callback, pattern="^coin_flip$")],
+    states={
+        COINFLIP_CHOICE: [
+            CallbackQueryHandler(handle_coinflip_choice, pattern="^coinflip_heads$"),
+            CallbackQueryHandler(handle_coinflip_choice, pattern="^coinflip_tails$"),
+        ],
+        COINFLIP_BET_AMOUNT: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_coinflip_bet_amount),
+        ],
+    },
+    fallbacks=[CallbackQueryHandler(coin_flip_callback, pattern="^coin_flip$")],
+    allow_reentry=True
+)
+
 # --- Admin Panel Handlers ---
 async def show_balance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show the user's current balance"""
@@ -2574,10 +2687,9 @@ async def async_main():
     application.add_handler(CallbackQueryHandler(mini_app_centre_callback, pattern="^mini_app_centre$"))
     application.add_handler(CallbackQueryHandler(show_balance_callback, pattern="^show_balance$"))
     application.add_handler(CallbackQueryHandler(classic_casino_callback, pattern="^classic_casino$"))
-    application.add_handler(CallbackQueryHandler(play_slots_callback, pattern="^play_slots$"))
-    application.add_handler(CallbackQueryHandler(handle_slots_bet, pattern="^slots_bet_"))
-    application.add_handler(CallbackQueryHandler(coin_flip_callback, pattern="^coin_flip$"))
-    application.add_handler(CallbackQueryHandler(handle_coinflip_bet, pattern="^coinflip_"))
+    # Game handlers - using conversation handlers for custom betting
+    application.add_handler(slots_conv_handler)
+    application.add_handler(coinflip_conv_handler)
     application.add_handler(CallbackQueryHandler(play_dice_callback, pattern="^play_dice$"))
     application.add_handler(CallbackQueryHandler(handle_dice_bet, pattern="^dice_"))
     # New casino games
