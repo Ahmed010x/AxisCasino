@@ -411,21 +411,30 @@ async def update_withdrawal_limits(user_id: int, amount_usd: float) -> bool:
         logger.error(f"Error updating withdrawal limits: {e}")
         return False
 
+# --- CryptoBot Real-Time Rate Fetch ---
+import aiohttp
+
 async def get_crypto_usd_rate(asset: str) -> float:
-    """Get current USD rate for crypto asset"""
+    """
+    Fetch the real-time USD/crypto rate for the given asset from CryptoBot API.
+    Returns the price of 1 unit of the asset in USD, or 0.0 on error.
+    """
+    url = "https://pay.crypt.bot/api/rates"
     try:
-        # Simple rate lookup - in production, use real API
-        rates = {
-            'LTC': 65.0,
-            'USDT': 1.0,
-            'TON': 2.5,
-            'SOL': 23.0
-        }
-        return rates.get(asset, 1.0)
-        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=10) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    rates = data.get("result", [])
+                    for rate in rates:
+                        if rate.get("source") == asset and rate.get("target") == "USD":
+                            price = float(rate.get("rate", 0))
+                            return price
+                else:
+                    logger.error(f"CryptoBot API error: HTTP {resp.status}")
     except Exception as e:
-        logger.error(f"Error getting crypto rate: {e}")
-        return 1.0
+        logger.error(f"Error fetching CryptoBot rate for {asset}: {e}")
+    return 0.0
 
 async def get_ltc_usd_rate() -> float:
     """Get current LTC to USD rate"""
@@ -466,12 +475,6 @@ async def init_db():
             
             # Withdrawals table
             await db.execute("""
-                CREATE TABLE IF NOT EXISTS withdrawals (
-                    withdrawal_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    asset TEXT NOT NULL,
-                    amount REAL NOT NULL,
-                    address TEXT NOT NULL,
                     fee REAL NOT NULL,
                     net_amount REAL NOT NULL,
                     rate_usd REAL NOT NULL,
@@ -661,43 +664,31 @@ DEPOSIT_ASSET, DEPOSIT_AMOUNT = range(2)
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command and main_panel callback"""
     user = update.effective_user
-    user_id = user.id
-    username = user.username or user.first_name
-    user_data = await get_user(user_id)
-    if not user_data:
-        user_data = await create_user(user_id, username)
-
-    # Determine if this is a /start command or a callback
+    user_id = user.id if user else None
     is_callback = hasattr(update, 'callback_query') and update.callback_query
-    is_start_command = hasattr(update, 'message') and update.message and update.message.text and update.message.text.startswith("/start")
 
-    # If user is owner and this is a /start command, show owner panel immediately
-    if is_owner(user_id) and is_start_command:
-        await owner_panel_callback(update, context)
-        return
-
-    balance_usd = await format_usd(user_data['balance'])
-    status_text = ""
-    if is_admin(user_id):
-        status_text = "🔑 Admin "
-
-    text = (
-        f"🎰 <b>CASINO BOT v{BOT_VERSION}</b> 🎰\n\n"
-        f"👋 Welcome, {status_text}{username}!\n\n"
-        f"💰 <b>Balance:</b> {balance_usd}\n"
-        f"🏆 <b>Games Played:</b> {user_data['games_played']}\n"
-        f"🎮 <b>Supported Assets:</b> LTC, TON, SOL\n\n"
-        "Choose an action below:"
-    )
+    # Build main menu keyboard
     keyboard = [
-        [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"), InlineKeyboardButton("💰 Balance", callback_data="show_balance")],
-        [InlineKeyboardButton("💳 Deposit", callback_data="deposit"), InlineKeyboardButton("💸 Withdraw", callback_data="withdraw")],
-        [InlineKeyboardButton("🎁 Redeem", callback_data="redeem_panel"), InlineKeyboardButton("ℹ️ Help", callback_data="show_help")],
-        [InlineKeyboardButton("📊 Statistics", callback_data="show_stats")]
+        [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre")],
+        [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
+        [InlineKeyboardButton("💸 Withdraw", callback_data="withdraw")],
+        [InlineKeyboardButton("📊 Stats", callback_data="show_stats")],
     ]
+    # Add Owner Panel button if user is owner
     if is_owner(user_id):
         keyboard.append([InlineKeyboardButton("👑 Owner Panel", callback_data="owner_panel")])
+    keyboard.append([InlineKeyboardButton("ℹ️ Help", callback_data="redeem_panel")])
 
+    text = (
+        "🏠 <b>Welcome to the Casino Bot!</b> 🏠\n\n"
+        "Choose an option below to get started.\n\n"
+        "💰 <b>Your Balance:</b> Use /balance\n"
+        "🎮 <b>Games:</b> Play slots, dice, coin flip, and more!\n"
+        "💳 <b>Deposit:</b> Add funds instantly\n"
+        "💸 <b>Withdraw:</b> Cash out your winnings\n"
+        "👑 <b>Owner Panel:</b> (owner only)\n\n"
+        "For help, use /help or tap Help below."
+    )
     if is_callback:
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     else:
@@ -1598,6 +1589,15 @@ async def owner_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     else:
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
+async def owner_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Allow owner to open the owner panel via /owner command."""
+    user = update.effective_user
+    user_id = user.id if user else None
+    if not is_owner(user_id):
+        await update.message.reply_text("❌ Access denied. Owner only.")
+        return
+    await owner_panel_callback(update, context)
+
 # --- Owner Demo Toggle (was admin_toggle_demo_callback, now owner only) ---
 
 async def owner_toggle_demo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1688,7 +1688,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "🔹 /start - Begin your casino adventure\n"
         "🔹 /balance - Check your current balance\n"
         "🔹 /app - Access the mini app centre\n"
-        "🔹 /help - Get assistance and support\n\n"
+        "🔹 /help - Get assistance and support\n"
+        "🔹 /owner - Access owner panel (if you are the owner)\n\n"
         "For instant updates, join our support channel: @casino_support\n\n"
         "Have fun and good luck!"
     )
@@ -1805,9 +1806,11 @@ If you just made a payment:
             for deposit in recent_deposits:
                 deposit_type, amount, description, timestamp = deposit
                 # Parse timestamp
+
                 try:
                     dt = datetime.fromisoformat(timestamp)
                     time_str = dt.strftime("%m/%d %H:%M")
+
                 except:
                     time_str = timestamp[:16] if len(timestamp) > 16 else timestamp
                 
@@ -1917,6 +1920,7 @@ async def async_main():
     application.add_handler(CommandHandler("payment", check_payment_command))
     application.add_handler(CommandHandler("checkpayment", check_payment_command))
     application.add_handler(CommandHandler("testcrypto", test_cryptobot_command))
+    application.add_handler(CommandHandler("owner", owner_command))
     
     # Callback query handlers
     application.add_handler(CallbackQueryHandler(mini_app_centre_callback, pattern="^mini_app_centre$"))
