@@ -1175,7 +1175,7 @@ Play again or try another game:
     return ConversationHandler.END
 
 async def play_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle dice prediction game"""
+    """Handle dice prediction game - show prediction options"""
     query = update.callback_query
     await query.answer()
     user_id = query.effective_user.id
@@ -1186,20 +1186,176 @@ async def play_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"🎲 <b>DICE PREDICTION</b> 🎲\n\n"
         f"💰 <b>Your Balance:</b> {balance}\n\n"
         "Predict the outcome of a 6-sided dice roll.\n"
-        "Choose your prediction and bet amount:\n\n"
+        "Choose your prediction type:\n\n"
         "<b>Payouts:</b>\n"
         "• Correct Number (1-6): 6x\n"
         "• Even/Odd: 2x\n"
         "• High (4-6)/Low (1-3): 2x\n"
     )
     keyboard = [
-        [InlineKeyboardButton("1️⃣ ($10)", callback_data="dice_1_10"), InlineKeyboardButton("2️⃣ ($10)", callback_data="dice_2_10"), InlineKeyboardButton("3️⃣ ($10)", callback_data="dice_3_10")],
-        [InlineKeyboardButton("4️⃣ ($10)", callback_data="dice_4_10"), InlineKeyboardButton("5️⃣ ($10)", callback_data="dice_5_10"), InlineKeyboardButton("6️⃣ ($10)", callback_data="dice_6_10")],
-        [InlineKeyboardButton("Even ($25)", callback_data="dice_even_25"), InlineKeyboardButton("Odd ($25)", callback_data="dice_odd_25")],
-        [InlineKeyboardButton("High ($25)", callback_data="dice_high_25"), InlineKeyboardButton("Low ($25)", callback_data="dice_low_25")],
+        [InlineKeyboardButton("1️⃣", callback_data="dice_choice_1"), InlineKeyboardButton("2️⃣", callback_data="dice_choice_2"), InlineKeyboardButton("3️⃣", callback_data="dice_choice_3")],
+        [InlineKeyboardButton("4️⃣", callback_data="dice_choice_4"), InlineKeyboardButton("5️⃣", callback_data="dice_choice_5"), InlineKeyboardButton("6️⃣", callback_data="dice_choice_6")],
+        [InlineKeyboardButton("📈 Even", callback_data="dice_choice_even"), InlineKeyboardButton("📉 Odd", callback_data="dice_choice_odd")],
+        [InlineKeyboardButton("🔺 High (4-6)", callback_data="dice_choice_high"), InlineKeyboardButton("🔻 Low (1-3)", callback_data="dice_choice_low")],
         [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    return DICE_BET_AMOUNT
+
+async def handle_dice_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle dice prediction choice and ask for bet amount"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    user = await get_user(user_id)
+    
+    # Extract the choice from callback data
+    choice = query.data.split("_")[-1]  # dice_choice_1 -> 1
+    context.user_data['dice_choice'] = choice
+    
+    # Format choice for display
+    choice_display = {
+        '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣', '5': '5️⃣', '6': '6️⃣',
+        'even': '📈 Even', 'odd': '📉 Odd', 'high': '🔺 High (4-6)', 'low': '🔻 Low (1-3)'
+    }.get(choice, choice)
+    
+    # Get payout multiplier for display
+    multiplier = 6 if choice.isdigit() else 2
+    
+    balance = await format_usd(user['balance'])
+    text = (
+        f"🎲 <b>DICE PREDICTION</b> 🎲\n\n"
+        f"💰 <b>Your Balance:</b> {balance}\n"
+        f"🎯 <b>Your Prediction:</b> {choice_display}\n"
+        f"💎 <b>Payout:</b> {multiplier}x\n\n"
+        f"💵 <b>Enter your bet amount</b>\n\n"
+        f"<i>Min: $1.00 | Max: ${MAX_BET_PER_GAME}.00</i>\n"
+        f"<i>Example: 25 (for $25.00)</i>"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Choose Different Prediction", callback_data="play_dice")],
+        [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    return DICE_BET_AMOUNT
+
+async def handle_dice_bet_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle dice bet amount input"""
+    user_id = update.effective_user.id
+    
+    try:
+        bet_amount = float(update.message.text.strip().replace('$', '').replace(',', ''))
+        
+        if bet_amount < 1:
+            await update.message.reply_text(
+                "❌ <b>Minimum bet is $1.00</b>\n\n"
+                "Please enter a valid amount:",
+                parse_mode=ParseMode.HTML
+            )
+            return DICE_BET_AMOUNT
+            
+        if bet_amount > MAX_BET_PER_GAME:
+            await update.message.reply_text(
+                f"❌ <b>Maximum bet is ${MAX_BET_PER_GAME}.00</b>\n\n"
+                "Please enter a valid amount:",
+                parse_mode=ParseMode.HTML
+            )
+            return DICE_BET_AMOUNT
+        
+        user = await get_user(user_id)
+        
+        # Check balance (allow admin/demo mode to play with zero balance)
+        if user['balance'] < bet_amount and not is_admin(user_id) and not DEMO_MODE:
+            balance = await format_usd(user['balance'])
+            await update.message.reply_text(
+                f"❌ <b>Insufficient balance</b>\n\n"
+                f"Your balance: {balance}\n"
+                f"Bet amount: {await format_usd(bet_amount)}\n\n"
+                "Please enter a smaller amount:",
+                parse_mode=ParseMode.HTML
+            )
+            return DICE_BET_AMOUNT
+        
+        # Get prediction from user data
+        prediction = context.user_data.get('dice_choice', '1')
+        
+        # Deduct bet (except for admins)
+        if not is_admin(user_id):
+            await deduct_balance(user_id, bet_amount)
+        
+        # Roll the dice
+        roll = random.randint(1, 6)
+        
+        # Determine if win
+        won = False
+        multiplier = 0
+        
+        if prediction.isdigit() and 1 <= int(prediction) <= 6:
+            # User guessed a specific number
+            if roll == int(prediction):
+                won = True
+                multiplier = 6
+        elif prediction == "even" and roll % 2 == 0:
+            won = True
+            multiplier = 2
+        elif prediction == "odd" and roll % 2 == 1:
+            won = True
+            multiplier = 2
+        elif prediction == "high" and roll >= 4:
+            won = True
+            multiplier = 2
+        elif prediction == "low" and roll <= 3:
+            won = True
+            multiplier = 2
+        
+        # Calculate payout
+        if won:
+            win_amount = bet_amount * multiplier
+            await update_balance(user_id, win_amount)
+            result_text = f"🎉 **YOU WIN!**\nDice rolled: **{roll}**\nYour prediction: **{prediction.title()}**\nPayout: **{await format_usd(win_amount)}**"
+        else:
+            win_amount = 0
+            result_text = f"😢 **YOU LOSE!**\nDice rolled: **{roll}**\nYour prediction: **{prediction.title()}**\nLost: **{await format_usd(bet_amount)}**"
+        
+        # Log game session
+        await log_game_session(user_id, "dice", bet_amount, win_amount, "WIN" if won else "LOSE")
+        
+        user_after = await get_user(user_id)
+        text = f"""
+🎲 **DICE RESULT** 🎲
+
+{result_text}
+
+💰 **New Balance:** {await format_usd(user_after['balance'])}
+
+Play again or try another game:
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("🔄 Play Again", callback_data="play_dice"), InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino")],
+            [InlineKeyboardButton("🎰 Slots", callback_data="play_slots"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+        
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+        return ConversationHandler.END
+        
+    except ValueError:
+        await update.message.reply_text(
+            "❌ <b>Invalid amount format</b>\n\n"
+            "Please enter a valid number (e.g., 25 for $25.00):",
+            parse_mode=ParseMode.HTML
+        )
+        return DICE_BET_AMOUNT
+    except Exception as e:
+        logger.error(f"Error processing dice bet: {e}")
+        await update.message.reply_text(
+            "❌ <b>Error processing bet</b>\n\n"
+            "Please try again:",
+            parse_mode=ParseMode.HTML
+        )
+        return DICE_BET_AMOUNT
 
 async def handle_dice_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle dice bet"""
@@ -1286,38 +1442,202 @@ Play again or try another game:
 # --- NEW CASINO GAMES ---
 
 async def play_blackjack_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle blackjack game"""
+    """Handle blackjack game - prompt for bet amount"""
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
     user = await get_user(user_id)
     
+    balance = await format_usd(user['balance'])
     text = f"""
-🃏 **BLACKJACK 21** 🃏
+🃏 <b>BLACKJACK 21</b> 🃏
 
-💰 **Your Balance:** {await format_usd(user['balance'])}
+💰 <b>Your Balance:</b> {balance}
 
-🎯 **How to Play:**
+🎯 <b>How to Play:</b>
 • Get as close to 21 as possible
 • Beat the dealer without going over
 • Aces = 1 or 11, Face cards = 10
 
-💎 **Payouts:**
+💎 <b>Payouts:</b>
 • Blackjack (21 with 2 cards): 2.5x
 • Beat dealer: 2x
 • Push (tie): 1x (money back)
 
-🎮 **Choose your bet:**
+💵 <b>Enter your bet amount</b>
+
+<i>Min: $1.00 | Max: ${MAX_BET_PER_GAME}.00</i>
+<i>Example: 25 (for $25.00)</i>
 """
     
     keyboard = [
-        [InlineKeyboardButton("💰 $5", callback_data="blackjack_bet_5"), InlineKeyboardButton("💰 $10", callback_data="blackjack_bet_10")],
-        [InlineKeyboardButton("💰 $25", callback_data="blackjack_bet_25"), InlineKeyboardButton("💰 $50", callback_data="blackjack_bet_50")],
-        [InlineKeyboardButton("💰 $100", callback_data="blackjack_bet_100")],
         [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    return BLACKJACK_BET_AMOUNT
+
+async def handle_blackjack_bet_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle blackjack bet amount input"""
+    user_id = update.effective_user.id
+    
+    try:
+        bet_amount = float(update.message.text.strip().replace('$', '').replace(',', ''))
+        
+        if bet_amount < 1:
+            await update.message.reply_text(
+                "❌ <b>Minimum bet is $1.00</b>\n\n"
+                "Please enter a valid amount:",
+                parse_mode=ParseMode.HTML
+            )
+            return BLACKJACK_BET_AMOUNT
+            
+        if bet_amount > MAX_BET_PER_GAME:
+            await update.message.reply_text(
+                f"❌ <b>Maximum bet is ${MAX_BET_PER_GAME}.00</b>\n\n"
+                "Please enter a valid amount:",
+                parse_mode=ParseMode.HTML
+            )
+            return BLACKJACK_BET_AMOUNT
+        
+        user = await get_user(user_id)
+        
+        # Check balance (allow admin/demo mode to play with zero balance)
+        if user['balance'] < bet_amount and not is_admin(user_id) and not DEMO_MODE:
+            balance = await format_usd(user['balance'])
+            await update.message.reply_text(
+                f"❌ <b>Insufficient balance</b>\n\n"
+                f"Your balance: {balance}\n"
+                f"Bet amount: {await format_usd(bet_amount)}\n\n"
+                "Please enter a smaller amount:",
+                parse_mode=ParseMode.HTML
+            )
+            return BLACKJACK_BET_AMOUNT
+        
+        # Deduct bet (except for admins)
+        if not is_admin(user_id):
+            await deduct_balance(user_id, bet_amount)
+        
+        # Blackjack simulation
+        def card_value(card):
+            if card in ['J', 'Q', 'K']:
+                return 10
+            elif card == 'A':
+                return 11  # Will adjust for aces later
+            else:
+                return int(card)
+        
+        def hand_value(hand):
+            value = sum(card_value(card) for card in hand)
+            aces = hand.count('A')
+            while value > 21 and aces:
+                value -= 10
+                aces -= 1
+            return value
+        
+        def format_hand(hand):
+            return ' '.join(hand)
+        
+        # Deal cards
+        deck = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'] * 4
+        random.shuffle(deck)
+        
+        player_hand = [deck.pop(), deck.pop()]
+        dealer_hand = [deck.pop(), deck.pop()]
+        
+        player_value = hand_value(player_hand)
+        dealer_value = hand_value(dealer_hand)
+        
+        # Check for blackjack
+        player_blackjack = player_value == 21
+        dealer_blackjack = dealer_value == 21
+        
+        if player_blackjack and dealer_blackjack:
+            # Push
+            await update_balance(user_id, bet_amount)  # Return bet
+            result = "PUSH"
+            win_amount = bet_amount
+            outcome = f"🤝 **PUSH!**\nBoth got Blackjack!\n\n💰 Bet returned: {await format_usd(bet_amount)}"
+        elif player_blackjack:
+            # Player blackjack wins
+            win_amount = bet_amount * 2.5
+            await update_balance(user_id, win_amount)
+            result = "WIN"
+            outcome = f"🃏 **BLACKJACK!** 🃏\nYou got 21!\n\n💰 Win: {await format_usd(win_amount)} (2.5x)"
+        elif dealer_blackjack:
+            # Dealer blackjack, player loses
+            win_amount = 0
+            result = "LOSE"
+            outcome = f"😔 **DEALER BLACKJACK**\nDealer got 21!\n\n💰 Lost: {await format_usd(bet_amount)}"
+        else:
+            # Dealer draws to 17
+            while dealer_value < 17:
+                dealer_hand.append(deck.pop())
+                dealer_value = hand_value(dealer_hand)
+            
+            if dealer_value > 21:
+                # Dealer busts
+                win_amount = bet_amount * 2
+                await update_balance(user_id, win_amount)
+                result = "WIN"
+                outcome = f"🎉 **DEALER BUST!**\nDealer over 21!\n\n💰 Win: {await format_usd(win_amount)} (2x)"
+            elif player_value > dealer_value:
+                # Player wins
+                win_amount = bet_amount * 2
+                await update_balance(user_id, win_amount)
+                result = "WIN"
+                outcome = f"🎉 **YOU WIN!**\nBeat the dealer!\n\n💰 Win: {await format_usd(win_amount)} (2x)"
+            elif player_value == dealer_value:
+                # Push
+                await update_balance(user_id, bet_amount)
+                result = "PUSH"
+                win_amount = bet_amount
+                outcome = f"🤝 **PUSH!**\nSame value!\n\n💰 Bet returned: {await format_usd(bet_amount)}"
+            else:
+                # Dealer wins
+                win_amount = 0
+                result = "LOSE"
+                outcome = f"😔 **DEALER WINS**\nDealer beat you!\n\n💰 Lost: {await format_usd(bet_amount)}"
+        
+        # Log game session
+        await log_game_session(user_id, "blackjack", bet_amount, win_amount if result == "WIN" else 0, result)
+        
+        user_after = await get_user(user_id)
+        
+        text = f"""
+🃏 **BLACKJACK RESULT** 🃏
+
+**Your Hand:** {format_hand(player_hand)} = {player_value}
+**Dealer Hand:** {format_hand(dealer_hand)} = {dealer_value}
+
+{outcome}
+
+💰 **New Balance:** {await format_usd(user_after['balance'])}
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("🔄 Play Again", callback_data="play_blackjack"), InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+        
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+        return ConversationHandler.END
+        
+    except ValueError:
+        await update.message.reply_text(
+            "❌ <b>Invalid amount format</b>\n\n"
+            "Please enter a valid number (e.g., 25 for $25.00):",
+            parse_mode=ParseMode.HTML
+        )
+        return BLACKJACK_BET_AMOUNT
+    except Exception as e:
+        logger.error(f"Error processing blackjack bet: {e}")
+        await update.message.reply_text(
+            "❌ <b>Error processing bet</b>\n\n"
+            "Please try again:",
+            parse_mode=ParseMode.HTML
+        )
+        return BLACKJACK_BET_AMOUNT
 
 async def handle_blackjack_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle blackjack betting"""
@@ -1449,34 +1769,257 @@ async def handle_blackjack_bet(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
 async def play_roulette_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle roulette game"""
+    """Handle roulette game - show betting options"""
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
     user = await get_user(user_id)
     
+    balance = await format_usd(user['balance'])
     text = f"""
-🎡 **EUROPEAN ROULETTE** 🎡
+🎡 <b>EUROPEAN ROULETTE</b> 🎡
 
-💰 **Your Balance:** {await format_usd(user['balance'])}
+💰 <b>Your Balance:</b> {balance}
 
-🎯 **Betting Options:**
-• **Red/Black:** 2x payout
-• **Even/Odd:** 2x payout  
-• **1-18/19-36:** 2x payout
-• **Single Number:** 35x payout!
+🎯 <b>Betting Options:</b>
+• <b>Red/Black:</b> 2x payout
+• <b>Even/Odd:</b> 2x payout  
+• <b>1-18/19-36:</b> 2x payout
+• <b>Single Number:</b> 35x payout!
 
-🎮 **Choose your bet type and amount:**
+🎮 <b>Choose your bet type:</b>
 """
     
     keyboard = [
-        [InlineKeyboardButton("🔴 Red ($10)", callback_data="roulette_red_10"), InlineKeyboardButton("⚫ Black ($10)", callback_data="roulette_black_10")],
-        [InlineKeyboardButton("📈 Even ($15)", callback_data="roulette_even_15"), InlineKeyboardButton("📉 Odd ($15)", callback_data="roulette_odd_15")],
-        [InlineKeyboardButton("🔢 Lucky Number ($25)", callback_data="roulette_number_25"), InlineKeyboardButton("💰 High Roller ($50)", callback_data="roulette_red_50")],
+        [InlineKeyboardButton("🔴 Red", callback_data="roulette_choice_red"), InlineKeyboardButton("⚫ Black", callback_data="roulette_choice_black")],
+        [InlineKeyboardButton("📈 Even", callback_data="roulette_choice_even"), InlineKeyboardButton("📉 Odd", callback_data="roulette_choice_odd")],
+        [InlineKeyboardButton("🔢 Lucky Number (0-36)", callback_data="roulette_choice_number")],
         [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    return ROULETTE_BET_AMOUNT
+
+async def handle_roulette_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle roulette bet type choice and ask for bet amount"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    user = await get_user(user_id)
+    
+    # Extract the choice from callback data
+    choice = query.data.split("_")[-1]  # roulette_choice_red -> red
+    context.user_data['roulette_choice'] = choice
+    
+    # Format choice for display and get payout
+    choice_display = {
+        'red': '🔴 Red',
+        'black': '⚫ Black', 
+        'even': '📈 Even',
+        'odd': '📉 Odd',
+        'number': '🔢 Lucky Number (0-36)'
+    }.get(choice, choice)
+    
+    multiplier = 35 if choice == 'number' else 2
+    
+    balance = await format_usd(user['balance'])
+    
+    if choice == 'number':
+        text = (
+            f"🎡 <b>EUROPEAN ROULETTE</b> 🎡\n\n"
+            f"💰 <b>Your Balance:</b> {balance}\n"
+            f"🎯 <b>Bet Type:</b> {choice_display}\n"
+            f"💎 <b>Payout:</b> {multiplier}x\n\n"
+            f"🔢 <b>Enter your lucky number (0-36) and bet amount</b>\n\n"
+            f"<i>Format: number,amount (e.g., 7,25 for number 7 with $25 bet)</i>\n"
+            f"<i>Min: $1.00 | Max: ${MAX_BET_PER_GAME}.00</i>"
+        )
+    else:
+        text = (
+            f"🎡 <b>EUROPEAN ROULETTE</b> 🎡\n\n"
+            f"💰 <b>Your Balance:</b> {balance}\n"
+            f"🎯 <b>Bet Type:</b> {choice_display}\n"
+            f"💎 <b>Payout:</b> {multiplier}x\n\n"
+            f"💵 <b>Enter your bet amount</b>\n\n"
+            f"<i>Min: $1.00 | Max: ${MAX_BET_PER_GAME}.00</i>\n"
+            f"<i>Example: 25 (for $25.00)</i>"
+        )
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Choose Different Bet", callback_data="play_roulette")],
+        [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    return ROULETTE_BET_AMOUNT
+
+async def handle_roulette_bet_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle roulette bet amount input"""
+    user_id = update.effective_user.id
+    choice = context.user_data.get('roulette_choice', 'red')
+    input_text = update.message.text.strip()
+    
+    try:
+        if choice == 'number':
+            # Format: number,amount (e.g., 7,25)
+            if ',' in input_text:
+                parts = input_text.split(',')
+                if len(parts) != 2:
+                    raise ValueError("Invalid format")
+                number_str, amount_str = parts
+                lucky_number = int(number_str.strip())
+                bet_amount = float(amount_str.strip().replace('$', '').replace(',', ''))
+                
+                if not (0 <= lucky_number <= 36):
+                    await update.message.reply_text(
+                        "❌ <b>Invalid number</b>\n\n"
+                        "Lucky number must be between 0-36.\n"
+                        "Format: number,amount (e.g., 7,25)",
+                        parse_mode=ParseMode.HTML
+                    )
+                    return ROULETTE_BET_AMOUNT
+                    
+                context.user_data['roulette_number'] = lucky_number
+            else:
+                raise ValueError("Missing comma")
+        else:
+            bet_amount = float(input_text.replace('$', '').replace(',', ''))
+        
+        if bet_amount < 1:
+            await update.message.reply_text(
+                "❌ <b>Minimum bet is $1.00</b>\n\n"
+                "Please enter a valid amount:",
+                parse_mode=ParseMode.HTML
+            )
+            return ROULETTE_BET_AMOUNT
+            
+        if bet_amount > MAX_BET_PER_GAME:
+            await update.message.reply_text(
+                f"❌ <b>Maximum bet is ${MAX_BET_PER_GAME}.00</b>\n\n"
+                "Please enter a valid amount:",
+                parse_mode=ParseMode.HTML
+            )
+            return ROULETTE_BET_AMOUNT
+        
+        user = await get_user(user_id)
+        
+        # Check balance (allow admin/demo mode to play with zero balance)
+        if user['balance'] < bet_amount and not is_admin(user_id) and not DEMO_MODE:
+            balance = await format_usd(user['balance'])
+            await update.message.reply_text(
+                f"❌ <b>Insufficient balance</b>\n\n"
+                f"Your balance: {balance}\n"
+                f"Bet amount: {await format_usd(bet_amount)}\n\n"
+                "Please enter a smaller amount:",
+                parse_mode=ParseMode.HTML
+            )
+            return ROULETTE_BET_AMOUNT
+        
+        # Deduct bet (except for admins)
+        if not is_admin(user_id):
+            await deduct_balance(user_id, bet_amount)
+        
+        # Roulette spin (European roulette: 0-36)
+        winning_number = random.randint(0, 36)
+        
+        # Determine color and properties
+        red_numbers = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]
+        is_red = winning_number in red_numbers
+        is_black = winning_number != 0 and not is_red
+        is_even = winning_number != 0 and winning_number % 2 == 0
+        is_odd = winning_number != 0 and winning_number % 2 == 1
+        
+        won = False
+        multiplier = 0
+        
+        if choice == "number":
+            lucky_number = context.user_data.get('roulette_number', 0)
+            if winning_number == lucky_number:
+                won = True
+                multiplier = 35
+        elif choice == "red" and is_red:
+            won = True
+            multiplier = 2
+        elif choice == "black" and is_black:
+            won = True
+            multiplier = 2
+        elif choice == "even" and is_even:
+            won = True
+            multiplier = 2
+        elif choice == "odd" and is_odd:
+            won = True
+            multiplier = 2
+        
+        # Calculate payout
+        if won:
+            win_amount = bet_amount * multiplier
+            await update_balance(user_id, win_amount)
+            result = "WIN"
+            result_text = f"🎉 **YOU WIN!**\nPayout: **{await format_usd(win_amount)}** ({multiplier}x)"
+        else:
+            win_amount = 0
+            result = "LOSE"
+            result_text = f"😢 **YOU LOSE!**\nLost: **{await format_usd(bet_amount)}**"
+        
+        # Determine winning number color emoji
+        if winning_number == 0:
+            number_display = f"🟢 {winning_number}"
+        elif is_red:
+            number_display = f"🔴 {winning_number}"
+        else:
+            number_display = f"⚫ {winning_number}"
+        
+        # Log game session
+        await log_game_session(user_id, "roulette", bet_amount, win_amount, result)
+        
+        user_after = await get_user(user_id)
+        
+        bet_description = f"{choice.title()}"
+        if choice == "number":
+            bet_description = f"Number {context.user_data.get('roulette_number', 0)}"
+        
+        text = f"""
+🎡 **ROULETTE RESULT** 🎡
+
+🎯 **Winning Number:** {number_display}
+🎰 **Your Bet:** {bet_description}
+
+{result_text}
+
+💰 **New Balance:** {await format_usd(user_after['balance'])}
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("🔄 Spin Again", callback_data="play_roulette"), InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+        
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+        return ConversationHandler.END
+        
+    except ValueError:
+        if choice == 'number':
+            await update.message.reply_text(
+                "❌ <b>Invalid format</b>\n\n"
+                "Please use format: number,amount\n"
+                "Example: 7,25 (number 7 with $25 bet)",
+                parse_mode=ParseMode.HTML
+            )
+        else:
+            await update.message.reply_text(
+                "❌ <b>Invalid amount format</b>\n\n"
+                "Please enter a valid number (e.g., 25 for $25.00):",
+                parse_mode=ParseMode.HTML
+            )
+        return ROULETTE_BET_AMOUNT
+    except Exception as e:
+        logger.error(f"Error processing roulette bet: {e}")
+        await update.message.reply_text(
+            "❌ <b>Error processing bet</b>\n\n"
+            "Please try again:",
+            parse_mode=ParseMode.HTML
+        )
+        return ROULETTE_BET_AMOUNT
 
 async def handle_roulette_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle roulette betting"""
@@ -1586,39 +2129,199 @@ async def handle_roulette_bet(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
 async def play_crash_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle crash game"""
+    """Handle crash game - show strategy options"""
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
     user = await get_user(user_id)
     
+    balance = await format_usd(user['balance'])
     text = f"""
-🚀 **CRASH GAME** 🚀
+🚀 <b>CRASH GAME</b> 🚀
 
-💰 **Your Balance:** {await format_usd(user['balance'])}
+💰 <b>Your Balance:</b> {balance}
 
-🎯 **How to Play:**
-• Place your bet
+🎯 <b>How to Play:</b>
+• Place your bet and choose strategy
 • Watch the multiplier rise
 • Cash out before it crashes!
 • The longer you wait, the higher the multiplier
 
-🎮 **Risk vs Reward:**
-• **Safe:** Cash out at 1.5x-2x (75% success)
-• **Medium:** Cash out at 2x-5x (50% success)  
-• **Risky:** Cash out at 5x-10x (25% success)
-• **YOLO:** Try for 10x+ (10% success)
+🎮 <b>Risk vs Reward:</b>
+• <b>Safe:</b> Cash out at 1.5x-2x (75% success)
+• <b>Medium:</b> Cash out at 2x-5x (50% success)  
+• <b>Risky:</b> Cash out at 5x-10x (25% success)
+• <b>YOLO:</b> Try for 10x+ (10% success)
 
-🎮 **Choose your strategy:**
+🎮 <b>Choose your strategy:</b>
 """
     
     keyboard = [
-        [InlineKeyboardButton("🛡️ Safe ($10)", callback_data="crash_safe_10"), InlineKeyboardButton("⚖️ Medium ($20)", callback_data="crash_medium_20")],
-        [InlineKeyboardButton("🎲 Risky ($30)", callback_data="crash_risky_30"), InlineKeyboardButton("🚀 YOLO ($50)", callback_data="crash_yolo_50")],
+        [InlineKeyboardButton("🛡️ Safe", callback_data="crash_strategy_safe"), InlineKeyboardButton("⚖️ Medium", callback_data="crash_strategy_medium")],
+        [InlineKeyboardButton("🎲 Risky", callback_data="crash_strategy_risky"), InlineKeyboardButton("🚀 YOLO", callback_data="crash_strategy_yolo")],
         [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    return CRASH_BET_AMOUNT
+
+async def handle_crash_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle crash strategy choice and ask for bet amount"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    user = await get_user(user_id)
+    
+    # Extract the strategy from callback data
+    strategy = query.data.split("_")[-1]  # crash_strategy_safe -> safe
+    context.user_data['crash_strategy'] = strategy
+    
+    # Format strategy for display
+    strategy_display = {
+        'safe': '🛡️ Safe (1.5x-2x)',
+        'medium': '⚖️ Medium (2x-5x)',
+        'risky': '🎲 Risky (5x-10x)',
+        'yolo': '🚀 YOLO (10x+)'
+    }.get(strategy, strategy)
+    
+    # Get success rate for display
+    success_rate = {
+        'safe': '75%',
+        'medium': '50%',
+        'risky': '25%',
+        'yolo': '10%'
+    }.get(strategy, '50%')
+    
+    balance = await format_usd(user['balance'])
+    text = (
+        f"🚀 <b>CRASH GAME</b> 🚀\n\n"
+        f"💰 <b>Your Balance:</b> {balance}\n"
+        f"🎯 <b>Strategy:</b> {strategy_display}\n"
+        f"📊 <b>Success Rate:</b> ~{success_rate}\n\n"
+        f"💵 <b>Enter your bet amount</b>\n\n"
+        f"<i>Min: $1.00 | Max: ${MAX_BET_PER_GAME}.00</i>\n"
+        f"<i>Example: 25 (for $25.00)</i>"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Choose Different Strategy", callback_data="play_crash")],
+        [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    return CRASH_BET_AMOUNT
+
+async def handle_crash_bet_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle crash bet amount input"""
+    user_id = update.effective_user.id
+    strategy = context.user_data.get('crash_strategy', 'safe')
+    
+    try:
+        bet_amount = float(update.message.text.strip().replace('$', '').replace(',', ''))
+        
+        if bet_amount < 1:
+            await update.message.reply_text(
+                "❌ <b>Minimum bet is $1.00</b>\n\n"
+                "Please enter a valid amount:",
+                parse_mode=ParseMode.HTML
+            )
+            return CRASH_BET_AMOUNT
+            
+        if bet_amount > MAX_BET_PER_GAME:
+            await update.message.reply_text(
+                f"❌ <b>Maximum bet is ${MAX_BET_PER_GAME}.00</b>\n\n"
+                "Please enter a valid amount:",
+                parse_mode=ParseMode.HTML
+            )
+            return CRASH_BET_AMOUNT
+        
+        user = await get_user(user_id)
+        
+        # Check balance (allow admin/demo mode to play with zero balance)
+        if user['balance'] < bet_amount and not is_admin(user_id) and not DEMO_MODE:
+            balance = await format_usd(user['balance'])
+            await update.message.reply_text(
+                f"❌ <b>Insufficient balance</b>\n\n"
+                f"Your balance: {balance}\n"
+                f"Bet amount: {await format_usd(bet_amount)}\n\n"
+                "Please enter a smaller amount:",
+                parse_mode=ParseMode.HTML
+            )
+            return CRASH_BET_AMOUNT
+        
+        # Deduct bet (except for admins)
+        if not is_admin(user_id):
+            await deduct_balance(user_id, bet_amount)
+        
+        # Crash simulation based on strategy
+        if strategy == "safe":
+            target_multiplier = random.uniform(1.5, 2.0)
+            crash_point = random.uniform(1.2, 10.0)
+            success_emoji = "🛡️"
+        elif strategy == "medium":
+            target_multiplier = random.uniform(2.0, 5.0)
+            crash_point = random.uniform(1.5, 15.0)
+            success_emoji = "⚖️"
+        elif strategy == "risky":
+            target_multiplier = random.uniform(5.0, 10.0)
+            crash_point = random.uniform(2.0, 25.0)
+            success_emoji = "🎲"
+        else:  # yolo
+            target_multiplier = random.uniform(10.0, 100.0)
+            crash_point = random.uniform(3.0, 150.0)
+            success_emoji = "🚀"
+        
+        # Determine if player cashed out in time
+        if target_multiplier <= crash_point:
+            # Success! Player cashed out before crash
+            win_amount = bet_amount * target_multiplier
+            await update_balance(user_id, win_amount)
+            result = "WIN"
+            outcome = f"{success_emoji} **CASHED OUT!**\nYou cashed out at **{target_multiplier:.2f}x**\nCrash point was **{crash_point:.2f}x**\n\n💰 Win: **{await format_usd(win_amount)}**"
+        else:
+            # Crashed before cashout
+            win_amount = 0
+            result = "LOSE"
+            outcome = f"💥 **CRASHED!**\nCrashed at **{crash_point:.2f}x**\nYou were aiming for **{target_multiplier:.2f}x**\n\n💰 Lost: **{await format_usd(bet_amount)}**"
+        
+        # Log game session
+        await log_game_session(user_id, "crash", bet_amount, win_amount, result)
+        
+        user_after = await get_user(user_id)
+        
+        text = f"""
+🚀 **CRASH RESULT** 🚀
+
+{outcome}
+
+💰 **New Balance:** {await format_usd(user_after['balance'])}
+
+Try again or change your strategy!
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("🔄 Play Again", callback_data="play_crash"), InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+        
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+        return ConversationHandler.END
+        
+    except ValueError:
+        await update.message.reply_text(
+            "❌ <b>Invalid amount format</b>\n\n"
+            "Please enter a valid number (e.g., 25 for $25.00):",
+            parse_mode=ParseMode.HTML
+        )
+        return CRASH_BET_AMOUNT
+    except Exception as e:
+        logger.error(f"Error processing crash bet: {e}")
+        await update.message.reply_text(
+            "❌ <b>Error processing bet</b>\n\n"
+            "Please try again:",
+            parse_mode=ParseMode.HTML
+        )
+        return CRASH_BET_AMOUNT
 
 async def handle_crash_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle crash betting"""
@@ -2120,6 +2823,53 @@ coinflip_conv_handler = ConversationHandler(
         ],
     },
     fallbacks=[CallbackQueryHandler(coin_flip_callback, pattern="^coin_flip$")],
+    allow_reentry=True
+)
+
+dice_conv_handler = ConversationHandler(
+    entry_points=[CallbackQueryHandler(play_dice_callback, pattern="^play_dice$")],
+    states={
+        DICE_BET_AMOUNT: [
+            CallbackQueryHandler(handle_dice_choice, pattern="^dice_choice_"),
+            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_dice_bet_amount),
+        ],
+    },
+    fallbacks=[CallbackQueryHandler(play_dice_callback, pattern="^play_dice$")],
+    allow_reentry=True
+)
+
+blackjack_conv_handler = ConversationHandler(
+    entry_points=[CallbackQueryHandler(play_blackjack_callback, pattern="^play_blackjack$")],
+    states={
+        BLACKJACK_BET_AMOUNT: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_blackjack_bet_amount),
+        ],
+    },
+    fallbacks=[CallbackQueryHandler(play_blackjack_callback, pattern="^play_blackjack$")],
+    allow_reentry=True
+)
+
+roulette_conv_handler = ConversationHandler(
+    entry_points=[CallbackQueryHandler(play_roulette_callback, pattern="^play_roulette$")],
+    states={
+        ROULETTE_BET_AMOUNT: [
+            CallbackQueryHandler(handle_roulette_choice, pattern="^roulette_choice_"),
+            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_roulette_bet_amount),
+        ],
+    },
+    fallbacks=[CallbackQueryHandler(play_roulette_callback, pattern="^play_roulette$")],
+    allow_reentry=True
+)
+
+crash_conv_handler = ConversationHandler(
+    entry_points=[CallbackQueryHandler(play_crash_callback, pattern="^play_crash$")],
+    states={
+        CRASH_BET_AMOUNT: [
+            CallbackQueryHandler(handle_crash_strategy, pattern="^crash_strategy_"),
+            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_crash_bet_amount),
+        ],
+    },
+    fallbacks=[CallbackQueryHandler(play_crash_callback, pattern="^play_crash$")],
     allow_reentry=True
 )
 
@@ -2690,15 +3440,10 @@ async def async_main():
     # Game handlers - using conversation handlers for custom betting
     application.add_handler(slots_conv_handler)
     application.add_handler(coinflip_conv_handler)
-    application.add_handler(CallbackQueryHandler(play_dice_callback, pattern="^play_dice$"))
-    application.add_handler(CallbackQueryHandler(handle_dice_bet, pattern="^dice_"))
-    # New casino games
-    application.add_handler(CallbackQueryHandler(play_blackjack_callback, pattern="^play_blackjack$"))
-    application.add_handler(CallbackQueryHandler(handle_blackjack_bet, pattern="^blackjack_bet_"))
-    application.add_handler(CallbackQueryHandler(play_roulette_callback, pattern="^play_roulette$"))
-    application.add_handler(CallbackQueryHandler(handle_roulette_bet, pattern="^roulette_"))
-    application.add_handler(CallbackQueryHandler(play_crash_callback, pattern="^play_crash$"))
-    application.add_handler(CallbackQueryHandler(handle_crash_bet, pattern="^crash_"))
+    application.add_handler(dice_conv_handler)
+    application.add_handler(blackjack_conv_handler)
+    application.add_handler(roulette_conv_handler)
+    application.add_handler(crash_conv_handler)
     # Deposit/Withdrawal handlers
     application.add_handler(CallbackQueryHandler(withdraw_start, pattern="^withdraw$"))
     application.add_handler(CallbackQueryHandler(withdraw_asset_callback, pattern="^withdraw_asset_"))
