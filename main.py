@@ -497,6 +497,12 @@ async def init_db():
             
             # Withdrawals table
             await db.execute("""
+                CREATE TABLE IF NOT EXISTS withdrawals (
+                    withdrawal_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    asset TEXT NOT NULL,
+                    address TEXT NOT NULL,
+                    amount REAL NOT NULL,
                     fee REAL NOT NULL,
                     net_amount REAL NOT NULL,
                     rate_usd REAL NOT NULL,
