@@ -497,12 +497,6 @@ async def init_db():
             
             # Withdrawals table
             await db.execute("""
-                CREATE TABLE IF NOT EXISTS withdrawals (
-                    withdrawal_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    asset TEXT NOT NULL,
-                    address TEXT NOT NULL,
-                    amount REAL NOT NULL,
                     fee REAL NOT NULL,
                     net_amount REAL NOT NULL,
                     rate_usd REAL NOT NULL,
@@ -686,6 +680,7 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
 
 # --- Conversation States (must be defined before use) ---
 DEPOSIT_ASSET, DEPOSIT_AMOUNT = range(2)
+WITHDRAW_ASSET, WITHDRAW_AMOUNT, WITHDRAW_ADDRESS, WITHDRAW_CONFIRM = range(10, 14)
 
 # --- Bot Handlers ---
 
@@ -695,16 +690,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id if user else None
     is_callback = hasattr(update, 'callback_query') and update.callback_query
 
-    # Build main menu keyboard
+    # Modern, visually balanced main menu layout
     keyboard = [
-        [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre")],
-        [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
-        [InlineKeyboardButton("💸 Withdraw", callback_data="withdraw")],
-        [InlineKeyboardButton("📊 Stats", callback_data="show_stats")],
+        [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"), InlineKeyboardButton("📊 Stats", callback_data="show_stats")],
+        [InlineKeyboardButton("💳 Deposit", callback_data="deposit"), InlineKeyboardButton("💸 Withdraw", callback_data="withdraw")],
     ]
     # Add Owner Panel button if user is owner
     if is_owner(user_id):
         keyboard.append([InlineKeyboardButton("👑 Owner Panel", callback_data="owner_panel")])
+    # Help always at the bottom
     keyboard.append([InlineKeyboardButton("ℹ️ Help", callback_data="redeem_panel")])
 
     text = (
@@ -1336,7 +1330,97 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
         await processing_msg.edit_text(f"❌ Error creating deposit invoice: {error_msg}\n\nPlease try again or contact support if the issue persists.")
         return DEPOSIT_AMOUNT
 
-# --- Register Deposit ConversationHandler ---
+# --- Withdrawal Conversation Handler ---
+async def withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start withdrawal process: choose asset"""
+    user = update.effective_user
+    user_id = user.id
+    user_data = await get_user(user_id)
+    if not user_data or user_data['balance'] < 1.0:
+        await update.message.reply_text("❌ You need at least $1.00 to withdraw.")
+        return ConversationHandler.END
+    text = """
+💸 <b>WITHDRAW FUNDS</b> 💸\n\nChoose the cryptocurrency to withdraw:"""
+    keyboard = [
+        [InlineKeyboardButton("Litecoin (LTC)", callback_data="withdraw_asset_LTC"),
+         InlineKeyboardButton("Toncoin (TON)", callback_data="withdraw_asset_TON")],
+        [InlineKeyboardButton("Solana (SOL)", callback_data="withdraw_asset_SOL")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    return WITHDRAW_ASSET
+
+async def withdraw_asset_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    asset = query.data.split('_')[-1]
+    context.user_data['withdraw_asset'] = asset
+    min_usd = float(os.environ.get(f"MIN_DEPOSIT_{asset}_USD", "1.00"))
+    text = f"""
+<b>{asset} Withdrawal</b>\n\nEnter the amount in USD you want to withdraw:\n(Minimum: ${min_usd:.2f})\n\nYour balance: ${context.user_data.get('balance', 'N/A')}\n"""
+    await query.edit_message_text(text, parse_mode=ParseMode.HTML)
+    return WITHDRAW_AMOUNT
+
+async def withdraw_amount_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    asset = context.user_data.get('withdraw_asset')
+    user = await get_user(user_id)
+    try:
+        usd_amount = float(update.message.text.strip())
+    except ValueError:
+        await update.message.reply_text("❌ Invalid amount. Enter a number in USD.")
+        return WITHDRAW_AMOUNT
+    min_usd = float(os.environ.get(f"MIN_DEPOSIT_{asset}_USD", "1.00"))
+    if usd_amount < min_usd:
+        await update.message.reply_text(f"❌ Minimum withdrawal for {asset} is ${min_usd:.2f}.")
+        return WITHDRAW_AMOUNT
+    if usd_amount > user['balance']:
+        await update.message.reply_text("❌ Insufficient balance.")
+        return WITHDRAW_AMOUNT
+    context.user_data['withdraw_amount'] = usd_amount
+    await update.message.reply_text(f"Enter your {asset} address:")
+    return WITHDRAW_ADDRESS
+
+async def withdraw_address_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    address = update.message.text.strip()
+    asset = context.user_data.get('withdraw_asset')
+    if not validate_crypto_address(address, asset):
+        await update.message.reply_text("❌ Invalid address format. Please try again.")
+        return WITHDRAW_ADDRESS
+    context.user_data['withdraw_address'] = address
+    usd_amount = context.user_data['withdraw_amount']
+    fee = calculate_withdrawal_fee(usd_amount)
+    net = usd_amount - fee
+    text = f"""
+<b>Confirm Withdrawal</b>\n\n<b>Asset:</b> {asset}\n<b>Amount:</b> ${usd_amount:.2f}\n<b>Fee:</b> ${fee:.2f}\n<b>Net:</b> ${net:.2f}\n<b>Address:</b> <code>{address}</code>\n\nSend?"""
+    keyboard = [
+        [InlineKeyboardButton("✅ Confirm", callback_data="withdraw_confirm")],
+        [InlineKeyboardButton("❌ Cancel", callback_data="main_panel")]
+    ]
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    return WITHDRAW_CONFIRM
+
+async def withdraw_confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    asset = context.user_data.get('withdraw_asset')
+    usd_amount = context.user_data.get('withdraw_amount')
+    address = context.user_data.get('withdraw_address')
+    fee = calculate_withdrawal_fee(usd_amount)
+    net = usd_amount - fee
+    user = await get_user(user_id)
+    if user['balance'] < usd_amount:
+        await query.edit_message_text("❌ Insufficient balance.")
+        return ConversationHandler.END
+    # Deduct balance atomically
+    await deduct_balance(user_id, usd_amount)
+    # Log withdrawal (pending status)
+    await log_withdrawal(user_id, asset, usd_amount, address, fee, net)
+    await query.edit_message_text(f"✅ Withdrawal request submitted!\n\n<b>Asset:</b> {asset}\n<b>Amount:</b> ${usd_amount:.2f}\n<b>Net:</b> ${net:.2f}\n<b>Address:</b> <code>{address}</code>\n\nAn admin will review and process your withdrawal soon.", parse_mode=ParseMode.HTML)
+    return ConversationHandler.END
+
+# --- Register Deposit and Withdrawal ConversationHandler ---
 deposit_conv_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(deposit_callback, pattern="^deposit$")],
     states={
@@ -1354,162 +1438,19 @@ deposit_conv_handler = ConversationHandler(
     allow_reentry=True
 )
 
-async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle main withdraw menu"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = """
-💸 **WITHDRAW FUNDS** 💸
+withdraw_conv_handler = ConversationHandler(
+    entry_points=[CommandHandler("withdraw", withdraw_start)],
+    states={
+        WITHDRAW_ASSET: [CallbackQueryHandler(withdraw_asset_callback, pattern="^withdraw_asset_")],
+        WITHDRAW_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_amount_handler)],
+        WITHDRAW_ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_address_handler)],
+        WITHDRAW_CONFIRM: [CallbackQueryHandler(withdraw_confirm_callback, pattern="^withdraw_confirm$")],
+    },
+    fallbacks=[CallbackQueryHandler(start_command, pattern="^main_panel$")],
+    allow_reentry=True
+)
 
-Choose your cryptocurrency:
-
-📋 **Withdrawal Info:**
-• Minimum: $1.00 USD
-• Maximum: $10,000 USD daily
-• Fee: 2% of amount
-• Processing: Instant
-
-🔒 **Secure withdrawals via CryptoBot**
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("Litecoin (LTC)", callback_data="withdraw_ltc"),
-         InlineKeyboardButton("Toncoin (TON)", callback_data="withdraw_ton")],
-        [InlineKeyboardButton("Solana (SOL)", callback_data="withdraw_sol")],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-async def deposit_ltc_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle LTC deposit"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = """
-💳 **LTC DEPOSIT** 💳
-
-Enter the amount of LTC you want to deposit:
-(Minimum: 0.01 LTC)
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit"),
-         InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-async def deposit_ton_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle TON deposit"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = """
-💳 **TON DEPOSIT** 💳
-
-Enter the amount of TON you want to deposit:
-(Minimum: 1 TON)
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit"),
-         InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-async def deposit_sol_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle SOL deposit"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = """
-💳 **SOL DEPOSIT** 💳
-
-Enter the amount of SOL you want to deposit:
-(Minimum: 0.05 SOL)
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit"),
-         InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-async def withdraw_ltc_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle LTC withdrawal"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = """
-💸 **LTC WITHDRAWAL** 💸
-
-🚧 **Coming Soon!**
-
-LTC withdrawal functionality will be available soon.
-For now, please contact support for manual withdrawals.
-
-📞 **Support:** @casino_support
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("🔙 Back to Withdraw", callback_data="withdraw"),
-         InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-async def withdraw_ton_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle TON withdrawal"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = """
-💸 **TON WITHDRAWAL** 💸
-
-🚧 **Coming Soon!**
-
-TON withdrawal functionality will be available soon.
-For now, please contact support for manual withdrawals.
-
-📞 **Support:** @casino_support
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("🔙 Back to Withdraw", callback_data="withdraw"),
-         InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-async def withdraw_sol_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle SOL withdrawal"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = """
-💸 **SOL WITHDRAWAL** 💸
-
-🚧 **Coming Soon!**
-
-SOL withdrawal functionality will be available soon.
-For now, please contact support for manual withdrawals.
-
-📞 **Support:** @casino_support
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("🔙 Back to Withdraw", callback_data="withdraw"),
-         InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-
-# --- Owner Panel Handlers ---
-
+# --- Admin Panel Handlers ---
 async def show_balance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show the user's current balance"""
     user = update.effective_user
@@ -1801,7 +1742,7 @@ async def show_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
 async def check_payment_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Allow users to check their recent payment status"""
@@ -2010,10 +1951,8 @@ async def async_main():
     application.add_handler(CallbackQueryHandler(play_dice_callback, pattern="^play_dice$"))
     application.add_handler(CallbackQueryHandler(handle_dice_bet, pattern="^dice_"))
     # Deposit/Withdrawal handlers
-    application.add_handler(CallbackQueryHandler(withdraw_callback, pattern="^withdraw$"))
-    application.add_handler(CallbackQueryHandler(withdraw_ltc_callback, pattern="^withdraw_ltc$"))
-    application.add_handler(CallbackQueryHandler(withdraw_ton_callback, pattern="^withdraw_ton$"))
-    application.add_handler(CallbackQueryHandler(withdraw_sol_callback, pattern="^withdraw_sol$"))
+    application.add_handler(CallbackQueryHandler(withdraw_start, pattern="^withdraw$"))
+    application.add_handler(CallbackQueryHandler(withdraw_asset_callback, pattern="^withdraw_asset_"))
     application.add_handler(CallbackQueryHandler(start_command, pattern="^main_panel$"))
     application.add_handler(CallbackQueryHandler(redeem_panel_callback, pattern="^redeem_panel$"))
     application.add_handler(CallbackQueryHandler(show_stats_callback, pattern="^show_stats$"))
@@ -2026,6 +1965,7 @@ async def async_main():
 
     # Add deposit ConversationHandler (this enables the coin selection -> amount prompt flow)
     application.add_handler(deposit_conv_handler)
+    application.add_handler(withdraw_conv_handler)
 
     # Add global error handler
     application.add_error_handler(global_error_handler)
