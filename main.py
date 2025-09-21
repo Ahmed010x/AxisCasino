@@ -418,22 +418,44 @@ async def get_crypto_usd_rate(asset: str) -> float:
     """
     Fetch the real-time USD/crypto rate for the given asset from CryptoBot API.
     Returns the price of 1 unit of the asset in USD, or 0.0 on error.
+    Includes retry logic for better reliability.
     """
-    url = "https://pay.crypt.bot/api/rates"
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=10) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    rates = data.get("result", [])
-                    for rate in rates:
-                        if rate.get("source") == asset and rate.get("target") == "USD":
-                            price = float(rate.get("rate", 0))
-                            return price
-                else:
-                    logger.error(f"CryptoBot API error: HTTP {resp.status}")
-    except Exception as e:
-        logger.error(f"Error fetching CryptoBot rate for {asset}: {e}")
+    url = "https://pay.crypt.bot/api/getExchangeRates"
+    max_retries = 3
+    
+    headers = {
+        "Crypto-Pay-API-Token": CRYPTOBOT_API_TOKEN
+    }
+    
+    for attempt in range(max_retries):
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers, timeout=15) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        if data.get("ok"):
+                            rates = data.get("result", [])
+                            for rate in rates:
+                                if rate.get("source") == asset and rate.get("target") == "USD":
+                                    price = float(rate.get("rate", 0))
+                                    if price > 0:
+                                        logger.info(f"CryptoBot API: {asset}/USD rate = ${price:.6f}")
+                                        return price
+                            logger.warning(f"CryptoBot API: No rate found for {asset}/USD")
+                        else:
+                            error_msg = data.get("error", {}).get("name", "Unknown error")
+                            logger.error(f"CryptoBot API error: {error_msg} (attempt {attempt + 1}/{max_retries})")
+                    else:
+                        logger.error(f"CryptoBot API error: HTTP {resp.status} (attempt {attempt + 1}/{max_retries})")
+                        
+        except Exception as e:
+            logger.error(f"Error fetching CryptoBot rate for {asset} (attempt {attempt + 1}/{max_retries}): {e}")
+            
+        # Wait before retry (except on last attempt)
+        if attempt < max_retries - 1:
+            await asyncio.sleep(1)
+    
+    logger.error(f"Failed to get live rate for {asset} after {max_retries} attempts")
     return 0.0
 
 async def get_ltc_usd_rate() -> float:
@@ -1279,16 +1301,18 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
 
 💰 **Amount:** ${usd_amount:.2f} USD
 🆔 **Invoice ID:** `{invoice_id}`
-💱 **Crypto Equivalent:** ~{crypto_amount:.8f} {asset}
+� **Live Rate:** 1 {asset} = ${crypto_rate:.2f} USD
+�💱 **Crypto Amount:** {crypto_amount:.8f} {asset}
 
-⚡ Payment will be processed automatically
+⚡ Payment will be processed automatically using live rates
 🔄 Your balance will update instantly after confirmation
 ⏰ Invoice expires in 60 minutes
 
-💡 **Tips:**
+💡 **Important:**
+• Rate is live from CryptoBot API at time of invoice creation
+• Final conversion uses live rate at payment confirmation
 • Payment is secure and processed by CryptoBot
 • Keep this chat open during payment
-• You'll receive confirmation when payment is complete
 
 📞 **Having issues?** Use /payment to check status
 
@@ -1897,6 +1921,52 @@ async def test_cryptobot_command(update: Update, context: ContextTypes.DEFAULT_T
         logger.error(f"Test CryptoBot error: {e}")
         await update.message.reply_text(f"❌ Test error: {str(e)}")
 
+async def rates_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show current live crypto rates from CryptoBot API"""
+    user = update.effective_user
+    
+    # Show loading message
+    loading_msg = await update.message.reply_text("⏳ Fetching live crypto rates...")
+    
+    try:
+        # Get live rates for supported assets
+        assets = ['LTC', 'TON', 'SOL', 'USDT']
+        rates_data = []
+        
+        for asset in assets:
+            rate = await get_crypto_usd_rate(asset)
+            if rate > 0:
+                rates_data.append(f"• **{asset}**: ${rate:.2f} USD")
+            else:
+                rates_data.append(f"• **{asset}**: ❌ Rate unavailable")
+        
+        rates_text = "\n".join(rates_data)
+        
+        text = f"""
+📊 **LIVE CRYPTO RATES** 📊
+
+🔴 **Real-time rates from CryptoBot API:**
+
+{rates_text}
+
+⏰ **Updated:** {datetime.now().strftime("%H:%M:%S UTC")}
+🔄 **Refresh:** Use /rates again for latest prices
+
+💡 **Note:** These are the live rates used for all deposits and withdrawals in our casino.
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
+            [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+        
+        await loading_msg.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+        
+    except Exception as e:
+        logger.error(f"Error getting rates for user {user.id}: {e}")
+        await loading_msg.edit_text("❌ Error fetching crypto rates. Please try again later.")
+
 # --- Main Bot Setup and Entry Point ---
 async def async_main():
     """Async main function to properly start both bot and keep-alive server."""
@@ -1921,6 +1991,7 @@ async def async_main():
     application.add_handler(CommandHandler("checkpayment", check_payment_command))
     application.add_handler(CommandHandler("testcrypto", test_cryptobot_command))
     application.add_handler(CommandHandler("owner", owner_command))
+    application.add_handler(CommandHandler("rates", rates_command))
     
     # Callback query handlers
     application.add_handler(CallbackQueryHandler(mini_app_centre_callback, pattern="^mini_app_centre$"))
@@ -2002,12 +2073,38 @@ async def async_main():
                     if user_id_str and amount > 0:
                         try:
                             user_id = int(user_id_str)
-                            # Convert crypto amount to USD for balance update
+                            # Convert crypto amount to USD for balance update using ONLY live rates
                             usd_amount = amount
                             if asset != 'USDT':
-                                # Get current rate and convert to USD
-                                rate = 65.0 if asset == 'LTC' else (2.5 if asset == 'TON' else 23.0)
-                                usd_amount = amount * rate
+                                # ALWAYS get current rate from CryptoBot API - no fallbacks
+                                try:
+                                    import aiohttp
+                                    import asyncio
+                                    
+                                    async def get_live_rate():
+                                        return await get_crypto_usd_rate(asset)
+                                    
+                                    # Create new event loop for this sync context
+                                    try:
+                                        loop = asyncio.new_event_loop()
+                                        asyncio.set_event_loop(loop)
+                                        rate = loop.run_until_complete(get_live_rate())
+                                        loop.close()
+                                        
+                                        if rate > 0:
+                                            usd_amount = amount * rate
+                                            logger.info(f"Webhook: Converted {amount} {asset} to ${usd_amount:.2f} USD using live rate ${rate:.2f}")
+                                        else:
+                                            logger.error(f"Webhook: CryptoBot API returned invalid rate for {asset}. Cannot process payment without live rate.")
+                                            return {"status": "rate_error", "message": "Unable to get live exchange rate"}, 500
+                                            
+                                    except Exception as rate_error:
+                                        logger.error(f"Webhook: Critical error getting live rate for {asset}: {rate_error}")
+                                        return {"status": "rate_fetch_failed", "message": "Live rate API unavailable"}, 500
+                                        
+                                except Exception as e:
+                                    logger.error(f"Webhook: Rate conversion system error: {e}")
+                                    return {"status": "conversion_error", "message": "Rate conversion failed"}, 500
                             
                             # Update user balance synchronously (we'll use a thread-safe approach)
                             import sqlite3
