@@ -696,6 +696,17 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id if user else None
     is_callback = hasattr(update, 'callback_query') and update.callback_query
 
+    # Get user data to show balance in welcome message
+    user_data = await get_user(user_id)
+    if not user_data:
+        # Create new user if doesn't exist
+        username = user.username or user.first_name or f"User_{user_id}"
+        await create_user(user_id, username)
+        user_data = await get_user(user_id)
+    
+    balance = await format_usd(user_data['balance'])
+    username = user_data['username']
+
     # Modern, visually balanced main menu layout
     keyboard = [
         [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"), InlineKeyboardButton("📊 Stats", callback_data="show_stats")],
@@ -707,16 +718,23 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Help always at the bottom
     keyboard.append([InlineKeyboardButton("ℹ️ Help", callback_data="redeem_panel")])
 
-    text = (
-        "🏠 <b>Welcome to the Casino Bot!</b> 🏠\n\n"
-        "Choose an option below to get started.\n\n"
-        "💰 <b>Your Balance:</b> Use /balance\n"
-        "🎮 <b>Games:</b> Play slots, dice, coin flip, and more!\n"
-        "💳 <b>Deposit:</b> Add funds instantly\n"
-        "💸 <b>Withdraw:</b> Cash out your winnings\n"
-        "👑 <b>Owner Panel:</b> (owner only)\n\n"
-        "For help, use /help or tap Help below."
-    )
+    text = f"""
+� <b>Welcome to Axis Casino!</b> �
+
+👋 <b>Hello, {username}!</b>
+💰 <b>Current Balance:</b> {balance}
+
+🎮 <b>Ready to Play?</b>
+• Slots, Dice, Coin Flip & More!
+• Instant deposits with crypto
+• Fast withdrawals
+• Live crypto rates
+
+� <b>Get Started:</b>
+Choose an option below to begin your casino adventure!
+
+💡 <b>Need help?</b> Use /help anytime
+"""
     if is_callback:
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     else:
@@ -1714,8 +1732,46 @@ async def show_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = query.from_user.id
     user = await get_user(user_id)
     
-    # Get global leaderboard (top 10 by balance)
+    # Get comprehensive statistics
     async with aiosqlite.connect(DB_PATH) as db:
+        # User rank by balance
+        cursor = await db.execute("""
+            SELECT COUNT(*) + 1 FROM users 
+            WHERE balance > ?
+        """, (user['balance'],))
+        user_rank = (await cursor.fetchone())[0]
+        
+        # Total users count
+        cursor = await db.execute("SELECT COUNT(*) FROM users")
+        total_users = (await cursor.fetchone())[0]
+        
+        # User's win rate (from game_sessions)
+        cursor = await db.execute("""
+            SELECT 
+                COUNT(*) as total_games,
+                SUM(CASE WHEN result = 'WIN' THEN 1 ELSE 0 END) as wins,
+                SUM(win_amount) as total_winnings
+            FROM game_sessions 
+            WHERE user_id = ?
+        """, (user_id,))
+        game_stats = await cursor.fetchone()
+        
+        total_games_detailed = game_stats[0] or 0
+        wins = game_stats[1] or 0
+        total_winnings = game_stats[2] or 0.0
+        win_rate = (wins / total_games_detailed * 100) if total_games_detailed > 0 else 0
+        
+        # Recent game activity (last 5 games)
+        cursor = await db.execute("""
+            SELECT game_type, bet_amount, win_amount, result, created_at
+            FROM game_sessions 
+            WHERE user_id = ? 
+            ORDER BY created_at DESC 
+            LIMIT 5
+        """, (user_id,))
+        recent_games = await cursor.fetchall()
+        
+        # Global leaderboard (top 10 by balance)
         cursor = await db.execute("""
             SELECT username, balance 
             FROM users 
@@ -1727,28 +1783,60 @@ async def show_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Format leaderboard text
     lb_text = ""
     for i, (username, balance) in enumerate(leaderboard, start=1):
-        lb_text += f"{i}. {username:} - {await format_usd(balance)}\n"
+        emoji = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
+        lb_text += f"{emoji} {username}: {await format_usd(balance)}\n"
+    
+    # Format recent games
+    recent_text = ""
+    if recent_games:
+        for game in recent_games[:3]:  # Show last 3 games
+            game_type, bet, win, result, timestamp = game
+            emoji = "🟢" if result == "WIN" else "🔴"
+            try:
+                dt = datetime.fromisoformat(timestamp)
+                time_str = dt.strftime("%m/%d %H:%M")
+            except:
+                time_str = timestamp[:10] if len(timestamp) > 10 else timestamp
+            
+            recent_text += f"{emoji} {game_type.title()}: ${bet:.0f} → ${win:.0f} ({time_str})\n"
+    else:
+        recent_text = "No games played yet"
+    
+    # Calculate net profit/loss
+    net_result = total_winnings - user['total_wagered']
+    net_emoji = "📈" if net_result >= 0 else "📉"
     
     text = f"""
-📊 **STATISTICS & LEADERBOARD** 📊
+📊 <b>YOUR CASINO STATISTICS</b> 📊
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-👤 **Your Stats:**
+👤 <b>Player Profile:</b>
+• Name: {user['username']}
 • Balance: {await format_usd(user['balance'])}
-• Games Played: {user['games_played']}
-• Total Wagered: {await format_usd(user['total_wagered'])}
-• Total Withdrawn: {await format_usd(user['total_withdrawn'])}
+• Rank: #{user_rank} of {total_users} players
 
-🏆 **Global Leaderboard:**
+🎮 <b>Gaming Stats:</b>
+• Games Played: {user['games_played']}
+• Win Rate: {win_rate:.1f}% ({wins}/{total_games_detailed})
+• Total Wagered: {await format_usd(user['total_wagered'])}
+• Total Winnings: {await format_usd(total_winnings)}
+• Net Result: {net_emoji} {await format_usd(abs(net_result))} {"profit" if net_result >= 0 else "loss"}
+
+🕒 <b>Recent Games:</b>
+{recent_text}
+
+🏆 <b>Top Players:</b>
 {lb_text}
 
-🎮 **Bot Version:** {BOT_VERSION}
+💡 <b>Tip:</b> {"Great job! Keep up the winning streak!" if win_rate > 50 else "Try different games to improve your luck!"}
 """
     keyboard = [
         [InlineKeyboardButton("🔄 Refresh Stats", callback_data="show_stats")],
+        [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
 async def check_payment_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Allow users to check their recent payment status"""
