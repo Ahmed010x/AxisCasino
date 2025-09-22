@@ -496,7 +496,8 @@ async def get_crypto_usd_rate(asset: str) -> float:
                                         logger.info(f"CryptoBot API: {asset}/USD rate = ${price:.6f}")
                                         return price
                             logger.warning(f"CryptoBot API: No rate found for {asset}/USD in response")
-                            logger.debug(f"Available rates: {[f'{r.get('source')}/{r.get('target')}' for r in rates]}")
+                            rate_strings = [f"{r.get('source')}/{r.get('target')}" for r in rates]
+                            logger.debug(f"Available rates: {rate_strings}")
                         else:
                             error_msg = data.get("error", {}).get("name", "Unknown API error")
                             logger.error(f"CryptoBot API error: {error_msg} (attempt {attempt + 1}/{max_retries})")
@@ -1323,12 +1324,20 @@ async def handle_dice_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
+    # Set pending amount request for message prioritization
+    await set_pending_amount_request(context, "DICE_BET_AMOUNT", "game bet")
+    
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     return DICE_BET_AMOUNT
 
 async def handle_dice_bet_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle dice bet amount input"""
     user_id = update.effective_user.id
+    
+    # Validate this is the current amount request
+    if not await validate_amount_request(context, "DICE_BET_AMOUNT"):
+        await send_priority_message(update, "game bet")
+        return DICE_BET_AMOUNT
     
     try:
         bet_amount = float(update.message.text.strip().replace('$', '').replace(',', ''))
@@ -1362,6 +1371,9 @@ async def handle_dice_bet_amount(update: Update, context: ContextTypes.DEFAULT_T
                 parse_mode=ParseMode.HTML
             )
             return DICE_BET_AMOUNT
+        
+        # Clear the pending amount request
+        await clear_amount_request(context)
         
         # Get prediction from user data
         prediction = context.user_data.get('dice_choice', '1')
@@ -1559,12 +1571,20 @@ async def play_blackjack_callback(update: Update, context: ContextTypes.DEFAULT_
         [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
+    # Set pending amount request for message prioritization
+    await set_pending_amount_request(context, "BLACKJACK_BET_AMOUNT", "game bet")
+    
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     return BLACKJACK_BET_AMOUNT
 
 async def handle_blackjack_bet_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle blackjack bet amount input"""
     user_id = update.effective_user.id
+    
+    # Validate this is the current amount request
+    if not await validate_amount_request(context, "BLACKJACK_BET_AMOUNT"):
+        await send_priority_message(update, "game bet")
+        return BLACKJACK_BET_AMOUNT
     
     try:
         bet_amount = float(update.message.text.strip().replace('$', '').replace(',', ''))
@@ -1598,6 +1618,9 @@ async def handle_blackjack_bet_amount(update: Update, context: ContextTypes.DEFA
                 parse_mode=ParseMode.HTML
             )
             return BLACKJACK_BET_AMOUNT
+        
+        # Clear the pending amount request
+        await clear_amount_request(context)
         
         # Deduct bet (except for admins)
         if not is_admin(user_id):
@@ -1935,6 +1958,9 @@ async def handle_roulette_choice(update: Update, context: ContextTypes.DEFAULT_T
         [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
+    # Set pending amount request for message prioritization
+    await set_pending_amount_request(context, "ROULETTE_BET_AMOUNT", "game bet")
+    
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     return ROULETTE_BET_AMOUNT
 
@@ -1943,6 +1969,11 @@ async def handle_roulette_bet_amount(update: Update, context: ContextTypes.DEFAU
     user_id = update.effective_user.id
     choice = context.user_data.get('roulette_choice', 'red')
     input_text = update.message.text.strip()
+    
+    # Validate this is the current amount request
+    if not await validate_amount_request(context, "ROULETTE_BET_AMOUNT"):
+        await send_priority_message(update, "game bet")
+        return ROULETTE_BET_AMOUNT
     
     try:
         if choice == 'number':
@@ -2080,6 +2111,10 @@ async def handle_roulette_bet_amount(update: Update, context: ContextTypes.DEFAU
         ]
         
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+        
+        # Clear the pending amount request
+        await clear_amount_request(context)
+        
         return ConversationHandler.END
         
     except ValueError:
@@ -2293,6 +2328,9 @@ async def handle_crash_strategy(update: Update, context: ContextTypes.DEFAULT_TY
         [InlineKeyboardButton("🎮 Other Games", callback_data="classic_casino"), InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
+    # Set pending amount request for message prioritization
+    await set_pending_amount_request(context, "CRASH_BET_AMOUNT", "game bet")
+    
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     return CRASH_BET_AMOUNT
 
@@ -2300,6 +2338,11 @@ async def handle_crash_bet_amount(update: Update, context: ContextTypes.DEFAULT_
     """Handle crash bet amount input"""
     user_id = update.effective_user.id
     strategy = context.user_data.get('crash_strategy', 'safe')
+    
+    # Validate this is the current amount request
+    if not await validate_amount_request(context, "CRASH_BET_AMOUNT"):
+        await send_priority_message(update, "game bet")
+        return CRASH_BET_AMOUNT
     
     try:
         bet_amount = float(update.message.text.strip().replace('$', '').replace(',', ''))
@@ -2333,6 +2376,9 @@ async def handle_crash_bet_amount(update: Update, context: ContextTypes.DEFAULT_
                 parse_mode=ParseMode.HTML
             )
             return CRASH_BET_AMOUNT
+        
+        # Clear the pending amount request
+        await clear_amount_request(context)
         
         # Deduct bet (except for admins)
         if not is_admin(user_id):
