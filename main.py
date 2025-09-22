@@ -118,6 +118,55 @@ def log_admin_action(user_id: int, action: str):
 # Global variables
 start_time = time.time()  # Record bot start time for metrics
 
+# --- Message Prioritization System ---
+import uuid
+
+def generate_request_id() -> str:
+    """Generate a unique request ID for amount input prioritization"""
+    return f"{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
+
+async def set_pending_amount_request(context: ContextTypes.DEFAULT_TYPE, state: str, prompt_type: str) -> str:
+    """Set a new pending amount request and return its ID"""
+    request_id = generate_request_id()
+    context.user_data['pending_amount_request'] = {
+        'id': request_id,
+        'state': state,
+        'type': prompt_type,
+        'timestamp': time.time()
+    }
+    logger.info(f"Set pending amount request: {request_id} for state {state}")
+    return request_id
+
+async def validate_amount_request(context: ContextTypes.DEFAULT_TYPE, expected_state: str) -> bool:
+    """Check if the current amount input is for the latest request"""
+    pending = context.user_data.get('pending_amount_request')
+    if not pending:
+        return True  # No pending request, allow
+    
+    if pending.get('state') != expected_state:
+        # Different state - newer request has taken priority
+        return False
+    
+    # Check if request is too old (5 minutes timeout)
+    if time.time() - pending.get('timestamp', 0) > 300:
+        context.user_data.pop('pending_amount_request', None)
+        return False
+    
+    return True
+
+async def clear_amount_request(context: ContextTypes.DEFAULT_TYPE):
+    """Clear the pending amount request"""
+    context.user_data.pop('pending_amount_request', None)
+
+async def send_priority_message(update: Update, prompt_type: str) -> None:
+    """Send a message when a newer request has taken priority"""
+    await update.message.reply_text(
+        f"⚠️ **Request Superseded**\n\n"
+        f"A newer {prompt_type} request is pending.\n"
+        f"Please respond to the latest prompt or use the menu buttons to navigate.",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
 # --- Deposit/Withdrawal Helper Functions ---
 
 DEPOSIT_LTC_AMOUNT = "DEPOSIT_LTC_AMOUNT"
@@ -420,6 +469,11 @@ async def get_crypto_usd_rate(asset: str) -> float:
     Returns the price of 1 unit of the asset in USD, or 0.0 on error.
     Includes retry logic for better reliability.
     """
+    # Check if API token is configured
+    if not CRYPTOBOT_API_TOKEN:
+        logger.error("CRYPTOBOT_API_TOKEN not configured - unable to fetch live rates")
+        return 0.0
+    
     url = "https://pay.crypt.bot/api/getExchangeRates"
     max_retries = 3
     
@@ -441,15 +495,26 @@ async def get_crypto_usd_rate(asset: str) -> float:
                                     if price > 0:
                                         logger.info(f"CryptoBot API: {asset}/USD rate = ${price:.6f}")
                                         return price
-                            logger.warning(f"CryptoBot API: No rate found for {asset}/USD")
+                            logger.warning(f"CryptoBot API: No rate found for {asset}/USD in response")
+                            logger.debug(f"Available rates: {[f'{r.get('source')}/{r.get('target')}' for r in rates]}")
                         else:
-                            error_msg = data.get("error", {}).get("name", "Unknown error")
+                            error_msg = data.get("error", {}).get("name", "Unknown API error")
                             logger.error(f"CryptoBot API error: {error_msg} (attempt {attempt + 1}/{max_retries})")
+                    elif resp.status == 401:
+                        logger.error(f"CryptoBot API: Invalid API token (HTTP 401)")
+                        return 0.0  # Don't retry on auth errors
+                    elif resp.status == 403:
+                        logger.error(f"CryptoBot API: Access forbidden (HTTP 403)")
+                        return 0.0  # Don't retry on permission errors
                     else:
                         logger.error(f"CryptoBot API error: HTTP {resp.status} (attempt {attempt + 1}/{max_retries})")
                         
+        except asyncio.TimeoutError:
+            logger.error(f"CryptoBot API timeout (attempt {attempt + 1}/{max_retries})")
+        except aiohttp.ClientError as e:
+            logger.error(f"Network error fetching CryptoBot rate for {asset} (attempt {attempt + 1}/{max_retries}): {e}")
         except Exception as e:
-            logger.error(f"Error fetching CryptoBot rate for {asset} (attempt {attempt + 1}/{max_retries}): {e}")
+            logger.error(f"Unexpected error fetching CryptoBot rate for {asset} (attempt {attempt + 1}/{max_retries}): {e}")
             
         # Wait before retry (except on last attempt)
         if attempt < max_retries - 1:
@@ -859,6 +924,9 @@ async def play_slots_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     user = await get_user(user_id)
     balance_usd = await format_usd(user['balance'])
     
+    # Set pending request for prioritization
+    await set_pending_amount_request(context, "SLOTS_BET_AMOUNT", "game bet")
+    
     text = f"""
 🎰 **MEGA SLOT MACHINE** 🎰
 
@@ -895,6 +963,11 @@ async def handle_slots_bet_amount(update: Update, context: ContextTypes.DEFAULT_
     user_id = update.effective_user.id
     amount_text = update.message.text.strip()
     
+    # Validate request priority
+    if not await validate_amount_request(context, "SLOTS_BET_AMOUNT"):
+        await send_priority_message(update, "game bet")
+        return ConversationHandler.END
+    
     try:
         bet = float(amount_text)
         if bet <= 0:
@@ -924,9 +997,9 @@ async def handle_slots_bet_amount(update: Update, context: ContextTypes.DEFAULT_
         return SLOTS_BET_AMOUNT
     
     # Now execute the slots game logic
-    return await execute_slots_game(update, user_id, bet)
+    return await execute_slots_game(update, context, user_id, bet)
 
-async def execute_slots_game(update, user_id, bet):
+async def execute_slots_game(update, context, user_id, bet):
     """Execute the slots game with the given bet amount"""
     user = await get_user(user_id)
     # User balance is already in USD format, bet is in USD
@@ -1014,6 +1087,8 @@ async def execute_slots_game(update, user_id, bet):
     ]
     
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    # Clear the pending request since game is complete
+    await clear_amount_request(context)
     return ConversationHandler.END
 
 async def coin_flip_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1052,6 +1127,9 @@ async def handle_coinflip_choice(update: Update, context: ContextTypes.DEFAULT_T
     choice = query.data.split("_")[1]  # heads or tails
     context.user_data['coinflip_choice'] = choice
     
+    # Set pending request for prioritization
+    await set_pending_amount_request(context, "COINFLIP_BET_AMOUNT", "game bet")
+    
     user_id = query.from_user.id
     user = await get_user(user_id)
     
@@ -1084,6 +1162,11 @@ async def handle_coinflip_bet_amount(update: Update, context: ContextTypes.DEFAU
     amount_text = update.message.text.strip()
     choice = context.user_data.get('coinflip_choice')
     
+    # Validate request priority
+    if not await validate_amount_request(context, "COINFLIP_BET_AMOUNT"):
+        await send_priority_message(update, "game bet")
+        return ConversationHandler.END
+    
     try:
         bet = float(amount_text)
         if bet <= 0:
@@ -1107,9 +1190,9 @@ async def handle_coinflip_bet_amount(update: Update, context: ContextTypes.DEFAU
         return COINFLIP_BET_AMOUNT
     
     # Execute the coinflip game
-    return await execute_coinflip_game(update, user_id, choice, bet)
+    return await execute_coinflip_game(update, context, user_id, choice, bet)
 
-async def execute_coinflip_game(update, user_id, choice, bet):
+async def execute_coinflip_game(update, context, user_id, choice, bet):
     """Execute the coinflip game with the given choice and bet amount"""
     
     user = await get_user(user_id)
@@ -1172,6 +1255,8 @@ Play again or try another game:
     ]
     
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    # Clear the pending request since game is complete
+    await clear_amount_request(context)
     return ConversationHandler.END
 
 async def play_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2409,6 +2494,30 @@ async def deposit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle main deposit menu and start deposit conversation"""
     query = update.callback_query
     await query.answer()
+    
+    # Check if crypto payment is available
+    if not CRYPTOBOT_API_TOKEN:
+        text = """
+❌ **DEPOSIT TEMPORARILY UNAVAILABLE** ❌
+
+The cryptocurrency payment system is currently unavailable due to configuration issues.
+
+📞 **Contact Support:**
+• Support Channel: @casino_support
+• Report this error code: CRYPTO_CONFIG_ERROR
+
+🔧 **For Administrators:**
+• Configure CRYPTOBOT_API_TOKEN in environment variables
+• Obtain API token from @CryptoBot on Telegram
+
+We apologize for the inconvenience and are working to resolve this issue.
+"""
+        keyboard = [
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+        return ConversationHandler.END
+    
     text = """
 💳 **DEPOSIT FUNDS** 💳
 
@@ -2445,15 +2554,23 @@ async def deposit_ltc_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer()
     context.user_data['deposit_asset'] = 'LTC'
     
+    # Set pending request for prioritization
+    await set_pending_amount_request(context, "DEPOSIT_AMOUNT", "deposit")
+    
     # Get minimum deposit in USD from environment
     min_deposit_usd = float(os.environ.get("MIN_DEPOSIT_LTC_USD", "1.00"))
     
     # Get current rate for reference
     try:
         current_rate = await get_crypto_usd_rate('LTC')
-        rate_text = f"📊 **Current Rate:** 1 LTC = ${current_rate:.2f} USD"
-    except:
-        rate_text = "📊 **Live rates** will be applied at payment"
+        if current_rate > 0:
+            rate_text = f"📊 **Current Rate:** 1 LTC = ${current_rate:.2f} USD"
+        else:
+            rate_text = "⚠️ **Rate unavailable** - Live rates will be applied at payment"
+            logger.warning("LTC rate returned 0.0 - possible API configuration issue")
+    except Exception as e:
+        rate_text = "⚠️ **Rate unavailable** - Live rates will be applied at payment"
+        logger.error(f"Error fetching LTC rate in deposit: {e}")
     
     text = f"""
 **💰 Litecoin (LTC) Deposit**
@@ -2478,15 +2595,23 @@ async def deposit_ton_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer()
     context.user_data['deposit_asset'] = 'TON'
     
+    # Set pending request for prioritization
+    await set_pending_amount_request(context, "DEPOSIT_AMOUNT", "deposit")
+    
     # Get minimum deposit in USD from environment
     min_deposit_usd = float(os.environ.get("MIN_DEPOSIT_TON_USD", "2.50"))
     
     # Get current rate for reference
     try:
         current_rate = await get_crypto_usd_rate('TON')
-        rate_text = f"📊 **Current Rate:** 1 TON = ${current_rate:.2f} USD"
-    except:
-        rate_text = "📊 **Live rates** will be applied at payment"
+        if current_rate > 0:
+            rate_text = f"📊 **Current Rate:** 1 TON = ${current_rate:.2f} USD"
+        else:
+            rate_text = "⚠️ **Rate unavailable** - Live rates will be applied at payment"
+            logger.warning("TON rate returned 0.0 - possible API configuration issue")
+    except Exception as e:
+        rate_text = "⚠️ **Rate unavailable** - Live rates will be applied at payment"
+        logger.error(f"Error fetching TON rate in deposit: {e}")
     
     text = f"""
 **🔷 Toncoin (TON) Deposit**
@@ -2511,15 +2636,23 @@ async def deposit_sol_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer()
     context.user_data['deposit_asset'] = 'SOL'
     
+    # Set pending request for prioritization
+    await set_pending_amount_request(context, "DEPOSIT_AMOUNT", "deposit")
+    
     # Get minimum deposit in USD from environment
     min_deposit_usd = float(os.environ.get("MIN_DEPOSIT_SOL_USD", "1.15"))
     
     # Get current rate for reference
     try:
         current_rate = await get_crypto_usd_rate('SOL')
-        rate_text = f"📊 **Current Rate:** 1 SOL = ${current_rate:.2f} USD"
-    except:
-        rate_text = "📊 **Live rates** will be applied at payment"
+        if current_rate > 0:
+            rate_text = f"📊 **Current Rate:** 1 SOL = ${current_rate:.2f} USD"
+        else:
+            rate_text = "⚠️ **Rate unavailable** - Live rates will be applied at payment"
+            logger.warning("SOL rate returned 0.0 - possible API configuration issue")
+    except Exception as e:
+        rate_text = "⚠️ **Rate unavailable** - Live rates will be applied at payment"
+        logger.error(f"Error fetching SOL rate in deposit: {e}")
     
     text = f"""
 **🟣 Solana (SOL) Deposit**
@@ -2543,6 +2676,11 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
     user_id = update.effective_user.id
     asset = context.user_data.get('deposit_asset')
     amount_text = update.message.text.strip()
+    
+    # Validate request priority
+    if not await validate_amount_request(context, "DEPOSIT_AMOUNT"):
+        await send_priority_message(update, "deposit")
+        return ConversationHandler.END
     
     try:
         # User enters USD amount
@@ -2598,14 +2736,31 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
     # Convert USD to crypto amount for the invoice
     crypto_rate = await get_crypto_usd_rate(asset)
     crypto_amount = usd_amount / crypto_rate if crypto_rate > 0 else 0
+    
     if crypto_amount <= 0:
-        await processing_msg.edit_text(
-            f"❌ **Rate Error!**\n\n"
-            f"Unable to get current exchange rate for {asset}.\n"
-            f"Please try again in a few seconds.\n\n"
-            f"If the problem persists, contact support.",
-            parse_mode=ParseMode.MARKDOWN
-        )
+        # Better error handling for rate issues
+        if not CRYPTOBOT_API_TOKEN:
+            await processing_msg.edit_text(
+                f"❌ **Configuration Error!**\n\n"
+                f"The payment system is not properly configured.\n"
+                f"Please contact support for assistance.\n\n"
+                f"**Support:** @casino_support\n"
+                f"**Error Code:** MISSING_API_TOKEN",
+                parse_mode=ParseMode.MARKDOWN
+            )
+        else:
+            await processing_msg.edit_text(
+                f"❌ **Rate Error!**\n\n"
+                f"Unable to get current exchange rate for {asset}.\n"
+                f"This may be due to:\n"
+                f"• Temporary API issues\n"
+                f"• Network connectivity problems\n"
+                f"• High server load\n\n"
+                f"Please try again in a few moments.\n"
+                f"If the problem persists, contact support.\n\n"
+                f"**Support:** @casino_support",
+                parse_mode=ParseMode.MARKDOWN
+            )
         return DEPOSIT_AMOUNT
 
     # Create invoice with crypto amount in the selected asset
@@ -2667,6 +2822,8 @@ async def deposit_amount_handler(update: Update, context: ContextTypes.DEFAULT_T
             parse_mode=ParseMode.MARKDOWN,
             disable_web_page_preview=True
         )
+        # Clear the pending request since deposit flow is complete
+        await clear_amount_request(context)
         return ConversationHandler.END
     else:
         error_msg = invoice_result.get('error', 'Unknown error')
@@ -3310,7 +3467,7 @@ If you just made a payment:
         await update.message.reply_text("❌ Error checking payment status. Please try again or contact support.")
 
 async def test_cryptobot_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Test CryptoBot invoice creation (for debugging)"""
+    """Test CryptoBot API connection and configuration (for debugging)"""
     user = update.effective_user
     user_id = user.id
     
@@ -3320,31 +3477,55 @@ async def test_cryptobot_command(update: Update, context: ContextTypes.DEFAULT_T
         return
     
     try:
-        # Create a test invoice
+        # Check API token configuration
+        if not CRYPTOBOT_API_TOKEN:
+            await update.message.reply_text(
+                "❌ **CryptoBot API Not Configured**\n\n"
+                "CRYPTOBOT_API_TOKEN environment variable is missing.\n\n"
+                "**To fix this:**\n"
+                "1. Get API token from @CryptoBot\n"
+                "2. Add CRYPTOBOT_API_TOKEN=your_token to .env\n"
+                "3. Restart the bot",
+                parse_mode=ParseMode.MARKDOWN
+            )
+            return
+        
+        # Test API connectivity
+        await update.message.reply_text("🔧 Testing CryptoBot API connection...")
+        
+        # Test getting exchange rates
+        test_rate = await get_crypto_usd_rate('LTC')
+        if test_rate > 0:
+            rate_status = f"✅ Exchange rates: LTC = ${test_rate:.2f}"
+        else:
+            rate_status = "❌ Exchange rates: Failed to fetch"
+        
+        # Test creating a small test invoice
         test_result = await create_crypto_invoice('USDT', 1.0, user_id)
         
         if test_result.get('ok'):
             result = test_result['result']
+            invoice_status = f"✅ Invoice creation: Success (ID: {result.get('invoice_id')})"
             
             # Show all available URLs for debugging
             debug_info = f"""
-🔧 **CryptoBot Test Invoice Created**
+🔧 **CryptoBot API Test Results**
 
-**Available URLs:**
-• pay_url: `{result.get('pay_url', 'N/A')}`
-• mini_app_invoice_url: `{result.get('mini_app_invoice_url', 'N/A')}`
-• web_app_invoice_url: `{result.get('web_app_invoice_url', 'N/A')}`
-• bot_invoice_url: `{result.get('bot_invoice_url', 'N/A')}`
+**Configuration:**
+✅ API Token: Configured (length: {len(CRYPTOBOT_API_TOKEN)})
 
-**Invoice Details:**
+**API Tests:**
+{rate_status}
+{invoice_status}
+
+**Test Invoice Details:**
 • ID: `{result.get('invoice_id', 'N/A')}`
 • Amount: {result.get('amount', 'N/A')} {result.get('asset', 'N/A')}
 • Status: {result.get('status', 'N/A')}
+• Pay URL: `{result.get('pay_url', 'N/A')}`
 
-**Raw Response:**
-```json
-{test_result}
-```
+**Recommendation:** 
+✅ CryptoBot integration is working correctly.
 """
             
             # Create test button
@@ -3355,7 +3536,21 @@ async def test_cryptobot_command(update: Update, context: ContextTypes.DEFAULT_T
             
             await update.message.reply_text(debug_info, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
         else:
-            await update.message.reply_text(f"❌ Test failed: {test_result.get('error', 'Unknown error')}")
+            error_msg = test_result.get('error', 'Unknown error')
+            await update.message.reply_text(
+                f"❌ **CryptoBot API Test Failed**\n\n"
+                f"**Configuration:**\n"
+                f"✅ API Token: Configured\n\n"
+                f"**API Tests:**\n"
+                f"{rate_status}\n"
+                f"❌ Invoice creation: {error_msg}\n\n"
+                f"**Possible Issues:**\n"
+                f"• Invalid API token\n"
+                f"• Network connectivity\n"
+                f"• CryptoBot API service issues\n\n"
+                f"**Raw Error:**\n```\n{test_result}\n```",
+                parse_mode=ParseMode.MARKDOWN
+            )
             
     except Exception as e:
         logger.error(f"Test CryptoBot error: {e}")
