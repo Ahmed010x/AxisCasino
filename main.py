@@ -496,8 +496,8 @@ async def get_crypto_usd_rate(asset: str) -> float:
                                         logger.info(f"CryptoBot API: {asset}/USD rate = ${price:.6f}")
                                         return price
                             logger.warning(f"CryptoBot API: No rate found for {asset}/USD in response")
-                            rate_strings = [f"{r.get('source')}/{r.get('target')}" for r in rates]
-                            logger.debug(f"Available rates: {rate_strings}")
+                            available_rates = [f"{r.get('source')}/{r.get('target')}" for r in rates]
+                            logger.debug(f"Available rates: {available_rates}")
                         else:
                             error_msg = data.get("error", {}).get("name", "Unknown API error")
                             logger.error(f"CryptoBot API error: {error_msg} (attempt {attempt + 1}/{max_retries})")
@@ -2031,6 +2031,9 @@ async def handle_roulette_bet_amount(update: Update, context: ContextTypes.DEFAU
             )
             return ROULETTE_BET_AMOUNT
         
+        # Clear the pending amount request
+        await clear_amount_request(context)
+        
         # Deduct bet (except for admins)
         if not is_admin(user_id):
             await deduct_balance(user_id, bet_amount)
@@ -2111,10 +2114,6 @@ async def handle_roulette_bet_amount(update: Update, context: ContextTypes.DEFAU
         ]
         
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-        
-        # Clear the pending amount request
-        await clear_amount_request(context)
-        
         return ConversationHandler.END
         
     except ValueError:
