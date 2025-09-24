@@ -237,7 +237,45 @@ async def create_crypto_payment(asset: str, amount: float, user_id: int, payload
         return {"ok": False, "error": str(e)}
 
 async def create_crypto_invoice(asset: str, amount: float, user_id: int, payload: dict = None) -> dict:
-    """Create a crypto invoice using CryptoBot API (fallback for compatibility)"""
+    """Create a crypto invoice using CryptoBot API."""
+    if not CRYPTOBOT_API_TOKEN:
+        return {"ok": False, "error": "CryptoBot API token not configured"}
+    
+    url = "https://pay.crypt.bot/api/createInvoice"
+    headers = {
+        "Crypto-Pay-API-Token": CRYPTOBOT_API_TOKEN,
+        "Content-Type": "application/json"
+    }
+    
+    data = {
+        "asset": asset,
+        "amount": f"{amount:.8f}",
+        "description": f"Casino deposit - ${amount * await get_crypto_usd_rate(asset):.2f} USD",
+        "hidden_message": str(user_id),  # This will be used in webhook to identify user
+        "paid_btn_name": "callback",
+        "paid_btn_url": f"https://t.me/{await get_bot_username()}?start=payment_success",
+        "expires_in": 3600  # 1 hour
+    }
+    
+    if payload:
+        data.update(payload)
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=data, timeout=30) as response:
+                result = await response.json()
+                return result
+    except asyncio.TimeoutError:
+        logger.error("Timeout creating crypto invoice")
+        return {"ok": False, "error": "Request timeout"}
+    except Exception as e:
+        logger.error(f"Error creating crypto invoice: {e}")
+        return {"ok": False, "error": str(e)}
+
+async def get_bot_username() -> str:
+    """Get bot username, cached for performance."""
+    # This would normally be cached, but for simplicity:
+    return "AxisCasinoBot"
     try:
         if not CRYPTOBOT_API_TOKEN:
             return {"ok": False, "error": "API token not configured"}
@@ -495,6 +533,8 @@ async def get_crypto_usd_rate(asset: str) -> float:
                                     if price > 0:
                                         logger.info(f"CryptoBot API: {asset}/USD rate = ${price:.6f}")
                                         return price
+                                        logger.info(f"CryptoBot API: {asset}/USD rate = ${price:.6f}")
+                                        return price
                             logger.warning(f"CryptoBot API: No rate found for {asset}/USD in response")
                             rate_pairs = [f"{r.get('source')}/{r.get('target')}" for r in rates]
                             logger.debug(f"Available rates: {rate_pairs}")
@@ -737,6 +777,12 @@ async def log_game_session(user_id: int, game_type: str, bet_amount: float, win_
 WEEKLY_BONUS_AMOUNT = float(os.environ.get("WEEKLY_BONUS_AMOUNT", "5.0"))
 WEEKLY_BONUS_INTERVAL = 7  # days
 
+# --- Referral System Configuration ---
+REFERRAL_BONUS_REFERRER = float(os.environ.get("REFERRAL_BONUS_REFERRER", "10.0"))  # Bonus for person who refers
+REFERRAL_BONUS_REFEREE = float(os.environ.get("REFERRAL_BONUS_REFEREE", "5.0"))    # Bonus for new user
+REFERRAL_MIN_DEPOSIT = float(os.environ.get("REFERRAL_MIN_DEPOSIT", "10.0"))       # Min deposit to activate referral
+MAX_REFERRALS_PER_USER = int(os.environ.get("MAX_REFERRALS_PER_USER", "50"))       # Max referrals per user
+
 async def ensure_weekly_bonus_column():
     """Ensure the last_weekly_bonus column exists in users table."""
     try:
@@ -748,6 +794,48 @@ async def ensure_weekly_bonus_column():
     except Exception as e:
         if "duplicate column name" not in str(e):
             logger.error(f"Error adding last_weekly_bonus column: {e}")
+
+async def ensure_referral_columns():
+    """Ensure referral system columns exist in users table."""
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            # Add referral columns to users table
+            await db.execute("""
+                ALTER TABLE users ADD COLUMN referral_code TEXT UNIQUE DEFAULT NULL
+            """)
+            await db.execute("""
+                ALTER TABLE users ADD COLUMN referred_by INTEGER DEFAULT NULL
+            """)
+            await db.execute("""
+                ALTER TABLE users ADD COLUMN referral_count INTEGER DEFAULT 0
+            """)
+            await db.execute("""
+                ALTER TABLE users ADD COLUMN referral_earnings REAL DEFAULT 0.0
+            """)
+            await db.execute("""
+                ALTER TABLE users ADD COLUMN referral_activated BOOLEAN DEFAULT FALSE
+            """)
+            
+            # Create referrals tracking table
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS referrals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    referrer_id INTEGER NOT NULL,
+                    referee_id INTEGER NOT NULL,
+                    referral_code TEXT NOT NULL,
+                    bonus_paid BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    activated_at TIMESTAMP DEFAULT NULL,
+                    referee_first_deposit REAL DEFAULT 0.0,
+                    FOREIGN KEY (referrer_id) REFERENCES users (user_id),
+                    FOREIGN KEY (referee_id) REFERENCES users (user_id),
+                    UNIQUE(referee_id)
+                )
+            """)
+            await db.commit()
+    except Exception as e:
+        if "duplicate column name" not in str(e) and "already exists" not in str(e):
+            logger.error(f"Error adding referral columns: {e}")
 
 async def can_claim_weekly_bonus(user_id: int) -> Tuple[bool, Optional[int]]:
     """Check if user can claim weekly bonus. Returns (can_claim, seconds_remaining)."""
@@ -777,6 +865,252 @@ async def claim_weekly_bonus(user_id: int) -> bool:
         return True
     except Exception as e:
         logger.error(f"Error granting weekly bonus: {e}")
+        return False
+
+# --- Referral System Helpers ---
+
+def generate_referral_code(user_id: int) -> str:
+    """Generate a unique referral code for a user."""
+    import hashlib
+    import random
+    import string
+    
+    # Create a base from user_id and current timestamp
+    base = f"{user_id}_{int(time.time())}_{random.randint(1000, 9999)}"
+    hash_obj = hashlib.md5(base.encode())
+    
+    # Take first 8 characters and make it alphanumeric
+    code = hash_obj.hexdigest()[:6].upper()
+    return f"REF{code}"
+
+async def get_or_create_referral_code(user_id: int) -> str:
+    """Get existing referral code or create a new one."""
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            # Check if user already has a referral code
+            cursor = await db.execute(
+                "SELECT referral_code FROM users WHERE user_id = ?", (user_id,)
+            )
+            result = await cursor.fetchone()
+            
+            if result and result[0]:
+                return result[0]
+            
+            # Generate new referral code
+            max_attempts = 10
+            for _ in range(max_attempts):
+                code = generate_referral_code(user_id)
+                try:
+                    await db.execute(
+                        "UPDATE users SET referral_code = ? WHERE user_id = ?",
+                        (code, user_id)
+                    )
+                    await db.commit()
+                    return code
+                except Exception:
+                    # Code might already exist, try again
+                    continue
+            
+            # Fallback if all attempts failed
+            return f"REF{user_id}"
+            
+    except Exception as e:
+        logger.error(f"Error getting/creating referral code: {e}")
+        return f"REF{user_id}"
+
+async def get_referral_stats(user_id: int) -> dict:
+    """Get referral statistics for a user."""
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            # Get user referral data
+            cursor = await db.execute("""
+                SELECT referral_code, referral_count, referral_earnings
+                FROM users WHERE user_id = ?
+            """, (user_id,))
+            user_data = await cursor.fetchone()
+            
+            if not user_data:
+                return {"code": "", "count": 0, "earnings": 0.0, "recent": []}
+            
+            # Get recent referrals
+            cursor = await db.execute("""
+                SELECT r.referee_id, u.username, r.created_at, r.bonus_paid, r.referee_first_deposit
+                FROM referrals r
+                JOIN users u ON r.referee_id = u.user_id
+                WHERE r.referrer_id = ?
+                ORDER BY r.created_at DESC
+                LIMIT 10
+            """, (user_id,))
+            recent_referrals = await cursor.fetchall()
+            
+            return {
+                "code": user_data[0] or "",
+                "count": user_data[1] or 0,
+                "earnings": user_data[2] or 0.0,
+                "recent": [
+                    {
+                        "username": ref[1] or f"User{ref[0]}",
+                        "date": ref[2][:10] if ref[2] else "Unknown",
+                        "bonus_paid": bool(ref[3]),
+                        "first_deposit": ref[4] or 0.0
+                    }
+                    for ref in recent_referrals
+                ]
+            }
+            
+    except Exception as e:
+        logger.error(f"Error getting referral stats: {e}")
+        return {"code": "", "count": 0, "earnings": 0.0, "recent": []}
+
+async def process_referral(referee_id: int, referral_code: str) -> bool:
+    """Process a new referral when user registers with a code."""
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            # Find the referrer
+            cursor = await db.execute(
+                "SELECT user_id FROM users WHERE referral_code = ?", (referral_code,)
+            )
+            referrer_data = await cursor.fetchone()
+            
+            if not referrer_data:
+                return False
+            
+            referrer_id = referrer_data[0]
+            
+            # Don't allow self-referral
+            if referrer_id == referee_id:
+                return False
+            
+            # Check if referee already has a referrer
+            cursor = await db.execute(
+                "SELECT referred_by FROM users WHERE user_id = ?", (referee_id,)
+            )
+            referee_data = await cursor.fetchone()
+            
+            if referee_data and referee_data[0]:
+                return False  # Already referred by someone
+            
+            # Check referral limits
+            cursor = await db.execute(
+                "SELECT referral_count FROM users WHERE user_id = ?", (referrer_id,)
+            )
+            referrer_stats = await cursor.fetchone()
+            
+            if referrer_stats and referrer_stats[0] >= MAX_REFERRALS_PER_USER:
+                return False  # Referrer has reached max referrals
+            
+            # Create referral relationship
+            await db.execute(
+                "UPDATE users SET referred_by = ? WHERE user_id = ?",
+                (referrer_id, referee_id)
+            )
+            
+            # Insert into referrals table
+            await db.execute("""
+                INSERT INTO referrals (referrer_id, referee_id, referral_code, created_at)
+                VALUES (?, ?, ?, ?)
+            """, (referrer_id, referee_id, referral_code, datetime.now().isoformat()))
+            
+            # Update referrer's count
+            await db.execute(
+                "UPDATE users SET referral_count = referral_count + 1 WHERE user_id = ?",
+                (referrer_id,)
+            )
+            
+            # Give immediate signup bonus to referee
+            await db.execute(
+                "UPDATE users SET balance = balance + ? WHERE user_id = ?",
+                (REFERRAL_BONUS_REFEREE, referee_id)
+            )
+            
+            await db.commit()
+            
+            # Notify referrer
+            try:
+                from main import application  # Import the application instance
+                referee_user = await get_user(referee_id)
+                referee_name = referee_user.get('username', f'User{referee_id}') if referee_user else f'User{referee_id}'
+                
+                await application.bot.send_message(
+                    chat_id=referrer_id,
+                    text=f"🎉 <b>New Referral!</b>\n\n"
+                         f"👤 <b>{referee_name}</b> joined using your referral code!\n"
+                         f"💰 They received ${REFERRAL_BONUS_REFEREE:.2f} signup bonus\n"
+                         f"🎁 You'll get ${REFERRAL_BONUS_REFERRER:.2f} when they make their first deposit of ${REFERRAL_MIN_DEPOSIT:.2f}+",
+                    parse_mode=ParseMode.HTML
+                )
+            except Exception as e:
+                logger.error(f"Failed to notify referrer: {e}")
+            
+            return True
+            
+    except Exception as e:
+        logger.error(f"Error processing referral: {e}")
+        return False
+
+async def activate_referral_bonus(referee_id: int, deposit_amount: float) -> bool:
+    """Activate referral bonus when referee makes qualifying deposit."""
+    try:
+        if deposit_amount < REFERRAL_MIN_DEPOSIT:
+            return False
+            
+        async with aiosqlite.connect(DB_PATH) as db:
+            # Get referral info
+            cursor = await db.execute("""
+                SELECT r.referrer_id, r.bonus_paid, u.referred_by
+                FROM referrals r
+                JOIN users u ON r.referee_id = u.user_id
+                WHERE r.referee_id = ? AND r.bonus_paid = FALSE
+            """, (referee_id,))
+            referral_data = await cursor.fetchone()
+            
+            if not referral_data:
+                return False
+            
+            referrer_id = referral_data[0]
+            
+            # Give bonus to referrer
+            await db.execute(
+                "UPDATE users SET balance = balance + ?, referral_earnings = referral_earnings + ? WHERE user_id = ?",
+                (REFERRAL_BONUS_REFERRER, REFERRAL_BONUS_REFERRER, referrer_id)
+            )
+            
+            # Mark referral as paid and activated
+            await db.execute("""
+                UPDATE referrals 
+                SET bonus_paid = TRUE, activated_at = ?, referee_first_deposit = ?
+                WHERE referee_id = ?
+            """, (datetime.now().isoformat(), deposit_amount, referee_id))
+            
+            # Mark referee as activated
+            await db.execute(
+                "UPDATE users SET referral_activated = TRUE WHERE user_id = ?",
+                (referee_id,)
+            )
+            
+            await db.commit()
+            
+            # Notify referrer
+            try:
+                from main import application
+                referee_user = await get_user(referee_id)
+                referee_name = referee_user.get('username', f'User{referee_id}') if referee_user else f'User{referee_id}'
+                
+                await application.bot.send_message(
+                    chat_id=referrer_id,
+                    text=f"💰 <b>Referral Bonus Paid!</b>\n\n"
+                         f"👤 <b>{referee_name}</b> made their first deposit!\n"
+                         f"🎁 You received <b>${REFERRAL_BONUS_REFERRER:.2f}</b> referral bonus!\n"
+                         f"💵 Deposit amount: <b>${deposit_amount:.2f}</b>",
+                    parse_mode=ParseMode.HTML
+                )
+            except Exception as e:
+                logger.error(f"Failed to notify referrer of bonus: {e}")
+            
+            return True
+            
+    except Exception as e:
+        logger.error(f"Error activating referral bonus: {e}")
         return False
 
 # --- Owner Panel (Admin Panel) ---
@@ -1018,7 +1352,7 @@ async def rewards_panel_callback(update: Update, context: ContextTypes.DEFAULT_T
 """
     keyboard = [
         weekly_bonus_button,
-        [InlineKeyboardButton("💌 Invite Friends", callback_data="invite_friends")],
+        [InlineKeyboardButton("� Referral System", callback_data="referral_system")],
         [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="main_panel")]
     ]
     # Remove empty rows
@@ -1053,16 +1387,797 @@ async def claim_weekly_bonus_combined_callback(update: Update, context: ContextT
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
-# --- Deposit/Withdrawal Handlers ---
-# Define a placeholder withdraw_start handler if not already defined or import from your withdrawal module
-async def withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Start the withdrawal process (placeholder implementation)."""
+# --- Referral System Handlers ---
+async def referral_system_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the referral system dashboard."""
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text(
-        "🚧 Withdrawal feature is under construction. Please check back later.",
-        parse_mode=ParseMode.HTML
-    )
+    user_id = query.from_user.id
+    user = await get_user(user_id)
+    
+    if not user:
+        await query.edit_message_text(
+            "❌ User not found. Please use /start to register first.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Start", callback_data="main_panel")]])
+        )
+        return
+    
+    # Get or create referral code
+    referral_code = await get_or_create_referral_code(user_id)
+    stats = await get_referral_stats(user_id)
+    
+    # Create referral link
+    bot_username = context.bot.username or "AxisCasinoBot"
+    referral_link = f"https://t.me/{bot_username}?start=ref_{referral_code}"
+    
+    # Format recent referrals
+    recent_text = ""
+    if stats["recent"]:
+        recent_text = "\n\n👥 <b>Recent Referrals:</b>\n"
+        for ref in stats["recent"][:5]:
+            status = "✅ Activated" if ref["bonus_paid"] else "⏳ Pending"
+            recent_text += f"• {ref['username']} - {status} ({ref['date']})\n"
+    
+    text = f"""
+👥 <b>REFERRAL SYSTEM</b> 👥
+
+💰 <b>Your Earnings:</b> {await format_usd(stats['earnings'])}
+📊 <b>Total Referrals:</b> {stats['count']}/{MAX_REFERRALS_PER_USER}
+
+🎁 <b>Rewards:</b>
+• New users get: <b>${REFERRAL_BONUS_REFEREE:.2f}</b> signup bonus
+• You get: <b>${REFERRAL_BONUS_REFERRER:.2f}</b> per referral
+• Minimum deposit: <b>${REFERRAL_MIN_DEPOSIT:.2f}</b> to activate
+
+🔗 <b>Your Referral Code:</b> <code>{referral_code}</code>
+
+📱 <b>Share Your Link:</b>
+<code>{referral_link}</code>
+{recent_text}
+<i>💡 Share your link and earn rewards when friends join and deposit!</i>
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("📋 Copy Referral Link", callback_data=f"copy_ref_{referral_code}")],
+        [
+            InlineKeyboardButton("📊 View All Referrals", callback_data="view_all_referrals"),
+            InlineKeyboardButton("📈 Referral Stats", callback_data="referral_stats")
+        ],
+        [InlineKeyboardButton("🔙 Back to Rewards", callback_data="rewards_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def copy_referral_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle referral link copy action."""
+    query = update.callback_query
+    await query.answer()
+    
+    # Extract referral code from callback data
+    referral_code = query.data.split("_", 2)[2]
+    bot_username = context.bot.username or "AxisCasinoBot"
+    referral_link = f"https://t.me/{bot_username}?start=ref_{referral_code}"
+    
+    share_text = f"""
+🎰 <b>Join Axis Casino and Get Bonus!</b> 🎰
+
+💰 Get <b>${REFERRAL_BONUS_REFEREE:.2f}</b> signup bonus when you join!
+🎮 Play amazing casino games
+💳 Easy deposits and withdrawals
+
+👆 Click the link above to join and claim your bonus!
+
+#AxisCasino #Bonus #CasinoGames
+"""
+    
+    text = f"""
+📋 <b>Your Referral Link:</b>
+
+<code>{referral_link}</code>
+
+📱 <b>Share Message:</b>
+{share_text}
+
+💡 <i>Tap and hold the link above to copy it, then share with friends!</i>
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("📤 Share in Telegram", url=f"https://t.me/share/url?url={referral_link}&text={share_text.replace('#', '%23')}")],
+        [InlineKeyboardButton("🔙 Back to Referrals", callback_data="referral_system")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def view_all_referrals_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show detailed referral list."""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    stats = await get_referral_stats(user_id)
+    
+    if not stats["recent"]:
+        text = """
+👥 <b>Your Referrals</b>
+
+📊 You haven't referred anyone yet.
+
+💡 <i>Share your referral link to start earning!</i>
+"""
+    else:
+        text = f"""
+👥 <b>Your Referrals</b> ({stats['count']} total)
+
+💰 <b>Total Earnings:</b> {await format_usd(stats['earnings'])}
+
+"""
+        for i, ref in enumerate(stats["recent"], 1):
+            status_icon = "✅" if ref["bonus_paid"] else "⏳"
+            deposit_text = f"(${ref['first_deposit']:.2f})" if ref["first_deposit"] > 0 else "(No deposit)"
+            text += f"{i}. {status_icon} <b>{ref['username']}</b>\n"
+            text += f"   Joined: {ref['date']} {deposit_text}\n\n"
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back to Referrals", callback_data="referral_system")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def referral_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show detailed referral statistics."""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            # Get detailed stats
+            cursor = await db.execute("""
+                SELECT 
+                    COUNT(*) as total_refs,
+                    COUNT(CASE WHEN bonus_paid = TRUE THEN 1 END) as activated_refs,
+                    SUM(referee_first_deposit) as total_deposits,
+                    AVG(referee_first_deposit) as avg_deposit
+                FROM referrals 
+                WHERE referrer_id = ?
+            """, (user_id,))
+            detailed_stats = await cursor.fetchone()
+            
+            total_refs = detailed_stats[0] or 0
+            activated_refs = detailed_stats[1] or 0
+            total_deposits = detailed_stats[2] or 0.0
+            avg_deposit = detailed_stats[3] or 0.0
+            
+            # Get user's total referral earnings
+            cursor = await db.execute(
+                "SELECT referral_earnings FROM users WHERE user_id = ?", (user_id,)
+            )
+            earnings_data = await cursor.fetchone()
+            total_earnings = earnings_data[0] if earnings_data else 0.0
+            
+            activation_rate = (activated_refs / total_refs * 100) if total_refs > 0 else 0
+            
+            text = f"""
+📈 <b>REFERRAL ANALYTICS</b> 📈
+
+📊 <b>Overview:</b>
+• Total Referrals: <b>{total_refs}</b>
+• Activated: <b>{activated_refs}</b> ({activation_rate:.1f}%)
+• Pending: <b>{total_refs - activated_refs}</b>
+
+💰 <b>Earnings:</b>
+• Total Earned: <b>{await format_usd(total_earnings)}</b>
+• Potential Max: <b>{await format_usd(total_refs * REFERRAL_BONUS_REFERRER)}</b>
+
+💳 <b>Deposit Stats:</b>
+• Total Deposits: <b>{await format_usd(total_deposits)}</b>
+• Average Deposit: <b>{await format_usd(avg_deposit)}</b>
+
+🎯 <b>Performance:</b>
+• Conversion Rate: <b>{activation_rate:.1f}%</b>
+• Remaining Slots: <b>{MAX_REFERRALS_PER_USER - total_refs}</b>
+
+<i>💡 Higher deposits lead to better conversion rates!</i>
+"""
+            
+    except Exception as e:
+        logger.error(f"Error getting referral analytics: {e}")
+        text = "❌ Unable to load analytics. Please try again later."
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back to Referrals", callback_data="referral_system")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+# --- Deposit/Withdrawal Handlers ---
+
+async def deposit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle deposit button - show deposit options."""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    user = await get_user(user_id)
+    if not user:
+        await query.edit_message_text(
+            "❌ User not found. Please use /start to register first.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Start", callback_data="main_panel")]])
+        )
+        return
+    
+    balance_str = await format_usd(user['balance'])
+    
+    text = f"""
+💳 <b>DEPOSIT FUNDS</b> 💳
+
+💰 <b>Current Balance:</b> {balance_str}
+
+🔒 <b>Secure Payment Methods:</b>
+Choose your preferred deposit method below.
+
+• <b>Cryptocurrency:</b> Instant deposits with low fees
+• <b>Minimum:</b> $1.00 USD equivalent
+• <b>Processing:</b> Usually within minutes
+
+💡 <b>Why choose crypto?</b>
+✅ Fast processing times
+✅ Lower transaction fees
+✅ Enhanced privacy
+✅ 24/7 availability
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("₿ Bitcoin (BTC)", callback_data="deposit_BTC")],
+        [InlineKeyboardButton("🪙 Litecoin (LTC)", callback_data="deposit_LTC")],
+        [InlineKeyboardButton("💎 Ethereum (ETH)", callback_data="deposit_ETH")],
+        [InlineKeyboardButton("🔷 TON", callback_data="deposit_TON")],
+        [InlineKeyboardButton("💰 USDT", callback_data="deposit_USDT")],
+        [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def deposit_crypto_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle specific crypto deposit selection."""
+    query = update.callback_query
+    await query.answer()
+    
+    # Extract crypto type from callback data
+    crypto_type = query.data.split("_")[1]  # deposit_BTC -> BTC
+    user_id = query.from_user.id
+    
+    # Set the crypto type in context for the conversation
+    context.user_data['deposit_crypto'] = crypto_type
+    
+    # Get current rate
+    rate = await get_crypto_usd_rate(crypto_type)
+    rate_text = f"${rate:.4f}" if rate > 0 else "Rate unavailable"
+    
+    text = f"""
+💰 <b>DEPOSIT {crypto_type}</b> 💰
+
+📊 <b>Current Rate:</b> 1 {crypto_type} = {rate_text} USD
+
+💵 <b>Enter Deposit Amount</b>
+Please enter the amount you want to deposit in USD.
+
+<b>Limits:</b>
+• Minimum: $1.00 USD
+• Maximum: $10,000.00 USD per transaction
+
+💡 <i>Enter amount in USD (e.g., 50 for $50)</i>
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("💳 Quick: $10", callback_data=f"deposit_amount_{crypto_type}_10")],
+        [InlineKeyboardButton("💳 Quick: $25", callback_data=f"deposit_amount_{crypto_type}_25"),
+         InlineKeyboardButton("💳 Quick: $50", callback_data=f"deposit_amount_{crypto_type}_50")],
+        [InlineKeyboardButton("💳 Quick: $100", callback_data=f"deposit_amount_{crypto_type}_100"),
+         InlineKeyboardButton("💳 Quick: $500", callback_data=f"deposit_amount_{crypto_type}_500")],
+        [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    # Set state for text input
+    context.user_data['awaiting_deposit_amount'] = crypto_type
+
+async def deposit_amount_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle quick deposit amount selection."""
+    query = update.callback_query
+    await query.answer()
+    
+    # Parse callback data: deposit_amount_BTC_50
+    parts = query.data.split("_")
+    crypto_type = parts[2]
+    amount_usd = float(parts[3])
+    
+    await process_deposit_payment(update, context, crypto_type, amount_usd)
+
+async def process_deposit_payment(update, context, crypto_type: str, amount_usd: float):
+    """Process the deposit payment creation."""
+    query = update.callback_query if hasattr(update, 'callback_query') and update.callback_query else None
+    user_id = update.effective_user.id
+    
+    try:
+        # Get current rate
+        rate = await get_crypto_usd_rate(crypto_type)
+        if rate <= 0:
+            error_text = f"❌ Unable to get current {crypto_type} rate. Please try again later."
+            if query:
+                await query.edit_message_text(error_text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="deposit")]]))
+            else:
+                await update.message.reply_text(error_text)
+            return
+        
+        # Calculate crypto amount
+        crypto_amount = amount_usd / rate
+        
+        # Create invoice using CryptoBot
+        invoice_data = await create_crypto_invoice(crypto_type, crypto_amount, user_id)
+        
+        if not invoice_data.get('ok'):
+            error_text = f"❌ Failed to create {crypto_type} invoice. Please try again."
+            if query:
+                await query.edit_message_text(error_text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="deposit")]]))
+            else:
+                await update.message.reply_text(error_text)
+            return
+        
+        invoice = invoice_data['result']
+        invoice_url = invoice['bot_invoice_url']
+        invoice_hash = invoice['hash']
+        
+        text = f"""
+💰 <b>DEPOSIT INVOICE CREATED</b> 💰
+
+📊 <b>Payment Details:</b>
+• Amount: <b>${amount_usd:.2f} USD</b>
+• Crypto: <b>{crypto_amount:.8f} {crypto_type}</b>
+• Rate: <b>${rate:.4f}</b> per {crypto_type}
+
+🔗 <b>Payment Options:</b>
+1. Click "Pay with CryptoBot" to pay directly
+2. Or scan the QR code in the payment page
+
+⏰ <b>Invoice expires in 1 hour</b>
+
+💡 <i>Your balance will be updated automatically after payment confirmation.</i>
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("💳 Pay with CryptoBot", url=invoice_url)],
+            [InlineKeyboardButton("📱 Open in Mini App", url=f"https://t.me/{context.bot.username}/payment?startapp=invoice_{invoice_hash}")],
+            [InlineKeyboardButton("🔄 Check Payment", callback_data=f"check_payment_{invoice['invoice_id']}")],
+            [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
+        ]
+        
+        if query:
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        else:
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+            
+    except Exception as e:
+        logger.error(f"Error processing deposit payment: {e}")
+        error_text = "❌ An error occurred while creating the payment. Please try again."
+        if query:
+            await query.edit_message_text(error_text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="deposit")]]))
+        else:
+            await update.message.reply_text(error_text)
+
+async def handle_deposit_amount_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle text input for deposit amount."""
+    if 'awaiting_deposit_amount' not in context.user_data:
+        return
+    
+    crypto_type = context.user_data['awaiting_deposit_amount']
+    
+    try:
+        amount_usd = float(update.message.text.replace('$', '').replace(',', ''))
+        
+        if amount_usd < 1.0:
+            await update.message.reply_text("❌ Minimum deposit is $1.00 USD. Please enter a higher amount.")
+            return
+        
+        if amount_usd > 10000.0:
+            await update.message.reply_text("❌ Maximum deposit is $10,000.00 USD per transaction. Please enter a lower amount.")
+            return
+        
+        # Clear the state
+        del context.user_data['awaiting_deposit_amount']
+        
+        await process_deposit_payment(update, context, crypto_type, amount_usd)
+        
+    except ValueError:
+        await update.message.reply_text("❌ Invalid amount. Please enter a valid number (e.g., 50 for $50).")
+
+async def withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Start the withdrawal process."""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    user = await get_user(user_id)
+    if not user:
+        await query.edit_message_text(
+            "❌ User not found. Please use /start to register first.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Start", callback_data="main_panel")]])
+        )
+        return
+    
+    balance = user['balance']
+    if balance < MIN_WITHDRAWAL_USD:
+        await query.edit_message_text(
+            f"❌ Insufficient balance for withdrawal.\n\n"
+            f"💰 <b>Your Balance:</b> {await format_usd(balance)}\n"
+            f"💵 <b>Minimum Withdrawal:</b> {await format_usd(MIN_WITHDRAWAL_USD)}\n\n"
+            f"💡 <i>Make a deposit or play games to increase your balance!</i>",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+            ]),
+            parse_mode=ParseMode.HTML
+        )
+        return
+    
+    # Check withdrawal limits
+    limits_check = await check_withdrawal_limits(user_id, balance)
+    
+    fee_amount = calculate_withdrawal_fee(balance)
+    max_withdrawal = min(balance - fee_amount, MAX_WITHDRAWAL_USD)
+    
+    text = f"""
+🏦 <b>WITHDRAW FUNDS</b> 🏦
+
+💰 <b>Current Balance:</b> {await format_usd(balance)}
+💸 <b>Available to Withdraw:</b> {await format_usd(max_withdrawal)}
+
+📋 <b>Withdrawal Limits:</b>
+• Minimum: {await format_usd(MIN_WITHDRAWAL_USD)}
+• Maximum: {await format_usd(MAX_WITHDRAWAL_USD)} per transaction
+• Daily Limit: {await format_usd(MAX_WITHDRAWAL_USD_DAILY)}
+• Fee: {WITHDRAWAL_FEE_PERCENT}% (min ${MIN_WITHDRAWAL_FEE:.2f})
+
+🔒 <b>Supported Cryptocurrencies:</b>
+Choose your preferred withdrawal method below.
+
+⏰ <b>Processing Time:</b> Usually within 24 hours
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🪙 Litecoin (LTC)", callback_data="withdraw_LTC")],
+        [InlineKeyboardButton("₿ Bitcoin (BTC)", callback_data="withdraw_BTC")], 
+        [InlineKeyboardButton("💎 Ethereum (ETH)", callback_data="withdraw_ETH")],
+        [InlineKeyboardButton("🔷 TON", callback_data="withdraw_TON")],
+        [InlineKeyboardButton("💰 USDT", callback_data="withdraw_USDT")],
+        [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def withdraw_crypto_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle crypto withdrawal selection."""
+    query = update.callback_query
+    await query.answer()
+    
+    crypto_type = query.data.split("_")[1]  # withdraw_LTC -> LTC
+    user_id = query.from_user.id
+    
+    user = await get_user(user_id)
+    balance = user['balance']
+    
+    # Calculate available amount after fees
+    fee_amount = calculate_withdrawal_fee(balance)
+    max_withdrawal = min(balance - fee_amount, MAX_WITHDRAWAL_USD)
+    
+    # Get current rate
+    rate = await get_crypto_usd_rate(crypto_type)
+    rate_text = f"${rate:.4f}" if rate > 0 else "Rate unavailable"
+    
+    context.user_data['withdraw_crypto'] = crypto_type
+    
+    text = f"""
+🏦 <b>WITHDRAW {crypto_type}</b> 🏦
+
+💰 <b>Your Balance:</b> {await format_usd(balance)}
+💸 <b>Available:</b> {await format_usd(max_withdrawal)}
+📊 <b>Current Rate:</b> 1 {crypto_type} = {rate_text}
+
+💵 <b>Enter Withdrawal Amount</b>
+Please enter the amount you want to withdraw in USD.
+
+<b>Important:</b>
+• Fee: {WITHDRAWAL_FEE_PERCENT}% (minimum ${MIN_WITHDRAWAL_FEE:.2f})
+• Minimum: {await format_usd(MIN_WITHDRAWAL_USD)}
+• Maximum: {await format_usd(max_withdrawal)}
+
+💡 <i>Enter amount in USD (e.g., 50 for $50)</i>
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("💸 Quick: $10", callback_data=f"withdraw_amount_{crypto_type}_10")],
+        [InlineKeyboardButton("💸 Quick: $25", callback_data=f"withdraw_amount_{crypto_type}_25"),
+         InlineKeyboardButton("💸 Quick: $50", callback_data=f"withdraw_amount_{crypto_type}_50")],
+        [InlineKeyboardButton("💸 Quick: $100", callback_data=f"withdraw_amount_{crypto_type}_100")],
+        [InlineKeyboardButton(f"💸 Max: {await format_usd(max_withdrawal)}", callback_data=f"withdraw_amount_{crypto_type}_{max_withdrawal}")],
+        [InlineKeyboardButton("🔙 Back to Withdraw", callback_data="withdraw")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    # Set state for text input
+    context.user_data['awaiting_withdraw_amount'] = crypto_type
+
+async def withdraw_amount_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle withdrawal amount selection."""
+    query = update.callback_query
+    await query.answer()
+    
+    # Parse callback data: withdraw_amount_LTC_50
+    parts = query.data.split("_")
+    crypto_type = parts[2]
+    amount_usd = float(parts[3])
+    
+    context.user_data['withdraw_crypto'] = crypto_type
+    context.user_data['withdraw_amount'] = amount_usd
+    
+    # Ask for address
+    text = f"""
+🏦 <b>WITHDRAWAL ADDRESS</b> 🏦
+
+💰 <b>Amount:</b> ${amount_usd:.2f} USD
+🪙 <b>Asset:</b> {crypto_type}
+
+📝 <b>Enter {crypto_type} Address</b>
+Please enter your {crypto_type} wallet address where you want to receive the funds.
+
+⚠️ <b>Important:</b>
+• Double-check your address before confirming
+• Wrong addresses may result in permanent loss of funds
+• Only send {crypto_type} to {crypto_type} addresses
+
+💡 <i>Paste your {crypto_type} wallet address below:</i>
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back to Amount", callback_data=f"withdraw_{crypto_type}")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    # Set state for address input
+    context.user_data['awaiting_withdraw_address'] = crypto_type
+
+async def handle_withdraw_amount_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle text input for withdrawal amount."""
+    if 'awaiting_withdraw_amount' not in context.user_data:
+        return
+    
+    crypto_type = context.user_data['awaiting_withdraw_amount']
+    user_id = update.effective_user.id
+    
+    try:
+        amount_usd = float(update.message.text.replace('$', '').replace(',', ''))
+        
+        user = await get_user(user_id)
+        balance = user['balance']
+        
+        if amount_usd < MIN_WITHDRAWAL_USD:
+            await update.message.reply_text(f"❌ Minimum withdrawal is {await format_usd(MIN_WITHDRAWAL_USD)}. Please enter a higher amount.")
+            return
+        
+        fee_amount = calculate_withdrawal_fee(amount_usd)
+        total_needed = amount_usd + fee_amount
+        
+        if total_needed > balance:
+            await update.message.reply_text(
+                f"❌ Insufficient balance.\n\n"
+                f"💰 Your Balance: {await format_usd(balance)}\n"
+                f"💸 Withdrawal Amount: {await format_usd(amount_usd)}\n"
+                f"💵 Fee: {await format_usd(fee_amount)}\n"
+                f"🏦 Total Needed: {await format_usd(total_needed)}"
+            )
+            return
+        
+        if amount_usd > MAX_WITHDRAWAL_USD:
+            await update.message.reply_text(f"❌ Maximum withdrawal is {await format_usd(MAX_WITHDRAWAL_USD)} per transaction.")
+            return
+        
+        # Clear the state and set amount
+        del context.user_data['awaiting_withdraw_amount']
+        context.user_data['withdraw_amount'] = amount_usd
+        
+        # Ask for address
+        text = f"""
+🏦 <b>WITHDRAWAL ADDRESS</b> 🏦
+
+💰 <b>Amount:</b> {await format_usd(amount_usd)}
+💵 <b>Fee:</b> {await format_usd(fee_amount)}
+🏦 <b>You'll Receive:</b> {await format_usd(amount_usd)}
+🪙 <b>Asset:</b> {crypto_type}
+
+📝 <b>Enter {crypto_type} Address</b>
+Please enter your {crypto_type} wallet address.
+
+⚠️ <b>Important:</b> Double-check your address!
+"""
+        
+        await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+        
+        # Set state for address input
+        context.user_data['awaiting_withdraw_address'] = crypto_type
+        
+    except ValueError:
+        await update.message.reply_text("❌ Invalid amount. Please enter a valid number (e.g., 50 for $50).")
+
+async def handle_withdraw_address_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle text input for withdrawal address."""
+    if 'awaiting_withdraw_address' not in context.user_data:
+        return
+    
+    crypto_type = context.user_data['awaiting_withdraw_address']
+    amount_usd = context.user_data.get('withdraw_amount', 0)
+    address = update.message.text.strip()
+    user_id = update.effective_user.id
+    
+    # Validate address format
+    if not validate_crypto_address(address, crypto_type):
+        await update.message.reply_text(
+            f"❌ Invalid {crypto_type} address format. Please check and try again."
+        )
+        return
+    
+    # Calculate amounts
+    fee_amount = calculate_withdrawal_fee(amount_usd)
+    rate = await get_crypto_usd_rate(crypto_type)
+    crypto_amount = amount_usd / rate if rate > 0 else 0
+    
+    # Show confirmation
+    text = f"""
+🏦 <b>CONFIRM WITHDRAWAL</b> 🏦
+
+💰 <b>Amount:</b> {await format_usd(amount_usd)}
+💵 <b>Fee ({WITHDRAWAL_FEE_PERCENT}%):</b> {await format_usd(fee_amount)}
+🏦 <b>Total Deducted:</b> {await format_usd(amount_usd + fee_amount)}
+
+🪙 <b>You'll Receive:</b> {crypto_amount:.8f} {crypto_type}
+� <b>Rate:</b> ${rate:.4f} per {crypto_type}
+
+📍 <b>Address:</b>
+<code>{address}</code>
+
+⚠️ <b>Warning:</b> This action cannot be undone!
+Please verify all details are correct.
+
+⏰ <b>Processing:</b> Usually completed within 24 hours.
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("✅ Confirm Withdrawal", callback_data="confirm_withdrawal")],
+        [InlineKeyboardButton("❌ Cancel", callback_data="withdraw")]
+    ]
+    
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    # Store all data for confirmation
+    context.user_data['withdraw_address'] = address
+    context.user_data['withdraw_crypto'] = crypto_type
+    context.user_data['withdraw_fee'] = fee_amount
+    context.user_data['withdraw_crypto_amount'] = crypto_amount
+    
+    # Clear the awaiting state
+    del context.user_data['awaiting_withdraw_address']
+
+async def confirm_withdrawal_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Process the confirmed withdrawal."""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    # Get withdrawal data
+    crypto_type = context.user_data.get('withdraw_crypto')
+    amount_usd = context.user_data.get('withdraw_amount')
+    address = context.user_data.get('withdraw_address')
+    fee_amount = context.user_data.get('withdraw_fee')
+    crypto_amount = context.user_data.get('withdraw_crypto_amount')
+    
+    if not all([crypto_type, amount_usd, address, fee_amount]):
+        await query.edit_message_text(
+            "❌ Missing withdrawal data. Please start over.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏦 Withdraw", callback_data="withdraw")]])
+        )
+        return
+    
+    try:
+        # Check balance again
+        user = await get_user(user_id)
+        total_needed = amount_usd + fee_amount
+        
+        if user['balance'] < total_needed:
+            await query.edit_message_text(
+                f"❌ Insufficient balance. Your balance may have changed.\n\n"
+                f"💰 Current Balance: {await format_usd(user['balance'])}\n"
+                f"🏦 Required: {await format_usd(total_needed)}",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏦 Withdraw", callback_data="withdraw")]]),
+                parse_mode=ParseMode.HTML
+            )
+            return
+        
+        # Deduct balance first
+        success = await deduct_balance(user_id, total_needed)
+        if not success:
+            await query.edit_message_text(
+                "❌ Failed to process withdrawal. Please try again.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏦 Withdraw", callback_data="withdraw")]])
+            )
+            return
+        
+        # Log withdrawal
+        withdrawal_id = await log_withdrawal(user_id, crypto_type, amount_usd, address, fee_amount, amount_usd)
+        
+        # In demo mode or if sending fails, mark as completed for testing
+        if DEMO_MODE:
+            await update_withdrawal_status(withdrawal_id, "completed", f"DEMO_{withdrawal_id}", "")
+            status_text = "✅ <b>Demo withdrawal completed!</b>"
+        else:
+            # Try to send crypto
+            send_result = await send_crypto(address, crypto_amount, f"Withdrawal from casino", crypto_type)
+            
+            if send_result.get('ok'):
+                await update_withdrawal_status(withdrawal_id, "completed", send_result.get('transaction_hash', ''), "")
+                status_text = "✅ <b>Withdrawal sent successfully!</b>"
+            else:
+                await update_withdrawal_status(withdrawal_id, "failed", "", send_result.get('error', 'Unknown error'))
+                # Refund the balance
+                await update_balance(user_id, total_needed)
+                status_text = f"❌ <b>Withdrawal failed:</b> {send_result.get('error', 'Unknown error')}"
+        
+        # Update user withdrawal limits
+        if not DEMO_MODE:
+            await update_withdrawal_limits(user_id, amount_usd)
+        
+        # Clear context data
+        for key in ['withdraw_crypto', 'withdraw_amount', 'withdraw_address', 'withdraw_fee', 'withdraw_crypto_amount']:
+            context.user_data.pop(key, None)
+        
+        # Get updated balance
+        updated_user = await get_user(user_id)
+        new_balance = await format_usd(updated_user['balance'])
+        
+        text = f"""
+🏦 <b>WITHDRAWAL PROCESSED</b> 🏦
+
+{status_text}
+
+💰 <b>Amount:</b> {await format_usd(amount_usd)}
+🪙 <b>Crypto:</b> {crypto_amount:.8f} {crypto_type}
+💵 <b>Fee:</b> {await format_usd(fee_amount)}
+📍 <b>Address:</b> <code>{address}</code>
+
+💰 <b>New Balance:</b> {new_balance}
+🆔 <b>Transaction ID:</b> #{withdrawal_id}
+
+⏰ <b>Processing Time:</b> Usually within 24 hours
+💌 You'll receive updates on the transaction status.
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("💰 Balance", callback_data="show_balance")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+        
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        
+    except Exception as e:
+        logger.error(f"Error processing withdrawal: {e}")
+        await query.edit_message_text(
+            "❌ An error occurred while processing your withdrawal. Please contact support.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🆘 Support", callback_data="support")],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+            ])
+        )
 
 # --- Support/Help Feature ---
 async def support_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1104,6 +2219,9 @@ async def async_main():
     # Ensure weekly bonus column exists AFTER database is initialized
     await ensure_weekly_bonus_column()
     
+    # Ensure referral system columns exist
+    await ensure_referral_columns()
+    
     # Create the Application
     application = Application.builder().token(BOT_TOKEN).build()
     
@@ -1114,11 +2232,27 @@ async def async_main():
         user_id = user.id if user else None
         username = user.username or (user.first_name if user else "Guest")
         
+        # Check for referral code in start parameter
+        referral_code = None
+        if context.args and len(context.args) > 0:
+            arg = context.args[0]
+            if arg.startswith("ref_"):
+                referral_code = arg[4:]  # Remove "ref_" prefix
+        
         # Ensure user exists in DB
         user_data = await get_user(user_id)
+        is_new_user = user_data is None
+        
         if not user_data:
             await create_user(user_id, username)
             user_data = await get_user(user_id)
+            
+        # Process referral if this is a new user with a referral code
+        referral_message = ""
+        if is_new_user and referral_code and update.message:
+            success = await process_referral(user_id, referral_code)
+            if success:
+                referral_message = f"\n\n🎉 <b>Welcome bonus received!</b>\n💰 You got <b>${REFERRAL_BONUS_REFEREE:.2f}</b> for joining through a referral!"
         
         # Get user's current balance for display
         balance_str = await format_usd(user_data['balance']) if user_data else "$0.00"
@@ -1133,6 +2267,7 @@ async def async_main():
             f"💰 <b>Balance:</b> {balance_str}\n"
             f"🏆 Ready to win big? Let's get started!\n\n"
             f"🎮 <b>Play Games</b> • 💳 <b>Manage Funds</b> • {bonus_emoji} <b>Rewards</b>"
+            f"{referral_message}"
         )
         
         # Organized keyboard layout with logical grouping
@@ -1261,6 +2396,94 @@ async def async_main():
         await query.answer()
         await support_command(update, context)
 
+    async def show_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Show user statistics and game history."""
+        query = update.callback_query
+        await query.answer()
+        user = update.effective_user
+        user_id = user.id if user else None
+        
+        if not user_id:
+            await query.edit_message_text(
+                "❌ Unable to identify user.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]])
+            )
+            return
+            
+        user_data = await get_user(user_id)
+        if not user_data:
+            await query.edit_message_text(
+                "❌ User not found. Please use /start to register first.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Start", callback_data="main_panel")]])
+            )
+            return
+            
+        username = user.username or user.first_name or "Player"
+        balance_str = await format_usd(user_data['balance'])
+        
+        # Get additional stats from database
+        try:
+            async with aiosqlite.connect(DB_PATH) as db:
+                # Get recent game sessions
+                cursor = await db.execute("""
+                    SELECT COUNT(*), SUM(bet_amount), SUM(win_amount), AVG(bet_amount)
+                    FROM game_sessions WHERE user_id = ?
+                """, (user_id,))
+                game_stats = await cursor.fetchone()
+                
+                total_games = game_stats[0] if game_stats[0] else 0
+                total_bet = game_stats[1] if game_stats[1] else 0.0
+                total_won = game_stats[2] if game_stats[2] else 0.0
+                avg_bet = game_stats[3] if game_stats[3] else 0.0
+                
+                # Calculate profit/loss
+                net_result = total_won - total_bet
+                
+        except Exception as e:
+            logger.error(f"Error getting user stats: {e}")
+            total_games = user_data.get('games_played', 0)
+            total_bet = user_data.get('total_wagered', 0.0)
+            total_won = 0.0
+            avg_bet = 0.0
+            net_result = 0.0
+        
+        # Format the stats display
+        profit_loss_str = f"+{await format_usd(net_result)}" if net_result >= 0 else f"-{await format_usd(abs(net_result))}"
+        profit_emoji = "📈" if net_result >= 0 else "📉"
+        
+        text = f"""
+📊 <b>{username}'s Statistics</b> 📊
+
+💰 <b>Current Balance:</b> {balance_str}
+{profit_emoji} <b>Total P&L:</b> {profit_loss_str}
+
+🎮 <b>Gaming Stats:</b>
+• Games Played: {total_games:,}
+• Total Wagered: {await format_usd(total_bet)}
+• Total Won: {await format_usd(total_won)}
+• Average Bet: {await format_usd(avg_bet)}
+
+📅 <b>Account Info:</b>
+• Member Since: {user_data.get('created_at', 'Unknown')[:10]}
+• Last Active: {user_data.get('last_active', 'Unknown')[:10]}
+
+<i>Keep playing to improve your stats!</i>
+"""
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"),
+                InlineKeyboardButton("💰 Balance", callback_data="show_balance")
+            ],
+            [
+                InlineKeyboardButton("🎁 Rewards", callback_data="rewards_panel"),
+                InlineKeyboardButton("💳 Deposit", callback_data="deposit")
+            ],
+            [InlineKeyboardButton("🏠 ← Back to Menu", callback_data="main_panel")]
+        ]
+        
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
     # Add all handlers
     
     # Command handlers
@@ -1379,6 +2602,8 @@ async def async_main():
 
     application.add_handler(CallbackQueryHandler(mini_app_centre_callback, pattern="^mini_app_centre$"))
     application.add_handler(CallbackQueryHandler(show_balance_callback, pattern="^show_balance$"))
+    application.add_handler(CallbackQueryHandler(show_stats_callback, pattern="^show_stats$"))
+    application.add_handler(CallbackQueryHandler(support_callback, pattern="^support$"))
     # application.add_handler(CallbackQueryHandler(classic_casino_callback, pattern="^classic_casino$"))
     
     # Game handlers - using conversation handlers for custom betting
@@ -1453,23 +2678,41 @@ async def async_main():
     application.add_handler(roulette_conv_handler)
     application.add_handler(crash_conv_handler)
     # Deposit/Withdrawal handlers
-    # Define a placeholder withdraw_start handler if not already defined or import from your withdrawal module
-    async def withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Start the withdrawal process (placeholder implementation)."""
-        query = update.callback_query
-        await query.answer()
-        await query.edit_message_text(
-            "🚧 Withdrawal feature is under construction. Please check back later.",
-            parse_mode=ParseMode.HTML
-        )
-
+    application.add_handler(CallbackQueryHandler(deposit_callback, pattern="^deposit$"))
+    application.add_handler(CallbackQueryHandler(deposit_crypto_callback, pattern="^deposit_(BTC|LTC|ETH|TON|USDT)$"))
+    application.add_handler(CallbackQueryHandler(deposit_amount_callback, pattern="^deposit_amount_"))
+    
+    # Withdrawal handlers
     application.add_handler(CallbackQueryHandler(withdraw_start, pattern="^withdraw$"))
-    # TODO: Implement withdraw_asset_callback in your withdrawal module and import it here.
-    # application.add_handler(CallbackQueryHandler(withdraw_asset_callback, pattern="^withdraw_asset_"))
+    application.add_handler(CallbackQueryHandler(withdraw_crypto_callback, pattern="^withdraw_(BTC|LTC|ETH|TON|USDT)$"))  
+    application.add_handler(CallbackQueryHandler(withdraw_amount_callback, pattern="^withdraw_amount_"))
+    application.add_handler(CallbackQueryHandler(confirm_withdrawal_callback, pattern="^confirm_withdrawal$"))
 
     application.add_handler(CallbackQueryHandler(start_command, pattern="^main_panel$"))
     application.add_handler(CallbackQueryHandler(rewards_panel_callback, pattern="^rewards_panel$"))
     application.add_handler(CallbackQueryHandler(claim_weekly_bonus_combined_callback, pattern="^claim_weekly_bonus_combined$"))
+    
+    # Referral system handlers
+    application.add_handler(CallbackQueryHandler(referral_system_callback, pattern="^referral_system$"))
+    application.add_handler(CallbackQueryHandler(copy_referral_callback, pattern="^copy_ref_"))
+    application.add_handler(CallbackQueryHandler(view_all_referrals_callback, pattern="^view_all_referrals$"))
+    application.add_handler(CallbackQueryHandler(referral_stats_callback, pattern="^referral_stats$"))
+    
+    # Message handlers for text input
+    async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle text input for various states."""
+        # Handle deposit amount input
+        if 'awaiting_deposit_amount' in context.user_data:
+            await handle_deposit_amount_input(update, context)
+        # Handle withdrawal amount input
+        elif 'awaiting_withdraw_amount' in context.user_data:
+            await handle_withdraw_amount_input(update, context)
+        # Handle withdrawal address input
+        elif 'awaiting_withdraw_address' in context.user_data:
+            await handle_withdraw_address_input(update, context)
+    
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
+    
     # Remove old weekly_bonus and redeem_panel handlers (do not re-register them)
     # ...existing code...
 
@@ -1589,6 +2832,15 @@ async def async_main():
                                 
                                 conn.commit()
                                 conn.close()
+                                
+                                # Check and activate referral bonus (async operation in sync context)
+                                try:
+                                    loop = asyncio.new_event_loop()
+                                    asyncio.set_event_loop(loop)
+                                    loop.run_until_complete(activate_referral_bonus(user_id, usd_amount))
+                                    loop.close()
+                                except Exception as ref_error:
+                                    logger.error(f"Error activating referral bonus: {ref_error}")
                                 
                                 logger.info(f"Payment processed: User {user_id}, Amount: {amount} {asset} (${usd_amount:.2f} USD), Invoice: {invoice_id}")
                                 
