@@ -1360,30 +1360,59 @@ async def async_main():
         user = update.effective_user
         user_id = user.id if user else None
         username = user.username or (user.first_name if user else "Guest")
+        
         # Ensure user exists in DB
         user_data = await get_user(user_id)
         if not user_data:
             await create_user(user_id, username)
+            user_data = await get_user(user_id)
+        
+        # Get user's current balance for display
+        balance_str = await format_usd(user_data['balance']) if user_data else "$0.00"
+        
+        # Check if user can claim weekly bonus
+        can_claim_bonus = await can_claim_weekly_bonus(user_id) if user_id else False
+        bonus_emoji = "🎁✨" if can_claim_bonus else "🎁"
+        
+        # Create an engaging welcome message
         text = (
-            "🏠 <b>Welcome to Axis Casino!</b>\n\n"
-            "Choose an option below to get started."
+            f"� <b>Welcome to Axis Casino, {username}!</b> 🎰\n\n"
+            f"💰 <b>Balance:</b> {balance_str}\n"
+            f"🏆 Ready to win big? Let's get started!\n\n"
+            f"🎮 <b>Play Games</b> • 💳 <b>Manage Funds</b> • 🎁 <b>Claim Rewards</b>"
         )
+        
+        # Organized keyboard layout with logical grouping
         keyboard = [
-            [InlineKeyboardButton("🎮 Mini App Centre", callback_data="mini_app_centre")],
-            [InlineKeyboardButton("💰 Show Balance", callback_data="show_balance")],
-            [InlineKeyboardButton("🎁 Weekly Bonus", callback_data="weekly_bonus")],
-            [InlineKeyboardButton("🎁 Redeem Rewards", callback_data="redeem_panel")],
-            [InlineKeyboardButton("📊 Show Stats", callback_data="show_stats")],
-            [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
-            [InlineKeyboardButton("🏦 Withdraw", callback_data="withdraw")],
+            # Main Game Access (Top Priority)
+            [InlineKeyboardButton("🎮 🎯 Mini App Centre", callback_data="mini_app_centre")],
+            
+            # Quick Actions Row
+            [
+                InlineKeyboardButton("💰 Balance", callback_data="show_balance"),
+                InlineKeyboardButton("📊 Stats", callback_data="show_stats")
+            ],
+            
+            # Financial Operations
+            [
+                InlineKeyboardButton("💳 Deposit", callback_data="deposit"),
+                InlineKeyboardButton("🏦 Withdraw", callback_data="withdraw")
+            ],
+            
+            # Rewards & Bonuses
+            [
+                InlineKeyboardButton(f"{bonus_emoji} Weekly Bonus", callback_data="weekly_bonus"),
+                InlineKeyboardButton("� Rewards", callback_data="redeem_panel")
+            ]
         ]
+        
         if update.message:
             await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
         elif update.callback_query:
             await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
     async def show_balance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Show the user's current balance."""
+        """Show the user's current balance with enhanced information."""
         user = update.effective_user
         user_id = user.id if user else None
         if not user_id:
@@ -1402,11 +1431,34 @@ async def async_main():
             return
     
         balance_str = await format_usd(user_data['balance'])
-        text = f"💰 <b>Your Balance:</b> {balance_str}"
+        username = user.username or user.first_name or "Player"
+        
+        # Enhanced balance display with quick actions
+        text = (
+            f"💰 <b>{username}'s Wallet</b> 💰\n\n"
+            f"💵 <b>Current Balance:</b> {balance_str}\n\n"
+            f"💡 <i>Ready to grow your balance?</i>\n"
+            f"🎮 Play games to win more\n"
+            f"💳 Deposit to add funds\n"
+            f"🎁 Check for available bonuses"
+        )
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"),
+                InlineKeyboardButton("💳 Deposit", callback_data="deposit")
+            ],
+            [
+                InlineKeyboardButton("🎁 Weekly Bonus", callback_data="weekly_bonus"),
+                InlineKeyboardButton("🏦 Withdraw", callback_data="withdraw")
+            ],
+            [InlineKeyboardButton("🏠 ← Back to Menu", callback_data="main_panel")]
+        ]
+        
         if update.message:
-            await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
         elif update.callback_query:
-            await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML)
+            await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
     # Add all handlers
     
@@ -1448,19 +1500,46 @@ async def async_main():
         """Show the mini app centre with available games and features."""
         query = update.callback_query
         await query.answer()
+        
+        # Get user data for personalized experience
+        user = update.effective_user
+        user_id = user.id if user else None
+        user_data = await get_user(user_id) if user_id else None
+        balance_str = await format_usd(user_data['balance']) if user_data else "$0.00"
+        
+        # Organized game selection with categories
         keyboard = [
-            [InlineKeyboardButton("🎰 Slots", callback_data="slots")],
-            [InlineKeyboardButton("🪙 Coin Flip", callback_data="coinflip")],
-            [InlineKeyboardButton("🎲 Dice", callback_data="dice")],
-            [InlineKeyboardButton("🃏 Blackjack", callback_data="blackjack")],
-            [InlineKeyboardButton("🎡 Roulette", callback_data="roulette")],
-            [InlineKeyboardButton("🚀 Crash", callback_data="crash")],
-            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+            # Featured/Popular Games (Top Row)
+            [
+                InlineKeyboardButton("🎰 Slots", callback_data="slots"),
+                InlineKeyboardButton("🃏 Blackjack", callback_data="blackjack")
+            ],
+            
+            # Quick Games
+            [
+                InlineKeyboardButton("🪙 Coin Flip", callback_data="coinflip"),
+                InlineKeyboardButton("� Dice Roll", callback_data="dice")
+            ],
+            
+            # Advanced Games
+            [
+                InlineKeyboardButton("🎡 Roulette", callback_data="roulette"),
+                InlineKeyboardButton("🚀 Crash Game", callback_data="crash")
+            ],
+            
+            # Navigation
+            [InlineKeyboardButton("🏠 ← Back to Main Menu", callback_data="main_panel")]
         ]
+        
         text = (
-            "🎮 <b>Mini App Centre</b> 🎮\n\n"
-            "Choose a game to play or explore more features!"
+            "🎮 <b>Welcome to the Game Centre!</b> �\n\n"
+            f"💰 <b>Your Balance:</b> {balance_str}\n\n"
+            "🎰 <b>Featured Games:</b> Classic casino favorites\n"
+            "⚡ <b>Quick Games:</b> Fast-paced instant wins\n"
+            "🎪 <b>Advanced Games:</b> Strategic gameplay\n\n"
+            "🍀 <i>Good luck and play responsibly!</i>"
         )
+        
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
     # Game handler (for verification requirements)
@@ -1576,34 +1655,80 @@ async def async_main():
 
     # --- Weekly Bonus Callback ---
     async def weekly_bonus_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle weekly bonus claim via callback query."""
+        """Handle weekly bonus claim with enhanced user experience."""
         query = update.callback_query
         await query.answer()
         user_id = query.from_user.id
+        username = query.from_user.username or query.from_user.first_name or "Player"
 
         can_claim, seconds_remaining = await can_claim_weekly_bonus(user_id)
+        
         if can_claim:
             success = await claim_weekly_bonus(user_id)
             if success:
+                # Get updated balance
+                user_data = await get_user(user_id)
+                new_balance = await format_usd(user_data['balance']) if user_data else "$0.00"
+                bonus_amount = await format_usd(WEEKLY_BONUS_AMOUNT)
+                
                 text = (
-                    "🎉 <b>Weekly Bonus Claimed!</b> 🎉\n\n"
-                    f"You have received <b>{await format_usd(WEEKLY_BONUS_AMOUNT)}</b> as your weekly bonus.\n"
-                    "Come back next week for more rewards!"
+                    "🎉 <b>Congratulations!</b> 🎉\n\n"
+                    f"🎁 <b>Weekly Bonus Claimed:</b> {bonus_amount}\n"
+                    f"💰 <b>New Balance:</b> {new_balance}\n\n"
+                    "✨ Your account has been credited!\n"
+                    "📅 Come back next week for more rewards!\n\n"
+                    "🎮 <i>Ready to play with your bonus?</i>"
                 )
+                
+                keyboard = [
+                    [
+                        InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"),
+                        InlineKeyboardButton("💰 View Balance", callback_data="show_balance")
+                    ],
+                    [InlineKeyboardButton("🏠 ← Back to Menu", callback_data="main_panel")]
+                ]
             else:
-                text = "❌ Error granting weekly bonus. Please try again later."
+                text = (
+                    "❌ <b>Bonus Claim Failed</b>\n\n"
+                    "We encountered an issue processing your weekly bonus.\n"
+                    "Please try again in a few moments."
+                )
+                keyboard = [
+                    [InlineKeyboardButton("🔄 Try Again", callback_data="weekly_bonus")],
+                    [InlineKeyboardButton("🏠 ← Back to Menu", callback_data="main_panel")]
+                ]
         else:
-            # Show time remaining
-            hours = seconds_remaining // 3600
+            # Show countdown with better formatting
+            days = seconds_remaining // 86400
+            hours = (seconds_remaining % 86400) // 3600
             minutes = (seconds_remaining % 3600) // 60
+            
+            if days > 0:
+                time_str = f"{days}d {hours}h {minutes}m"
+            elif hours > 0:
+                time_str = f"{hours}h {minutes}m"
+            else:
+                time_str = f"{minutes}m"
+                
+            bonus_amount = await format_usd(WEEKLY_BONUS_AMOUNT)
+            
             text = (
-                "⏳ <b>Weekly Bonus Not Ready</b>\n\n"
-                f"You can claim your next weekly bonus in <b>{hours}h {minutes}m</b>."
+                f"⏰ <b>Weekly Bonus Status</b> ⏰\n\n"
+                f"💰 <b>Bonus Amount:</b> {bonus_amount}\n"
+                f"⏳ <b>Available In:</b> {time_str}\n\n"
+                "🎁 Your weekly bonus is on cooldown.\n"
+                "📅 Check back when the timer expires!\n\n"
+                "💡 <i>Tip: Play games to grow your balance while you wait!</i>"
             )
+            
+            keyboard = [
+                [
+                    InlineKeyboardButton("� Play Games", callback_data="mini_app_centre"),
+                    InlineKeyboardButton("💰 View Balance", callback_data="show_balance")
+                ],
+                [InlineKeyboardButton("🏠 ← Back to Menu", callback_data="main_panel")]
+            ]
 
-        keyboard = [
-            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-        ]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
     application.add_handler(CallbackQueryHandler(weekly_bonus_callback, pattern="^weekly_bonus$"))
