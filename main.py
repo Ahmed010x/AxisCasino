@@ -81,7 +81,7 @@ DEMO_MODE = os.environ.get("DEMO_MODE", "false").lower() == "true"
 
 # CryptoBot configuration
 CRYPTOBOT_API_TOKEN = os.environ.get("CRYPTOBOT_API_TOKEN")
-CRYPTOBOT_USD_ASSET = os.environ.get("CRYPTOBOT_USD_ASSET", "USDT")
+CRYPTOBOT_USD_ASSET = os.environ.get("CRYPTOBOT_USD_ASSET", "LTC")
 CRYPTOBOT_WEBHOOK_SECRET = os.environ.get("CRYPTOBOT_WEBHOOK_SECRET")
 
 # Render hosting configuration
@@ -180,6 +180,10 @@ WITHDRAWAL_FEE_PERCENT = float(os.environ.get("WITHDRAWAL_FEE_PERCENT", "0.02"))
 WITHDRAWAL_COOLDOWN_SECONDS = int(os.environ.get("WITHDRAWAL_COOLDOWN_SECONDS", "300"))
 MIN_WITHDRAWAL_FEE = 1.0
 
+# --- Supported Crypto Assets ---
+# Only allow LTC, TON, SOL
+SUPPORTED_CRYPTO_ASSETS = ["LTC", "TON", "SOL"]
+
 CRYPTO_ADDRESS_PATTERNS = {
     'LTC': r'^[LM3][a-km-zA-HJ-NP-Z1-9]{26,33}$|^ltc1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{39,59}$',
     'TON': r'^UQ[a-zA-Z0-9_-]{46,}$',
@@ -268,10 +272,6 @@ async def create_crypto_invoice(asset: str, amount: float, user_id: int, payload
     except asyncio.TimeoutError:
         logger.error("Timeout creating crypto invoice")
         return {"ok": False, "error": "Request timeout"}
-    except Exception as e:
-        logger.error(f"Error creating crypto invoice: {e}")
-        return {"ok": False, "error": str(e)}
-
 async def get_bot_username() -> str:
     """Get bot username, cached for performance."""
     # This would normally be cached, but for simplicity:
@@ -779,7 +779,7 @@ WEEKLY_BONUS_INTERVAL = 7  # days
 
 # --- Referral System Configuration ---
 REFERRAL_BONUS_REFERRER = float(os.environ.get("REFERRAL_BONUS_REFERRER", "10.0"))  # Bonus for person who refers
-REFERRAL_BONUS_REFEREE = float(os.environ.get("REFERRAL_BONUS_REFEREE", "5.0"))    # Bonus for new user
+REFERRAL_BONUS_REFEREE = float(os.environ.get("REFERRAL_BONUS_REFERRER", "5.0"))    # Bonus for new user
 REFERRAL_MIN_DEPOSIT = float(os.environ.get("REFERRAL_MIN_DEPOSIT", "10.0"))       # Min deposit to activate referral
 MAX_REFERRALS_PER_USER = int(os.environ.get("MAX_REFERRALS_PER_USER", "50"))       # Max referrals per user
 
@@ -1009,6 +1009,7 @@ async def process_referral(referee_id: int, referral_code: str) -> bool:
             await db.execute("""
                 INSERT INTO referrals (referrer_id, referee_id, referral_code, created_at)
                 VALUES (?, ?, ?, ?)
+                ON CONFLICT(referee_id) DO NOTHING
             """, (referrer_id, referee_id, referral_code, datetime.now().isoformat()))
             
             # Update referrer's count
@@ -1033,10 +1034,10 @@ async def process_referral(referee_id: int, referral_code: str) -> bool:
                 
                 await application.bot.send_message(
                     chat_id=referrer_id,
-                    text=f"🎉 <b>New Referral!</b>\n\n"
-                         f"👤 <b>{referee_name}</b> joined using your referral code!\n"
-                         f"💰 They received ${REFERRAL_BONUS_REFEREE:.2f} signup bonus\n"
-                         f"🎁 You'll get ${REFERRAL_BONUS_REFERRER:.2f} when they make their first deposit of ${REFERRAL_MIN_DEPOSIT:.2f}+",
+                    text=f"New Referral!\n\n"
+                         f"{referee_name} joined using your referral code!\n"
+                         f"They received ${REFERRAL_BONUS_REFEREE:.2f} signup bonus\n"
+                         f"You'll get ${REFERRAL_BONUS_REFERRER:.2f} when they make their first deposit of ${REFERRAL_MIN_DEPOSIT:.2f}+",
                     parse_mode=ParseMode.HTML
                 )
             except Exception as e:
@@ -1098,14 +1099,14 @@ async def activate_referral_bonus(referee_id: int, deposit_amount: float) -> boo
                 
                 await application.bot.send_message(
                     chat_id=referrer_id,
-                    text=f"💰 <b>Referral Bonus Paid!</b>\n\n"
-                         f"👤 <b>{referee_name}</b> made their first deposit!\n"
-                         f"🎁 You received <b>${REFERRAL_BONUS_REFERRER:.2f}</b> referral bonus!\n"
-                         f"💵 Deposit amount: <b>${deposit_amount:.2f}</b>",
+                    text=f"Referral Bonus Paid!\n\n"
+                         f"{referee_name} made their first deposit!\n"
+                         f"You received ${REFERRAL_BONUS_REFERRER:.2f} referral bonus!\n"
+                         f"Deposit amount: ${deposit_amount:.2f}",
                     parse_mode=ParseMode.HTML
                 )
             except Exception as e:
-                logger.error(f"Failed to notify referrer of bonus: {e}")
+                logger.error(f"Failed to notify referrer: {e}")
             
             return True
             
@@ -1425,7 +1426,7 @@ async def referral_system_callback(update: Update, context: ContextTypes.DEFAULT
 📊 <b>Total Referrals:</b> {stats['count']}/{MAX_REFERRALS_PER_USER}
 
 🎁 <b>Rewards:</b>
-• New users get: <b>${REFERRAL_BONUS_REFEREE:.2f}</b> signup bonus
+• New users get: <b>${REFERRAL_BONUS_REFERRER:.2f}</b> signup bonus
 • You get: <b>${REFERRAL_BONUS_REFERRER:.2f}</b> per referral
 • Minimum deposit: <b>${REFERRAL_MIN_DEPOSIT:.2f}</b> to activate
 
@@ -1461,7 +1462,7 @@ async def copy_referral_callback(update: Update, context: ContextTypes.DEFAULT_T
     share_text = f"""
 🎰 <b>Join Axis Casino and Get Bonus!</b> 🎰
 
-💰 Get <b>${REFERRAL_BONUS_REFEREE:.2f}</b> signup bonus when you join!
+💰 Get <b>${REFERRAL_BONUS_REFERRER:.2f}</b> signup bonus when you join!
 🎮 Play amazing casino games
 💳 Easy deposits and withdrawals
 
@@ -1628,9 +1629,7 @@ Choose your preferred deposit method below.
 """
     
     keyboard = [
-        [InlineKeyboardButton("₿ Bitcoin (BTC)", callback_data="deposit_BTC")],
         [InlineKeyboardButton("🪙 Litecoin (LTC)", callback_data="deposit_LTC")],
-        [InlineKeyboardButton("💎 Ethereum (ETH)", callback_data="deposit_ETH")],
         [InlineKeyboardButton("🔷 TON", callback_data="deposit_TON")],
         [InlineKeyboardButton("💰 USDT", callback_data="deposit_USDT")],
         [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
@@ -1644,7 +1643,7 @@ async def deposit_crypto_callback(update: Update, context: ContextTypes.DEFAULT_
     await query.answer()
     
     # Extract crypto type from callback data
-    crypto_type = query.data.split("_")[1]  # deposit_BTC -> BTC
+    crypto_type = query.data.split("_")[1]  # deposit_LTC -> LTC
     user_id = query.from_user.id
     
     # Set the crypto type in context for the conversation
@@ -1688,10 +1687,9 @@ async def deposit_amount_callback(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     await query.answer()
     
-    # Parse callback data: deposit_amount_BTC_50
-    parts = query.data.split("_")
-    crypto_type = parts[2]
-    amount_usd = float(parts[3])
+    # Parse callback data: deposit_amount_LTC_50
+    crypto_type = query.data.split("_")[2]
+    amount_usd = float(query.data.split("_")[3])
     
     await process_deposit_payment(update, context, crypto_type, amount_usd)
 
@@ -1847,8 +1845,6 @@ Choose your preferred withdrawal method below.
     
     keyboard = [
         [InlineKeyboardButton("🪙 Litecoin (LTC)", callback_data="withdraw_LTC")],
-        [InlineKeyboardButton("₿ Bitcoin (BTC)", callback_data="withdraw_BTC")], 
-        [InlineKeyboardButton("💎 Ethereum (ETH)", callback_data="withdraw_ETH")],
         [InlineKeyboardButton("🔷 TON", callback_data="withdraw_TON")],
         [InlineKeyboardButton("💰 USDT", callback_data="withdraw_USDT")],
         [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
@@ -1882,7 +1878,7 @@ async def withdraw_crypto_callback(update: Update, context: ContextTypes.DEFAULT
 
 💰 <b>Your Balance:</b> {await format_usd(balance)}
 💸 <b>Available:</b> {await format_usd(max_withdrawal)}
-📊 <b>Current Rate:</b> 1 {crypto_type} = {rate_text}
+📊 <b>Current Rate:</b> 1 {crypto_type} = {rate_text} USD
 
 💵 <b>Enter Withdrawal Amount</b>
 Please enter the amount you want to withdraw in USD.
@@ -2050,7 +2046,7 @@ async def handle_withdraw_address_input(update: Update, context: ContextTypes.DE
 ⚠️ <b>Warning:</b> This action cannot be undone!
 Please verify all details are correct.
 
-⏰ <b>Processing:</b> Usually completed within 24 hours.
+⏰ <b>Processing:</b> Usually completed within 24 hours
 """
     
     keyboard = [
@@ -2252,7 +2248,7 @@ async def async_main():
         if is_new_user and referral_code and update.message:
             success = await process_referral(user_id, referral_code)
             if success:
-                referral_message = f"\n\n🎉 <b>Welcome bonus received!</b>\n💰 You got <b>${REFERRAL_BONUS_REFEREE:.2f}</b> for joining through a referral!"
+                referral_message = f"\n\n🎉 <b>Welcome bonus received!</b>\n💰 You got <b>${REFERRAL_BONUS_REFERRER:.2f}</b> for joining through a referral!"
         
         # Get user's current balance for display
         balance_str = await format_usd(user_data['balance']) if user_data else "$0.00"
@@ -2361,7 +2357,7 @@ async def async_main():
             [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
         ]
         text = (
-            "🎮 <b>Mini App Centre</b> 🎮\n\n"
+            "🎮 <b>Welcome to the Game Centre!</b> �\n\n"
             "Choose a game to play or explore more features!"
         )
         if update.message:
@@ -2679,12 +2675,12 @@ async def async_main():
     application.add_handler(crash_conv_handler)
     # Deposit/Withdrawal handlers
     application.add_handler(CallbackQueryHandler(deposit_callback, pattern="^deposit$"))
-    application.add_handler(CallbackQueryHandler(deposit_crypto_callback, pattern="^deposit_(BTC|LTC|ETH|TON|USDT)$"))
+    application.add_handler(CallbackQueryHandler(deposit_crypto_callback, pattern="^deposit_(LTC|TON)$"))
     application.add_handler(CallbackQueryHandler(deposit_amount_callback, pattern="^deposit_amount_"))
     
     # Withdrawal handlers
     application.add_handler(CallbackQueryHandler(withdraw_start, pattern="^withdraw$"))
-    application.add_handler(CallbackQueryHandler(withdraw_crypto_callback, pattern="^withdraw_(BTC|LTC|ETH|TON|USDT)$"))  
+    application.add_handler(CallbackQueryHandler(withdraw_crypto_callback, pattern="^withdraw_(LTC|TON)$"))  
     application.add_handler(CallbackQueryHandler(withdraw_amount_callback, pattern="^withdraw_amount_"))
     application.add_handler(CallbackQueryHandler(confirm_withdrawal_callback, pattern="^confirm_withdrawal$"))
 
