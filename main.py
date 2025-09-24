@@ -777,9 +777,6 @@ async def claim_weekly_bonus(user_id: int) -> bool:
         logger.error(f"Error granting weekly bonus: {e}")
         return False
 
-# Call this at startup
-asyncio.create_task(ensure_weekly_bonus_column())
-
 # --- Owner Panel (Admin Panel) ---
 async def owner_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Owner panel with full administrative features"""
@@ -1330,7 +1327,10 @@ async def rates_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def async_main():
     """Async main function to properly start both bot and keep-alive server."""
     logger.info("🚀 Starting Telegram Casino Bot...")
-    
+
+    # Ensure weekly bonus column exists before DB usage
+    await ensure_weekly_bonus_column()
+
     # Initialize database first
     await init_db()
     logger.info("✅ Database initialized")
@@ -1803,7 +1803,7 @@ if __name__ == "__main__":
         # Apply nest_asyncio to handle nested loops
         nest_asyncio.apply()
         logger.info("Applied nest_asyncio")
-        # Run the bot using a compatible event loop approach
+               # Run the bot using a compatible event loop approach
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
