@@ -1064,6 +1064,34 @@ async def withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         parse_mode=ParseMode.HTML
     )
 
+# --- Support/Help Feature ---
+async def support_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send support/help info to the user."""
+    text = (
+        "🆘 <b>Support & Help</b> 🆘\n\n"
+        "Need assistance? We're here to help!\n\n"
+        f"<b>Support Channel:</b> <a href='{SUPPORT_CHANNEL}'>{SUPPORT_CHANNEL}</a>\n"
+        "<b>Contact:</b> @casino_support_admin\n\n"
+        "• For FAQs, updates, and community help, join our support channel.\n"
+        "• For urgent issues, message our support admin.\n\n"
+        "<i>We aim to respond as quickly as possible!</i>"
+    )
+    keyboard = [
+        [InlineKeyboardButton("📢 Support Channel", url=SUPPORT_CHANNEL)],
+        [InlineKeyboardButton("👤 Contact Admin", url="https://t.me/casino_support_admin")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    if update.message:
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    elif update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+
+async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show support/help info from the Support button."""
+    query = update.callback_query
+    await query.answer()
+    await support_command(update, context)
+
 # --- Main Bot Setup and Entry Point ---
 async def async_main():
     """Async main function to properly start both bot and keep-alive server."""
@@ -1127,7 +1155,9 @@ async def async_main():
             # Rewards & Bonuses
             [
                 InlineKeyboardButton(f"{bonus_emoji} Rewards & Bonus", callback_data="rewards_panel")
-            ]
+            ],
+            # Support row
+            [InlineKeyboardButton("🆘 Support", callback_data="support")]
         ]
         
         if update.message:
@@ -1204,34 +1234,43 @@ async def async_main():
         elif update.callback_query:
             await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
+    async def support_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Send support/help info to the user."""
+        text = (
+            "🆘 <b>Support & Help</b> 🆘\n\n"
+            "Need assistance? We're here to help!\n\n"
+            f"<b>Support Channel:</b> <a href='{SUPPORT_CHANNEL}'>{SUPPORT_CHANNEL}</a>\n"
+            "<b>Contact:</b> @casino_support_admin\n\n"
+            "• For FAQs, updates, and community help, join our support channel.\n"
+            "• For urgent issues, message our support admin.\n\n"
+            "<i>We aim to respond as quickly as possible!</i>"
+        )
+        keyboard = [
+            [InlineKeyboardButton("📢 Support Channel", url=SUPPORT_CHANNEL)],
+            [InlineKeyboardButton("👤 Contact Admin", url="https://t.me/casino_support_admin")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+        if update.message:
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+        elif update.callback_query:
+            await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+
+    async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Show support/help info from the Support button."""
+        query = update.callback_query
+        await query.answer()
+        await support_command(update, context)
+
     # Add all handlers
     
     # Command handlers
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("health", health_command))
     application.add_handler(CommandHandler("balance", show_balance_callback))
-    async def mini_app_centre_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Show the mini app centre with available games and features (command version)."""
-        keyboard = [
-            [InlineKeyboardButton("🎰 Slots", callback_data="slots")],
-            [InlineKeyboardButton("🪙 Coin Flip", callback_data="coinflip")],
-            [InlineKeyboardButton("🎲 Dice", callback_data="dice")],
-            [InlineKeyboardButton("🃏 Blackjack", callback_data="blackjack")],
-            [InlineKeyboardButton("🎡 Roulette", callback_data="roulette")],
-            [InlineKeyboardButton("🚀 Crash", callback_data="crash")],
-            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-        ]
-        text = (
-            "🎮 <b>Mini App Centre</b> 🎮\n\n"
-            "Choose a game to play or explore more features!"
-        )
-        if update.message:
-            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-        elif update.callback_query:
-            await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-
     application.add_handler(CommandHandler("app", mini_app_centre_command))
     application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("support", support_command))
+    application.add_handler(CommandHandler("owner", owner_command))
 
     # Placeholder for check_payment_command to avoid NameError
     async def check_payment_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1260,7 +1299,6 @@ async def async_main():
             await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML)
 
     application.add_handler(CommandHandler("testcrypto", test_cryptobot_command))
-    application.add_handler(CommandHandler("owner", owner_command))
 
     async def rates_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Show current crypto to USD rates."""
