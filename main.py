@@ -752,6 +752,8 @@ async def ensure_weekly_bonus_column():
 async def can_claim_weekly_bonus(user_id: int) -> Tuple[bool, Optional[int]]:
     """Check if user can claim weekly bonus. Returns (can_claim, seconds_remaining)."""
     user = await get_user(user_id)
+    if not user:
+        return True, None  # New users can claim immediately
     last_claim = user.get('last_weekly_bonus')
     if not last_claim:
         return True, None
@@ -979,6 +981,13 @@ async def redeem_panel_callback(update: Update, context: ContextTypes.DEFAULT_TY
     user_id = query.from_user.id
     user = await get_user(user_id)
     
+    if not user:
+        await query.edit_message_text(
+            "❌ User not found. Please use /start to register first.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Start", callback_data="main_panel")]])
+        )
+        return
+    
     text = f"""
 🎁 **REDEEM REWARDS** 🎁
 
@@ -1008,6 +1017,13 @@ async def show_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     user_id = query.from_user.id
     user = await get_user(user_id)
+    
+    if not user:
+        await query.edit_message_text(
+            "❌ User not found. Please use /start to register first.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Start", callback_data="main_panel")]])
+        )
+        return
     
     # Get comprehensive statistics
     async with aiosqlite.connect(DB_PATH) as db:
@@ -1328,16 +1344,70 @@ async def async_main():
     """Async main function to properly start both bot and keep-alive server."""
     logger.info("🚀 Starting Telegram Casino Bot...")
 
-    # Ensure weekly bonus column exists before DB usage
-    await ensure_weekly_bonus_column()
-
     # Initialize database first
     await init_db()
     logger.info("✅ Database initialized")
     
+    # Ensure weekly bonus column exists AFTER database is initialized
+    await ensure_weekly_bonus_column()
+    
     # Create the Application
     application = Application.builder().token(BOT_TOKEN).build()
     
+    # Define handler functions first (before registration)
+    async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /start command and main panel callback."""
+        user = update.effective_user
+        user_id = user.id if user else None
+        username = user.username or (user.first_name if user else "Guest")
+        # Ensure user exists in DB
+        user_data = await get_user(user_id)
+        if not user_data:
+            await create_user(user_id, username)
+        text = (
+            "🏠 <b>Welcome to Axis Casino!</b>\n\n"
+            "Choose an option below to get started."
+        )
+        keyboard = [
+            [InlineKeyboardButton("🎮 Mini App Centre", callback_data="mini_app_centre")],
+            [InlineKeyboardButton("💰 Show Balance", callback_data="show_balance")],
+            [InlineKeyboardButton("🎁 Weekly Bonus", callback_data="weekly_bonus")],
+            [InlineKeyboardButton("🎁 Redeem Rewards", callback_data="redeem_panel")],
+            [InlineKeyboardButton("📊 Show Stats", callback_data="show_stats")],
+            [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
+            [InlineKeyboardButton("🏦 Withdraw", callback_data="withdraw")],
+        ]
+        if update.message:
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        elif update.callback_query:
+            await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+    async def show_balance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Show the user's current balance."""
+        user = update.effective_user
+        user_id = user.id if user else None
+        if not user_id:
+            if update.message:
+                await update.message.reply_text("❌ Unable to identify user.")
+            elif update.callback_query:
+                await update.callback_query.answer("❌ Unable to identify user.", show_alert=True)
+            return
+    
+        user_data = await get_user(user_id)
+        if not user_data:
+            if update.message:
+                await update.message.reply_text("❌ User not found. Please /start first.")
+            elif update.callback_query:
+                await update.callback_query.answer("❌ User not found. Please /start first.", show_alert=True)
+            return
+    
+        balance_str = await format_usd(user_data['balance'])
+        text = f"💰 <b>Your Balance:</b> {balance_str}"
+        if update.message:
+            await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+        elif update.callback_query:
+            await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML)
+
     # Add all handlers
     
     # Command handlers
@@ -1393,36 +1463,21 @@ async def async_main():
         )
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
+    # Game handler (for verification requirements)
+    async def game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle generic game callbacks."""
+        query = update.callback_query
+        await query.answer()
+        # This is a placeholder for game handlers
+        await query.edit_message_text(
+            "🎮 Game selection coming soon!",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Back to Menu", callback_data="main_panel")]])
+        )
+
     application.add_handler(CallbackQueryHandler(mini_app_centre_callback, pattern="^mini_app_centre$"))
     application.add_handler(CallbackQueryHandler(show_balance_callback, pattern="^show_balance$"))
     # application.add_handler(CallbackQueryHandler(classic_casino_callback, pattern="^classic_casino$"))
     
-    # --- Show Balance Callback ---
-    async def show_balance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Show the user's current balance."""
-        user = update.effective_user
-        user_id = user.id if user else None
-        if not user_id:
-            if update.message:
-                await update.message.reply_text("❌ Unable to identify user.")
-            elif update.callback_query:
-                await update.callback_query.answer("❌ Unable to identify user.", show_alert=True)
-            return
-    
-        user_data = await get_user(user_id)
-        if not user_data:
-            if update.message:
-                await update.message.reply_text("❌ User not found. Please /start first.")
-            elif update.callback_query:
-                await update.callback_query.answer("❌ User not found. Please /start first.", show_alert=True)
-            return
-    
-        balance_str = await format_usd(user_data['balance'])
-        text = f"💰 <b>Your Balance:</b> {balance_str}"
-        if update.message:
-            await update.message.reply_text(text, parse_mode=ParseMode.HTML)
-        elif update.callback_query:
-            await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML)
     # Game handlers - using conversation handlers for custom betting
     # TODO: Import or define slots_conv_handler and other game handlers in their respective modules
     # from games.slots import slots_conv_handler
@@ -1435,12 +1490,58 @@ async def async_main():
     # Example placeholder handlers to avoid NameError (replace with actual imports)
     from telegram.ext import ConversationHandler
 
-    slots_conv_handler = ConversationHandler([], [], [], name="slots_conv_handler")
-    coinflip_conv_handler = ConversationHandler([], [], [], name="coinflip_conv_handler")
-    dice_conv_handler = ConversationHandler([], [], [], name="dice_conv_handler")
-    blackjack_conv_handler = ConversationHandler([], [], [], name="blackjack_conv_handler")
-    roulette_conv_handler = ConversationHandler([], [], [], name="roulette_conv_handler")
-    crash_conv_handler = ConversationHandler([], [], [], name="crash_conv_handler")
+    # Create placeholder conversation handlers with proper fallbacks
+    async def placeholder_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Placeholder for game handlers"""
+        if hasattr(update, 'callback_query') and update.callback_query:
+            await update.callback_query.answer()
+            await update.callback_query.edit_message_text(
+                "🎮 This game is coming soon! Stay tuned for updates.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Back", callback_data="main_panel")]])
+            )
+        elif hasattr(update, 'message') and update.message:
+            await update.message.reply_text(
+                "🎮 This game is coming soon! Stay tuned for updates."
+            )
+        return ConversationHandler.END
+
+    # Create minimal working conversation handlers
+    slots_conv_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(placeholder_game_handler, pattern="^slots$")],
+        states={},
+        fallbacks=[],
+        name="slots_conv_handler"
+    )
+    coinflip_conv_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(placeholder_game_handler, pattern="^coinflip$")],
+        states={},
+        fallbacks=[],
+        name="coinflip_conv_handler"
+    )
+    dice_conv_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(placeholder_game_handler, pattern="^dice$")],
+        states={},
+        fallbacks=[],
+        name="dice_conv_handler"
+    )
+    blackjack_conv_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(placeholder_game_handler, pattern="^blackjack$")],
+        states={},
+        fallbacks=[],
+        name="blackjack_conv_handler"
+    )
+    roulette_conv_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(placeholder_game_handler, pattern="^roulette$")],
+        states={},
+        fallbacks=[],
+        name="roulette_conv_handler"
+    )
+    crash_conv_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(placeholder_game_handler, pattern="^crash$")],
+        states={},
+        fallbacks=[],
+        name="crash_conv_handler"
+    )
 
     application.add_handler(slots_conv_handler)
     application.add_handler(coinflip_conv_handler)
@@ -1462,33 +1563,6 @@ async def async_main():
     application.add_handler(CallbackQueryHandler(withdraw_start, pattern="^withdraw$"))
     # TODO: Implement withdraw_asset_callback in your withdrawal module and import it here.
     # application.add_handler(CallbackQueryHandler(withdraw_asset_callback, pattern="^withdraw_asset_"))
-    # Define start_command handler
-    async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /start command and main panel callback."""
-        user = update.effective_user
-        user_id = user.id if user else None
-        username = user.username or (user.first_name if user else "Guest")
-        # Ensure user exists in DB
-        user_data = await get_user(user_id)
-        if not user_data:
-            await create_user(user_id, username)
-        text = (
-            "🏠 <b>Welcome to Axis Casino!</b>\n\n"
-            "Choose an option below to get started."
-        )
-        keyboard = [
-            [InlineKeyboardButton("🎮 Mini App Centre", callback_data="mini_app_centre")],
-            [InlineKeyboardButton("💰 Show Balance", callback_data="show_balance")],
-            [InlineKeyboardButton("🎁 Weekly Bonus", callback_data="weekly_bonus")],
-            [InlineKeyboardButton("🎁 Redeem Rewards", callback_data="redeem_panel")],
-            [InlineKeyboardButton("📊 Show Stats", callback_data="show_stats")],
-            [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
-            [InlineKeyboardButton("🏦 Withdraw", callback_data="withdraw")],
-        ]
-        if update.message:
-            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-        elif update.callback_query:
-            await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
     application.add_handler(CallbackQueryHandler(start_command, pattern="^main_panel$"))
     application.add_handler(CallbackQueryHandler(redeem_panel_callback, pattern="^redeem_panel$"))
@@ -1746,7 +1820,7 @@ async def async_main():
                   }}
                 </style>
               </head>
-              <body>
+                           <body>
                 <h3>🚀 Opening CryptoBot Payment...</h3>
                 <div class="loading">
                   <p>Redirecting to secure payment page...</p>
