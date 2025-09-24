@@ -973,371 +973,96 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     elif update.callback_query:
         await update.callback_query.answer(text, show_alert=True)
 
-async def redeem_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show the redeem panel for bonus and rewards"""
+async def rewards_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the combined rewards and weekly bonus panel."""
     query = update.callback_query
     await query.answer()
-    
     user_id = query.from_user.id
     user = await get_user(user_id)
-    
     if not user:
         await query.edit_message_text(
             "❌ User not found. Please use /start to register first.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Start", callback_data="main_panel")]])
         )
         return
-    
+
+    # Weekly bonus status
+    can_claim, seconds_remaining = await can_claim_weekly_bonus(user_id)
+    bonus_amount = await format_usd(WEEKLY_BONUS_AMOUNT)
+    if can_claim:
+        weekly_bonus_text = f"<b>🎁 Weekly Bonus:</b> <i>Available!</i> <b>{bonus_amount}</b>"
+        weekly_bonus_button = [InlineKeyboardButton("🎉 Claim Weekly Bonus", callback_data="claim_weekly_bonus_combined")]
+    else:
+        days = seconds_remaining // 86400 if seconds_remaining else 0
+        hours = (seconds_remaining % 86400) // 3600 if seconds_remaining else 0
+        minutes = (seconds_remaining % 3600) // 60 if seconds_remaining else 0
+        if days > 0:
+            time_str = f"{days}d {hours}h {minutes}m"
+        elif hours > 0:
+            time_str = f"{hours}h {minutes}m"
+        else:
+            time_str = f"{minutes}m"
+        weekly_bonus_text = f"<b>🎁 Weekly Bonus:</b> <i>Available in {time_str}</i>"
+        weekly_bonus_button = []
+
+    # Other rewards (placeholders)
+    daily_bonus_text = "<b>🔅 Daily Bonus:</b> <i>Coming soon</i>"
+    loyalty_text = "<b>💎 Loyalty Points:</b> <i>Earned by playing games</i>"
+    referral_text = "<b>💌 Referral Bonus:</b> <i>Invite friends to earn rewards</i>"
+
     text = f"""
-🎁 **REDEEM REWARDS** 🎁
-
-💰 **Your Balance:** {await format_usd(user['balance'])}
-
-Get bonuses, free spins, and exclusive offers!
-
-🔹 **Loyalty Points:** Earned by playing games
-🔹 **Daily Bonus:** Claim every 24 hours
-🔹 **Referral Bonus:** Invite friends and earn rewards
-
-📅 **Last claimed:** Never
-🎉 **Total rewards:** 0
+🎁 <b>REWARDS & BONUS CENTRE</b> 🎁\n\n
+💰 <b>Your Balance:</b> {await format_usd(user['balance'])}\n\n
+{weekly_bonus_text}\n{daily_bonus_text}\n{loyalty_text}\n{referral_text}\n\n
+<i>Claim your bonuses and check your rewards here!</i>
 """
     keyboard = [
-        [InlineKeyboardButton("🎁 Claim Daily Bonus", callback_data="claim_daily_bonus")],
+        weekly_bonus_button,
         [InlineKeyboardButton("💌 Invite Friends", callback_data="invite_friends")],
         [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="main_panel")]
     ]
-    
+    # Remove empty rows
+    keyboard = [row for row in keyboard if row]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
-async def show_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show user statistics and leaderboard"""
+# --- Claim Weekly Bonus from Combined Panel ---
+async def claim_weekly_bonus_combined_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
-    
     user_id = query.from_user.id
-    user = await get_user(user_id)
-    
-    if not user:
-        await query.edit_message_text(
-            "❌ User not found. Please use /start to register first.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Start", callback_data="main_panel")]])
-        )
-        return
-    
-    # Get comprehensive statistics
-    async with aiosqlite.connect(DB_PATH) as db:
-        # User rank by balance
-        cursor = await db.execute("""
-            SELECT COUNT(*) + 1 FROM users 
-            WHERE balance > ?
-        """, (user['balance'],))
-        user_rank = (await cursor.fetchone())[0]
-        
-        # Total users count
-        cursor = await db.execute("SELECT COUNT(*) FROM users")
-        total_users = (await cursor.fetchone())[0]
-        
-        # User's win rate (from game_sessions)
-        cursor = await db.execute("""
-            SELECT 
-                COUNT(*) as total_games,
-                SUM(CASE WHEN result = 'WIN' THEN 1 ELSE 0 END) as wins,
-                SUM(win_amount) as total_winnings
-            FROM game_sessions 
-            WHERE user_id = ?
-        """, (user_id,))
-        game_stats = await cursor.fetchone()
-        
-        total_games_detailed = game_stats[0] or 0
-        wins = game_stats[1] or 0
-        total_winnings = game_stats[2] or 0.0
-        win_rate = (wins / total_games_detailed * 100) if total_games_detailed > 0 else 0
-        
-        # Recent game activity (last 5 games)
-        cursor = await db.execute("""
-            SELECT game_type, bet_amount, win_amount, result, created_at
-            FROM game_sessions 
-            WHERE user_id = ? 
-            ORDER BY created_at DESC 
-            LIMIT 5
-        """, (user_id,))
-        recent_games = await cursor.fetchall()
-        
-        # Global leaderboard (top 10 by balance)
-        cursor = await db.execute("""
-            SELECT username, balance 
-            FROM users 
-            ORDER BY balance DESC 
-            LIMIT 10
-        """)
-        leaderboard = await cursor.fetchall()
-    
-    # Format leaderboard text
-    lb_text = ""
-    for i, (username, balance) in enumerate(leaderboard, start=1):
-        emoji = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
-        lb_text += f"{emoji} {username}: {await format_usd(balance)}\n"
-    
-    # Format recent games
-    recent_text = ""
-    if recent_games:
-        for game in recent_games[:3]:  # Show last 3 games
-            game_type, bet, win, result, timestamp = game
-            emoji = "🟢" if result == "WIN" else "🔴"
-            try:
-                dt = datetime.fromisoformat(timestamp)
-                time_str = dt.strftime("%m/%d %H:%M")
-            except:
-                time_str = timestamp[:10] if len(timestamp) > 10 else timestamp
-            
-            recent_text += f"{emoji} {game_type.title()}: ${bet:.0f} → ${win:.0f} ({time_str})\n"
+    can_claim, _ = await can_claim_weekly_bonus(user_id)
+    if can_claim:
+        success = await claim_weekly_bonus(user_id)
+        if success:
+            user = await get_user(user_id)
+            new_balance = await format_usd(user['balance']) if user else "$0.00"
+            bonus_amount = await format_usd(WEEKLY_BONUS_AMOUNT)
+            text = (
+                f"🎉 <b>Weekly Bonus Claimed!</b>\n\n"
+                f"You received <b>{bonus_amount}</b>!\n"
+                f"💰 <b>New Balance:</b> {new_balance}\n\n"
+                "Come back next week for more rewards!"
+            )
+        else:
+            text = "❌ Error granting weekly bonus. Please try again later."
     else:
-        recent_text = "No games played yet"
-    
-    # Calculate net profit/loss
-    net_result = total_winnings - user['total_wagered']
-    net_emoji = "📈" if net_result >= 0 else "📉"
-    
-    text = f"""
-📊 <b>YOUR CASINO STATISTICS</b> 📊
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-👤 <b>Player Profile:</b>
-• Name: {user['username']}
-• Balance: {await format_usd(user['balance'])}
-• Rank: #{user_rank} of {total_users} players
-
-🎮 <b>Gaming Stats:</b>
-• Games Played: {user['games_played']}
-• Win Rate: {win_rate:.1f}% ({wins}/{total_games_detailed})
-• Total Wagered: {await format_usd(user['total_wagered'])}
-• Total Winnings: {await format_usd(total_winnings)}
-• Net Result: {net_emoji} {await format_usd(abs(net_result))} {"profit" if net_result >= 0 else "loss"}
-
-🕒 <b>Recent Games:</b>
-{recent_text}
-
-🏆 <b>Top Players:</b>
-{lb_text}
-
-💡 <b>Tip:</b> {"Great job! Keep up the winning streak!" if win_rate > 50 else "Try different games to improve your luck!"}
-"""
+        text = "⏳ Weekly bonus not ready. Please check back later."
     keyboard = [
-        [InlineKeyboardButton("🔄 Refresh Stats", callback_data="show_stats")],
-        [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre")],
+        [InlineKeyboardButton("🔙 Back to Rewards", callback_data="rewards_panel")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
-    
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
-async def check_payment_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Allow users to check their recent payment status"""
-    user = update.effective_user
-    user_id = user.id
-    
-    try:
-        # Get recent transactions for this user
-        async with aiosqlite.connect(DB_PATH) as db:
-            cursor = await db.execute("""
-                SELECT type, amount, description, timestamp 
-                FROM transactions 
-                WHERE user_id = ? AND type = 'deposit'
-                ORDER BY timestamp DESC 
-                LIMIT 3
-            """, (user_id,))
-            recent_deposits = await cursor.fetchall()
-        
-        if not recent_deposits:
-            text = """
-❌ **No Recent Deposits Found**
-
-If you just made a payment:
-• Wait 2-3 minutes for confirmation
-• Check that payment was completed in CryptoBot
-• Contact support if payment completed but balance not updated
-
-📞 **Support:** @casino_support
-"""
-        else:
-            text = "💳 **Recent Deposits:**\n\n"
-            for deposit in recent_deposits:
-                deposit_type, amount, description, timestamp = deposit
-                # Parse timestamp
-
-                try:
-                    dt = datetime.fromisoformat(timestamp)
-                    time_str = dt.strftime("%m/%d %H:%M")
-
-                except:
-                    time_str = timestamp[:16] if len(timestamp) > 16 else timestamp
-            
-                text += f"✅ **${amount:.2f}** - {time_str}\n"
-                if description:
-                    text += f"   _{description}_\n"
-                text += "\n"
-            
-           
-            
-            text += """
-🔄 **Payment Taking Long?**
-• CryptoBot payments usually confirm within 1-5 minutes
-• Check your CryptoBot app for payment status
-• Contact support if payment completed but balance missing
-
-📞 **Support:** @casino_support
-"""
-        
-        keyboard = [
-            [InlineKeyboardButton("💰 Check Balance", callback_data="balance")],
-            [InlineKeyboardButton("💳 Make Deposit", callback_data="deposit")],
-            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-        ]
-        
-        if update.message:
-            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-        elif update.callback_query:
-            await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-            
-    except Exception as e:
-        logger.error(f"Error checking payments for user {user.id}: {e}")
-        await update.message.reply_text("❌ Error checking payment status. Please try again or contact support.")
-
-async def test_cryptobot_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Test CryptoBot API connection and configuration (for debugging)"""
-    user = update.effective_user
-    user_id = user.id
-    
-    # Only allow owner to use this command
-    if not is_owner(user_id):
-        await update.message.reply_text("❌ This command is only available to the owner.")
-        return
-    
-    try:
-        # Check API token configuration
-        if not CRYPTOBOT_API_TOKEN:
-            await update.message.reply_text(
-                "❌ **CryptoBot API Not Configured**\n\n"
-                "CRYPTOBOT_API_TOKEN environment variable is missing.\n\n"
-                "**To fix this:**\n"
-                "1. Get API token from @CryptoBot\n"
-                "2. Add CRYPTOBOT_API_TOKEN=your_token to .env\n"
-                "3. Restart the bot",
-                parse_mode=ParseMode.MARKDOWN
-            )
-            return
-        
-        # Test API connectivity
-        await update.message.reply_text("🔧 Testing CryptoBot API connection...")
-        
-        # Test getting exchange rates
-        test_rate = await get_crypto_usd_rate('LTC')
-        if test_rate > 0:
-            rate_status = f"✅ Exchange rates: LTC = ${test_rate:.2f}"
-        else:
-            rate_status = "❌ Exchange rates: Failed to fetch"
-        
-        # Test creating a small test invoice
-        test_result = await create_crypto_invoice('USDT', 1.0, user_id)
-        
-        if test_result.get('ok'):
-            result = test_result['result']
-            invoice_status = f"✅ Invoice creation: Success (ID: {result.get('invoice_id')})"
-            
-            # Show all available URLs for debugging
-            debug_info = f"""
-🔧 **CryptoBot API Test Results**
-
-**Configuration:**
-✅ API Token: Configured (length: {len(CRYPTOBOT_API_TOKEN)})
-
-**API Tests:**
-{rate_status}
-{invoice_status}
-
-**Test Invoice Details:**
-• ID: `{result.get('invoice_id', 'N/A')}`
-• Amount: {result.get('amount', 'N/A')} {result.get('asset', 'N/A')}
-• Status: {result.get('status', 'N/A')}
-• Pay URL: `{result.get('pay_url', 'N/A')}`
-
-**Recommendation:** 
-✅ CryptoBot integration is working correctly.
-"""
-            
-            # Create test button
-            keyboard = [
-                [InlineKeyboardButton("🧪 Test Payment", url=result.get('pay_url'))],
-                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-            ]
-            
-            await update.message.reply_text(debug_info, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-        else:
-            error_msg = test_result.get('error', 'Unknown error')
-            await update.message.reply_text(
-                f"❌ **CryptoBot API Test Failed**\n\n"
-                f"**Configuration:**\n"
-                f"✅ API Token: Configured\n\n"
-                f"**API Tests:**\n"
-                f"{rate_status}\n"
-                f"❌ Invoice creation: {error_msg}\n\n"
-                f"**Possible Issues:**\n"
-                f"• Invalid API token\n"
-                f"• Network connectivity\n"
-                f"• CryptoBot API service issues\n\n"
-                f"**Raw Error:**\n```\n{test_result}\n```",
-                parse_mode=ParseMode.MARKDOWN
-            )
-            
-    except Exception as e:
-        logger.error(f"Test CryptoBot error: {e}")
-        await update.message.reply_text(f"❌ Test error: {str(e)}")
-
-async def rates_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show current live crypto rates from CryptoBot API"""
-    user = update.effective_user
-    
-    # Show loading message
-    loading_msg = await update.message.reply_text("⏳ Fetching live crypto rates...")
-    
-    try:
-        # Get live rates for supported assets
-        assets = ['LTC', 'TON', 'SOL', 'USDT']
-        rates_data = []
-        
-        for asset in assets:
-            rate = await get_crypto_usd_rate(asset)
-            if rate > 0:
-                rates_data.append(f"• <b>{asset}</b>: <code>${rate:,.2f}</code>")
-            else:
-                rates_data.append(f"• <b>{asset}</b>: <i>Rate unavailable</i>")
-        
-        rates_text = "\n".join(rates_data)
-        
-        text = f"""
-📊 <b>LIVE CRYPTO RATES</b> 📊
-
-🔴 <b>Real-time rates from CryptoBot API:</b>
-
-{rates_text}
-
-⏰ <b>Updated:</b> {datetime.now().strftime("%H:%M:%S UTC")}
-🔄 <b>Refresh:</b> Use /rates again for latest prices
-
-💡 <b>Note:</b> These are the live rates used for all deposits and withdrawals in our casino.
-"""
-        
-        keyboard = [
-            [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
-            [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre")],
-            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-        ]
-        
-        await loading_msg.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-        
-    except Exception as e:
-        logger.error(f"Error getting rates for user {user.id}: {e}")
-        await loading_msg.edit_text("❌ Error fetching crypto rates. Please try again later.")
+# --- Deposit/Withdrawal Handlers ---
+# Define a placeholder withdraw_start handler if not already defined or import from your withdrawal module
+async def withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Start the withdrawal process (placeholder implementation)."""
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text(
+        "🚧 Withdrawal feature is under construction. Please check back later.",
+        parse_mode=ParseMode.HTML
+    )
 
 # --- Main Bot Setup and Entry Point ---
 async def async_main():
@@ -1376,10 +1101,10 @@ async def async_main():
         
         # Create an engaging welcome message
         text = (
-            f"� <b>Welcome to Axis Casino, {username}!</b> 🎰\n\n"
+            f"🎰 <b>Welcome to Axis Casino, {username}!</b> 🎰\n\n"
             f"💰 <b>Balance:</b> {balance_str}\n"
             f"🏆 Ready to win big? Let's get started!\n\n"
-            f"🎮 <b>Play Games</b> • 💳 <b>Manage Funds</b> • 🎁 <b>Claim Rewards</b>"
+            f"🎮 <b>Play Games</b> • 💳 <b>Manage Funds</b> • {bonus_emoji} <b>Rewards</b>"
         )
         
         # Organized keyboard layout with logical grouping
@@ -1401,8 +1126,7 @@ async def async_main():
             
             # Rewards & Bonuses
             [
-                InlineKeyboardButton(f"{bonus_emoji} Weekly Bonus", callback_data="weekly_bonus"),
-                InlineKeyboardButton("� Rewards", callback_data="redeem_panel")
+                InlineKeyboardButton(f"{bonus_emoji} Rewards & Bonus", callback_data="rewards_panel")
             ]
         ]
         
@@ -1460,6 +1184,26 @@ async def async_main():
         elif update.callback_query:
             await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
+    async def mini_app_centre_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Show the mini app centre with available games and features (command version)."""
+        keyboard = [
+            [InlineKeyboardButton("🎰 Slots", callback_data="slots")],
+            [InlineKeyboardButton("🪙 Coin Flip", callback_data="coinflip")],
+            [InlineKeyboardButton("🎲 Dice", callback_data="dice")],
+            [InlineKeyboardButton("🃏 Blackjack", callback_data="blackjack")],
+            [InlineKeyboardButton("🎡 Roulette", callback_data="roulette")],
+            [InlineKeyboardButton("🚀 Crash", callback_data="crash")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+        text = (
+            "🎮 <b>Mini App Centre</b> 🎮\n\n"
+            "Choose a game to play or explore more features!"
+        )
+        if update.message:
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        elif update.callback_query:
+            await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
     # Add all handlers
     
     # Command handlers
@@ -1488,10 +1232,52 @@ async def async_main():
 
     application.add_handler(CommandHandler("app", mini_app_centre_command))
     application.add_handler(CommandHandler("help", help_command))
+
+    # Placeholder for check_payment_command to avoid NameError
+    async def check_payment_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Check payment status (placeholder implementation)."""
+        if update.message:
+            await update.message.reply_text("🚧 Payment check feature is under construction.")
+        elif update.callback_query:
+            await update.callback_query.answer("🚧 Payment check feature is under construction.", show_alert=True)
+
     application.add_handler(CommandHandler("payment", check_payment_command))
     application.add_handler(CommandHandler("checkpayment", check_payment_command))
+
+    async def test_cryptobot_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Test CryptoBot API connectivity and show current LTC/USD rate."""
+        try:
+            ltc_rate = await get_crypto_usd_rate("LTC")
+            if ltc_rate > 0:
+                text = f"✅ CryptoBot API is working!\n\nCurrent LTC/USD rate: <b>${ltc_rate:.4f}</b>"
+            else:
+                text = "⚠️ Could not fetch LTC/USD rate from CryptoBot API."
+        except Exception as e:
+            text = f"❌ Error testing CryptoBot API: {e}"
+        if update.message:
+            await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+        elif update.callback_query:
+            await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML)
+
     application.add_handler(CommandHandler("testcrypto", test_cryptobot_command))
     application.add_handler(CommandHandler("owner", owner_command))
+
+    async def rates_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Show current crypto to USD rates."""
+        assets = ["LTC", "USDT", "TON", "SOL"]
+        lines = ["💱 <b>Crypto Exchange Rates</b>"]
+        for asset in assets:
+            rate = await get_crypto_usd_rate(asset)
+            if rate > 0:
+                lines.append(f"• <b>{asset}/USD:</b> ${rate:.4f}")
+            else:
+                lines.append(f"• <b>{asset}/USD:</b> <i>Unavailable</i>")
+        text = "\n".join(lines)
+        if update.message:
+            await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+        elif update.callback_query:
+            await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML)
+
     application.add_handler(CommandHandler("rates", rates_command))
     
     # Callback query handlers
@@ -1644,97 +1430,10 @@ async def async_main():
     # application.add_handler(CallbackQueryHandler(withdraw_asset_callback, pattern="^withdraw_asset_"))
 
     application.add_handler(CallbackQueryHandler(start_command, pattern="^main_panel$"))
-    application.add_handler(CallbackQueryHandler(redeem_panel_callback, pattern="^redeem_panel$"))
-    application.add_handler(CallbackQueryHandler(show_stats_callback, pattern="^show_stats$"))
-    # Remove admin panel and admin demo toggle handlers
-    # application.add_handler(CallbackQueryHandler(admin_panel_callback, pattern="^admin_panel$"))
-    # application.add_handler(CallbackQueryHandler(admin_toggle_demo_callback, pattern="^admin_toggle_demo$"))
-    # Add owner panel and owner demo toggle only
-    application.add_handler(CallbackQueryHandler(owner_panel_callback, pattern="^owner_panel$"))
-    application.add_handler(CallbackQueryHandler(owner_toggle_demo_callback, pattern="^owner_toggle_demo$"))
-
-    # --- Weekly Bonus Callback ---
-    async def weekly_bonus_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle weekly bonus claim with enhanced user experience."""
-        query = update.callback_query
-        await query.answer()
-        user_id = query.from_user.id
-        username = query.from_user.username or query.from_user.first_name or "Player"
-
-        can_claim, seconds_remaining = await can_claim_weekly_bonus(user_id)
-        
-        if can_claim:
-            success = await claim_weekly_bonus(user_id)
-            if success:
-                # Get updated balance
-                user_data = await get_user(user_id)
-                new_balance = await format_usd(user_data['balance']) if user_data else "$0.00"
-                bonus_amount = await format_usd(WEEKLY_BONUS_AMOUNT)
-                
-                text = (
-                    "🎉 <b>Congratulations!</b> 🎉\n\n"
-                    f"🎁 <b>Weekly Bonus Claimed:</b> {bonus_amount}\n"
-                    f"💰 <b>New Balance:</b> {new_balance}\n\n"
-                    "✨ Your account has been credited!\n"
-                    "📅 Come back next week for more rewards!\n\n"
-                    "🎮 <i>Ready to play with your bonus?</i>"
-                )
-                
-                keyboard = [
-                    [
-                        InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"),
-                        InlineKeyboardButton("💰 View Balance", callback_data="show_balance")
-                    ],
-                    [InlineKeyboardButton("🏠 ← Back to Menu", callback_data="main_panel")]
-                ]
-            else:
-                text = (
-                    "❌ <b>Bonus Claim Failed</b>\n\n"
-                    "We encountered an issue processing your weekly bonus.\n"
-                    "Please try again in a few moments."
-                )
-                keyboard = [
-                    [InlineKeyboardButton("🔄 Try Again", callback_data="weekly_bonus")],
-                    [InlineKeyboardButton("🏠 ← Back to Menu", callback_data="main_panel")]
-                ]
-        else:
-            # Show countdown with better formatting
-            days = seconds_remaining // 86400
-            hours = (seconds_remaining % 86400) // 3600
-            minutes = (seconds_remaining % 3600) // 60
-            
-            if days > 0:
-                time_str = f"{days}d {hours}h {minutes}m"
-            elif hours > 0:
-                time_str = f"{hours}h {minutes}m"
-            else:
-                time_str = f"{minutes}m"
-                
-            bonus_amount = await format_usd(WEEKLY_BONUS_AMOUNT)
-            
-            text = (
-                f"⏰ <b>Weekly Bonus Status</b> ⏰\n\n"
-                f"💰 <b>Bonus Amount:</b> {bonus_amount}\n"
-                f"⏳ <b>Available In:</b> {time_str}\n\n"
-                "🎁 Your weekly bonus is on cooldown.\n"
-                "📅 Check back when the timer expires!\n\n"
-                "💡 <i>Tip: Play games to grow your balance while you wait!</i>"
-            )
-            
-            keyboard = [
-                [
-                    InlineKeyboardButton("� Play Games", callback_data="mini_app_centre"),
-                    InlineKeyboardButton("💰 View Balance", callback_data="show_balance")
-                ],
-                [InlineKeyboardButton("🏠 ← Back to Menu", callback_data="main_panel")]
-            ]
-
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-
-    application.add_handler(CallbackQueryHandler(weekly_bonus_callback, pattern="^weekly_bonus$"))
-
-    # Remove duplicate or misplaced ConversationHandlers and handler registrations
-    # (Already registered above, do not re-register or redefine here)
+    application.add_handler(CallbackQueryHandler(rewards_panel_callback, pattern="^rewards_panel$"))
+    application.add_handler(CallbackQueryHandler(claim_weekly_bonus_combined_callback, pattern="^claim_weekly_bonus_combined$"))
+    # Remove old weekly_bonus and redeem_panel handlers (do not re-register them)
+    # ...existing code...
 
     # Add global error handler
     async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2002,7 +1701,7 @@ if __name__ == "__main__":
         # Apply nest_asyncio to handle nested loops
         nest_asyncio.apply()
         logger.info("Applied nest_asyncio")
-               # Run the bot using a compatible event loop approach
+        # Run the bot using a compatible event loop approach
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
