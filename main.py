@@ -1660,23 +1660,23 @@ Please type the amount you want to deposit in USD.
 
 
 async def process_deposit_payment(update, context, crypto_type: str, amount_usd: float):
-    """Process the deposit payment creation."""
-    query = update.callback_query if hasattr(update, 'callback_query') and update.callback_query else None
-    user_id = update.effective_user.id
+    """Process deposit payment and create CryptoBot invoice"""
+    query = getattr(update, 'callback_query', None)
     
     try:
-        # Get current rate
+        # Get current crypto rate
         rate = await get_crypto_usd_rate(crypto_type)
         if rate <= 0:
-            error_text = f"❌ Unable to get current {crypto_type} rate. Please try again later."
+            error_text = f"❌ Unable to get current {crypto_type} rate. Please try again."
             if query:
                 await query.edit_message_text(error_text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="deposit")]]))
             else:
                 await update.message.reply_text(error_text)
             return
         
-        # Calculate crypto amount
+        # Calculate crypto amount needed
         crypto_amount = amount_usd / rate
+        user_id = query.from_user.id if query else update.message.from_user.id
         
         # Create invoice using CryptoBot
         invoice_data = await create_crypto_invoice(crypto_type, crypto_amount, user_id)
@@ -1691,10 +1691,9 @@ async def process_deposit_payment(update, context, crypto_type: str, amount_usd:
         
         invoice = invoice_data['result']
         invoice_url = invoice['bot_invoice_url']
-        invoice_hash = invoice['hash']
         
         text = f"""
-💰 <b>DEPOSIT INVOICE READY</b> 💰
+💰 <b>CRYPTO PAY INVOICE READY</b> 💰
 
 📊 <b>Payment Details:</b>
 • Amount: <b>${amount_usd:.2f} USD</b>
@@ -1702,21 +1701,17 @@ async def process_deposit_payment(update, context, crypto_type: str, amount_usd:
 • Rate: <b>${rate:.4f}</b> per {crypto_type}
 • Invoice ID: <code>{invoice['invoice_id']}</code>
 
-� <b>Choose Payment Method:</b>
-• <b>CryptoBot Mini App:</b> Seamless in-app payment
-• <b>Direct Payment:</b> Opens CryptoBot directly
-• <b>Manual Payment:</b> Copy address and send manually
+💳 <b>Pay with CryptoBot:</b>
+Click the button below to open CryptoBot's secure payment interface. You can pay directly within Telegram using your CryptoBot wallet.
 
 ⏰ <b>Expires in 1 hour</b>
-� <i>You'll be notified instantly when payment is received!</i>
+🔔 <i>You'll be notified instantly when payment is confirmed!</i>
+
+💡 <b>Note:</b> The payment opens in CryptoBot's native interface for the best secure experience.
 """
         
-        # Create mini app URL for better integration
-        mini_app_url = f"https://t.me/{await get_bot_username()}?startapp=invoice_{invoice_hash}"
-        
         keyboard = [
-            [InlineKeyboardButton("� Pay in Mini App", web_app=WebAppInfo(url=f"{RENDER_EXTERNAL_URL or 'https://axiscasino.onrender.com'}/miniapp/invoice/{invoice_hash}"))],
-            [InlineKeyboardButton("💳 Open CryptoBot", url=invoice_url)],
+            [InlineKeyboardButton("💳 Pay with CryptoBot", url=invoice_url)],
             [InlineKeyboardButton("🔄 Check Payment Status", callback_data=f"check_payment_{invoice['invoice_id']}")],
             [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
         ]
@@ -2002,7 +1997,7 @@ async def handle_withdraw_address_input(update: Update, context: ContextTypes.DE
 🏦 <b>CONFIRM WITHDRAWAL</b> 🏦
 
 💰 <b>Amount:</b> {await format_usd(amount_usd)}
-💵 <b>Fee ({WITHDRAWAL_FEE_PERCENT}%):</b> {await format_usd(fee_amount)}
+💵 <b>Fee:</b> {await format_usd(fee_amount)}
 🏦 <b>Total Deducted:</b> {await format_usd(amount_usd + fee_amount)}
 
 🪙 <b>You'll Receive:</b> {crypto_amount:.8f} {crypto_type}
@@ -2299,11 +2294,11 @@ async def async_main():
         keyboard = [
             [
                 InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"),
-                InlineKeyboardButton("💳 Deposit", callback_data="deposit")
+                InlineKeyboardButton("💰 Balance", callback_data="show_balance")
             ],
             [
-                InlineKeyboardButton("🎁 Weekly Bonus", callback_data="weekly_bonus"),
-                InlineKeyboardButton("🏦 Withdraw", callback_data="withdraw")
+                InlineKeyboardButton("🎁 Rewards", callback_data="rewards_panel"),
+                InlineKeyboardButton("💳 Deposit", callback_data="deposit")
             ],
             [InlineKeyboardButton("🏠 ← Back to Menu", callback_data="main_panel")]
         ]
@@ -2353,12 +2348,6 @@ async def async_main():
             await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML, disable_web_page_preview=True)
         elif update.callback_query:
             await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-
-    async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Show support/help info from the Support button."""
-        query = update.callback_query
-        await query.answer()
-        await support_command(update, context)
 
     async def show_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Show user statistics and game history."""
@@ -2560,7 +2549,7 @@ async def async_main():
         await query.answer()
         # This is a placeholder for game handlers
         await query.edit_message_text(
-            "🎮 Game selection coming soon!",
+            "🎮 This game is coming soon! Stay tuned for updates.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Back to Menu", callback_data="main_panel")]])
         )
 
@@ -2589,7 +2578,7 @@ async def async_main():
             await update.callback_query.answer()
             await update.callback_query.edit_message_text(
                 "🎮 This game is coming soon! Stay tuned for updates.",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Back", callback_data="main_panel")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Back to Menu", callback_data="main_panel")]])
             )
         elif hasattr(update, 'message') and update.message:
             await update.message.reply_text(
@@ -2858,25 +2847,24 @@ async def async_main():
             </html>
             """
         
-        # Mini App bridge route that opens the CryptoBot invoice inside your bot's WebApp
-        @app.route('/miniapp/invoice/<invoice_hash>')
-        def miniapp_invoice(invoice_hash: str):
-            # CryptoBot web app invoice URL constructed from the invoice hash
-            web_invoice = f"https://app.crypt.bot/invoices/{invoice_hash}"
-            # Enhanced WebApp page for CryptoBot invoice payment
+        # Payment redirect route - redirects directly to CryptoBot
+        @app.route('/payment_redirect/<invoice_hash>')
+        def payment_redirect(invoice_hash: str):
+            # Redirect to CryptoBot invoice URL
+            cryptobot_url = f"https://t.me/CryptoBot?start={invoice_hash}"
             return f"""
             <!doctype html>
             <html>
               <head>
                 <meta charset="utf-8" />
                 <meta name="viewport" content="width=device-width, initial-scale=1" />
-                <title>🎰 Casino Payment</title>
-                <script src="https://telegram.org/js/telegram-web-app.js"></script>
+                <title>🎰 Casino Payment - Redirecting</title>
+                <meta http-equiv="refresh" content="1;url={cryptobot_url}">
                 <style>
                   body {{ 
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
                     margin: 0;
-                    padding: 20px; 
+                    padding: 40px 20px; 
                     text-align: center; 
                     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
                     color: #ffffff;
