@@ -245,41 +245,7 @@ async def create_crypto_invoice(asset: str, amount: float, user_id: int, payload
     if not CRYPTOBOT_API_TOKEN:
         return {"ok": False, "error": "CryptoBot API token not configured"}
     
-    url = "https://pay.crypt.bot/api/createInvoice"
-    headers = {
-        "Crypto-Pay-API-Token": CRYPTOBOT_API_TOKEN,
-        "Content-Type": "application/json"
-    }
-    
-    data = {
-        "asset": asset,
-        "amount": f"{amount:.8f}",
-        "description": f"Casino deposit - ${amount * await get_crypto_usd_rate(asset):.2f} USD",  # No emoji
-        "hidden_message": str(user_id),  # This will be used in webhook to identify user
-        "paid_btn_name": "callback",
-        "paid_btn_url": f"https://t.me/{await get_bot_username()}?start=payment_success",
-        "expires_in": 3600  # 1 hour
-    }
-    
-    if payload:
-        data.update(payload)
-    
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=data, timeout=30) as response:
-                result = await response.json()
-                return result
-    except asyncio.TimeoutError:
-        logger.error("Timeout creating crypto invoice")
-        return {"ok": False, "error": "Request timeout"}
-async def get_bot_username() -> str:
-    """Get bot username, cached for performance."""
-    # This would normally be cached, but for simplicity:
-    return "AxisCasinoBot"
-    try:
-        if not CRYPTOBOT_API_TOKEN:
-            return {"ok": False, "error": "API token not configured"}
-        
         headers = {
             'Crypto-Pay-API-Token': CRYPTOBOT_API_TOKEN,
             'Content-Type': 'application/json'
@@ -287,17 +253,22 @@ async def get_bot_username() -> str:
         
         # Set webhook URL for payment notifications
         webhook_url = f'{RENDER_EXTERNAL_URL}/webhook/cryptobot' if RENDER_EXTERNAL_URL else 'https://axiscasino.onrender.com/webhook/cryptobot'
-        success_url = f'{RENDER_EXTERNAL_URL}/payment_success' if RENDER_EXTERNAL_URL else 'https://axiscasino.onrender.com/payment_success'
+        
+        # Get USD amount for description
+        usd_rate = await get_crypto_usd_rate(asset)
+        usd_amount = amount * usd_rate if usd_rate > 0 else amount
         
         data = {
             'asset': asset,
             'amount': f"{amount:.8f}",
-            'description': f'Casino deposit for user {user_id}',
+            'description': f'Casino deposit - ${usd_amount:.2f} USD',
             'hidden_message': str(user_id),
             'webhook_url': webhook_url,
             'expires_in': 3600,  # 1 hour expiration
             'allow_comments': False,
-            'allow_anonymous': False
+            'allow_anonymous': False,
+            'paid_btn_name': 'callback',
+            'paid_btn_url': f"https://t.me/{await get_bot_username()}?start=payment_success"
         }
         
         if payload:
@@ -308,8 +279,12 @@ async def get_bot_username() -> str:
                                   headers=headers, json=data) as response:
                 if response.status == 200:
                     result = await response.json()
-                    logger.info(f"CryptoBot invoice created successfully: {result.get('result', {}).get('invoice_id')}")
-                    return result
+                    if result.get('ok'):
+                        logger.info(f"CryptoBot invoice created successfully: {result.get('result', {}).get('invoice_id')}")
+                        return result
+                    else:
+                        logger.error(f"CryptoBot API returned error: {result}")
+                        return result
                 else:
                     error_text = await response.text()
                     logger.error(f"CryptoBot API error {response.status}: {error_text}")
@@ -321,6 +296,11 @@ async def get_bot_username() -> str:
     except Exception as e:
         logger.error(f"Error creating crypto invoice: {e}")
         return {"ok": False, "error": str(e)}
+
+async def get_bot_username() -> str:
+    """Get bot username, cached for performance."""
+    # This would normally be cached, but for simplicity:
+    return "AxisCasinoBot"
 
 async def get_user_withdrawals(user_id: int, limit: int = 10) -> list:
     """Get user withdrawal history"""
