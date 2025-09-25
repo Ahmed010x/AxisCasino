@@ -1694,26 +1694,30 @@ async def process_deposit_payment(update, context, crypto_type: str, amount_usd:
         invoice_hash = invoice['hash']
         
         text = f"""
-💰 <b>DEPOSIT INVOICE CREATED</b> 💰
+💰 <b>DEPOSIT INVOICE READY</b> 💰
 
 📊 <b>Payment Details:</b>
 • Amount: <b>${amount_usd:.2f} USD</b>
 • Crypto: <b>{crypto_amount:.8f} {crypto_type}</b>
 • Rate: <b>${rate:.4f}</b> per {crypto_type}
+• Invoice ID: <code>{invoice['invoice_id']}</code>
 
-🔗 <b>Payment Options:</b>
-1. Click "Pay with CryptoBot" to pay directly
-2. Or scan the QR code in the payment page
+� <b>Choose Payment Method:</b>
+• <b>CryptoBot Mini App:</b> Seamless in-app payment
+• <b>Direct Payment:</b> Opens CryptoBot directly
+• <b>Manual Payment:</b> Copy address and send manually
 
-⏰ <b>Invoice expires in 1 hour</b>
-
-💡 <i>Your balance will be updated automatically after payment confirmation.</i>
+⏰ <b>Expires in 1 hour</b>
+� <i>You'll be notified instantly when payment is received!</i>
 """
         
+        # Create mini app URL for better integration
+        mini_app_url = f"https://t.me/{await get_bot_username()}?startapp=invoice_{invoice_hash}"
+        
         keyboard = [
-            [InlineKeyboardButton("💳 Pay with CryptoBot", url=invoice_url)],
-            [InlineKeyboardButton("📱 Open in Mini App", url=f"https://t.me/{context.bot.username}/payment?startapp=invoice_{invoice_hash}")],
-            [InlineKeyboardButton("🔄 Check Payment", callback_data=f"check_payment_{invoice['invoice_id']}")],
+            [InlineKeyboardButton("� Pay in Mini App", web_app=WebAppInfo(url=f"{RENDER_EXTERNAL_URL or 'https://axiscasino.onrender.com'}/miniapp/invoice/{invoice_hash}"))],
+            [InlineKeyboardButton("💳 Open CryptoBot", url=invoice_url)],
+            [InlineKeyboardButton("🔄 Check Payment Status", callback_data=f"check_payment_{invoice['invoice_id']}")],
             [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
         ]
         
@@ -2858,62 +2862,158 @@ async def async_main():
         @app.route('/miniapp/invoice/<invoice_hash>')
         def miniapp_invoice(invoice_hash: str):
             # CryptoBot web app invoice URL constructed from the invoice hash
-            web_invoice = f"https://app.cr.bot/invoices/{invoice_hash}"
-            # Minimal WebApp page that redirects inside Telegram's webview
+            web_invoice = f"https://app.crypt.bot/invoices/{invoice_hash}"
+            # Enhanced WebApp page for CryptoBot invoice payment
             return f"""
             <!doctype html>
             <html>
               <head>
                 <meta charset="utf-8" />
                 <meta name="viewport" content="width=device-width, initial-scale=1" />
-                <title>Pay Invoice</title>
+                <title>🎰 Casino Payment</title>
                 <script src="https://telegram.org/js/telegram-web-app.js"></script>
                 <style>
                   body {{ 
-                    font-family: -apple-system, system-ui, Arial; 
-                    margin: 20px; 
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                    margin: 0;
+                    padding: 20px; 
                     text-align: center; 
-                    background: #1a1a1a; 
+                    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
                     color: #ffffff;
+                    min-height: 100vh;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                  }}
+                  .container {{
+                    max-width: 400px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    background: rgba(255, 255, 255, 0.1);
+                    border-radius: 16px;
+                    backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                  }}
+                  .logo {{
+                    font-size: 48px;
+                    margin-bottom: 20px;
+                  }}
+                  .title {{
+                    font-size: 24px;
+                    font-weight: 600;
+                    margin-bottom: 10px;
+                    color: #4CAF50;
+                  }}
+                  .subtitle {{
+                    font-size: 16px;
+                    opacity: 0.8;
+                    margin-bottom: 30px;
                   }}
                   .btn {{ 
                     display: inline-block; 
-                    padding: 12px 18px; 
-                    background: #2ea44f; 
+                    padding: 16px 32px; 
+                    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
                     color: #fff; 
-                    border-radius: 8px; 
+                    border-radius: 12px; 
                     text-decoration: none; 
                     margin: 10px;
+                    font-weight: 600;
+                    font-size: 16px;
+                    transition: all 0.3s ease;
+                    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+                  }}
+                  .btn:hover {{
+                    transform: translateY(-2px);
+                    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
                   }}
                   .loading {{
                     display: flex;
+                    flex-direction: column;
                     align-items: center;
                     justify-content: center;
                     margin: 20px 0;
                   }}
+                  .spinner {{
+                    width: 40px;
+                    height: 40px;
+                    border: 4px solid rgba(255, 255, 255, 0.1);
+                    border-left: 4px solid #4CAF50;
+                    border-radius: 50%;
+                    animation: spin 1s linear infinite;
+                    margin-bottom: 15px;
+                  }}
+                  @keyframes spin {{
+                    0% {{ transform: rotate(0deg); }}
+                    100% {{ transform: rotate(360deg); }}
+                  }}
+                  .info {{
+                    background: rgba(255, 255, 255, 0.05);
+                    padding: 15px;
+                    border-radius: 8px;
+                    margin: 20px 0;
+                    border-left: 4px solid #4CAF50;
+                  }}
                 </style>
               </head>
-                           <body>
-                <h3>🚀 Opening CryptoBot Payment...</h3>
-                <div class="loading">
-                  <p>Redirecting to secure payment page...</p>
+              <body>
+                <div class="container">
+                  <div class="logo">🎰</div>
+                  <h2 class="title">Secure Payment</h2>
+                  <p class="subtitle">Opening CryptoBot payment interface...</p>
+                  
+                  <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p>Connecting to payment processor...</p>
+                  </div>
+                  
+                  <div class="info">
+                    <p><strong>🔐 Secure Transaction</strong></p>
+                    <p>Your payment is processed securely through CryptoBot API</p>
+                  </div>
+                  
+                  <p><a class="btn" href="{web_invoice}" target="_self" id="payBtn">💳 Open Payment Page</a></p>
                 </div>
-                <p>If the page does not open automatically, tap the button below.</p>
-                <p><a class="btn" href="{web_invoice}" target="_self">💳 Open Invoice</a></p>
+                
                 <script>
                   try {{
                     // Initialize Telegram WebApp
                     if (window.Telegram && window.Telegram.WebApp) {{
-                      window.Telegram.WebApp.ready();
-                      window.Telegram.WebApp.expand();
+                      const webapp = window.Telegram.WebApp;
+                      webapp.ready();
+                      webapp.expand();
+                      webapp.disableVerticalSwipes();
+                      
+                      // Set header color
+                      webapp.setHeaderColor('#1a1a2e');
+                      webapp.setBackgroundColor('#1a1a2e');
+                      
+                      // Show main button
+                      webapp.MainButton.setText('💳 Proceed to Payment');
+                      webapp.MainButton.color = '#4CAF50';
+                      webapp.MainButton.textColor = '#FFFFFF';
+                      webapp.MainButton.show();
+                      
+                      webapp.MainButton.onClick(() => {{
+                        window.location.replace("{web_invoice}");
+                      }});
                     }}
                     
-                    // Auto-redirect to the invoice inside the same webview
+                    // Auto-redirect after 2 seconds
                     setTimeout(() => {{
+                      document.getElementById('loading').innerHTML = '<p>Redirecting now...</p>';
                       window.location.replace("{web_invoice}");
-                    }}, 1000);
+                    }}, 2000);
+                    
+                    // Manual button click
+                    document.getElementById('payBtn').addEventListener('click', (e) => {{
+                      e.preventDefault();
+                      window.location.replace("{web_invoice}");
+                    }});
+                    
                   }} catch (e) {{
-                    console.error(e);
+                    console.error('WebApp initialization error:', e);
+                    // Fallback - show button immediately
+                    document.getElementById('loading').style.display = 'none';
                   }}
                 </script>
               </body>
