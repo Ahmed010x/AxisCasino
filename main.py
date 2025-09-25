@@ -211,7 +211,7 @@ async def create_crypto_payment(asset: str, amount: float, user_id: int, payload
             'asset': asset,
             'amount': f"{amount:.8f}",
             'payment_id': payment_id,
-            'description': f'Casino deposit for user {user_id}',
+            'description': f'Casino deposit for user {user_id}',  # No emoji
             'webhook_url': webhook_url,
             'expires_in': 3600,  # 1 hour expiration
             'hide_message': True,  # Hide payment in chat
@@ -254,7 +254,7 @@ async def create_crypto_invoice(asset: str, amount: float, user_id: int, payload
     data = {
         "asset": asset,
         "amount": f"{amount:.8f}",
-        "description": f"Casino deposit - ${amount * await get_crypto_usd_rate(asset):.2f} USD",
+        "description": f"Casino deposit - ${amount * await get_crypto_usd_rate(asset):.2f} USD",  # No emoji
         "hidden_message": str(user_id),  # This will be used in webhook to identify user
         "paid_btn_name": "callback",
         "paid_btn_url": f"https://t.me/{await get_bot_username()}?start=payment_success",
@@ -1615,13 +1615,13 @@ async def deposit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 💰 <b>Current Balance:</b> {balance_str}
 
 🔒 <b>Secure Payment Methods:</b>
-Choose your preferred deposit method below.
+We accept Litecoin (LTC) deposits for fast and secure transactions.
 
 • <b>Cryptocurrency:</b> Instant deposits with low fees
 • <b>Minimum:</b> $1.00 USD equivalent
 • <b>Processing:</b> Usually within minutes
 
-💡 <b>Why choose crypto?</b>
+💡 <b>Why choose Litecoin?</b>
 ✅ Fast processing times
 ✅ Lower transaction fees
 ✅ Enhanced privacy
@@ -1629,9 +1629,7 @@ Choose your preferred deposit method below.
 """
     
     keyboard = [
-        [InlineKeyboardButton("🪙 Litecoin (LTC)", callback_data="deposit_LTC")],
-        [InlineKeyboardButton("🔷 TON", callback_data="deposit_TON")],
-        [InlineKeyboardButton("💰 USDT", callback_data="deposit_USDT")],
+        [InlineKeyboardButton("🪙 Deposit Litecoin (LTC)", callback_data="deposit_LTC")],
         [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
     ]
     
@@ -1659,21 +1657,18 @@ async def deposit_crypto_callback(update: Update, context: ContextTypes.DEFAULT_
 📊 <b>Current Rate:</b> 1 {crypto_type} = {rate_text} USD
 
 💵 <b>Enter Deposit Amount</b>
-Please enter the amount you want to deposit in USD.
+Please type the amount you want to deposit in USD.
 
-<b>Limits:</b>
+<b>Deposit Limits:</b>
 • Minimum: $1.00 USD
 • Maximum: $10,000.00 USD per transaction
 
-💡 <i>Enter amount in USD (e.g., 50 for $50)</i>
+💡 <i>Simply type your amount in USD (e.g., type "50" for $50.00)</i>
+
+⌨️ <b>Waiting for your input...</b>
 """
     
     keyboard = [
-        [InlineKeyboardButton("💳 Quick: $10", callback_data=f"deposit_amount_{crypto_type}_10")],
-        [InlineKeyboardButton("💳 Quick: $25", callback_data=f"deposit_amount_{crypto_type}_25"),
-         InlineKeyboardButton("💳 Quick: $50", callback_data=f"deposit_amount_{crypto_type}_50")],
-        [InlineKeyboardButton("💳 Quick: $100", callback_data=f"deposit_amount_{crypto_type}_100"),
-         InlineKeyboardButton("💳 Quick: $500", callback_data=f"deposit_amount_{crypto_type}_500")],
         [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
     ]
     
@@ -1682,16 +1677,7 @@ Please enter the amount you want to deposit in USD.
     # Set state for text input
     context.user_data['awaiting_deposit_amount'] = crypto_type
 
-async def deposit_amount_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle quick deposit amount selection."""
-    query = update.callback_query
-    await query.answer()
-    
-    # Parse callback data: deposit_amount_LTC_50
-    crypto_type = query.data.split("_")[2]
-    amount_usd = float(query.data.split("_")[3])
-    
-    await process_deposit_payment(update, context, crypto_type, amount_usd)
+
 
 async def process_deposit_payment(update, context, crypto_type: str, amount_usd: float):
     """Process the deposit payment creation."""
@@ -1837,16 +1823,14 @@ async def withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 • Daily Limit: {await format_usd(MAX_WITHDRAWAL_USD_DAILY)}
 • Fee: {WITHDRAWAL_FEE_PERCENT}% (min ${MIN_WITHDRAWAL_FEE:.2f})
 
-🔒 <b>Supported Cryptocurrencies:</b>
-Choose your preferred withdrawal method below.
+🔒 <b>Supported Cryptocurrency:</b>
+We support Litecoin (LTC) withdrawals for fast and secure transactions.
 
 ⏰ <b>Processing Time:</b> Usually within 24 hours
 """
     
     keyboard = [
-        [InlineKeyboardButton("🪙 Litecoin (LTC)", callback_data="withdraw_LTC")],
-        [InlineKeyboardButton("🔷 TON", callback_data="withdraw_TON")],
-        [InlineKeyboardButton("💰 USDT", callback_data="withdraw_USDT")],
+        [InlineKeyboardButton("🪙 Withdraw Litecoin (LTC)", callback_data="withdraw_LTC")],
         [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
     ]
     
@@ -2675,12 +2659,11 @@ async def async_main():
     application.add_handler(crash_conv_handler)
     # Deposit/Withdrawal handlers
     application.add_handler(CallbackQueryHandler(deposit_callback, pattern="^deposit$"))
-    application.add_handler(CallbackQueryHandler(deposit_crypto_callback, pattern="^deposit_(LTC|TON)$"))
-    application.add_handler(CallbackQueryHandler(deposit_amount_callback, pattern="^deposit_amount_"))
+    application.add_handler(CallbackQueryHandler(deposit_crypto_callback, pattern="^deposit_LTC$"))
     
     # Withdrawal handlers
     application.add_handler(CallbackQueryHandler(withdraw_start, pattern="^withdraw$"))
-    application.add_handler(CallbackQueryHandler(withdraw_crypto_callback, pattern="^withdraw_(LTC|TON)$"))  
+    application.add_handler(CallbackQueryHandler(withdraw_crypto_callback, pattern="^withdraw_LTC$"))  
     application.add_handler(CallbackQueryHandler(withdraw_amount_callback, pattern="^withdraw_amount_"))
     application.add_handler(CallbackQueryHandler(confirm_withdrawal_callback, pattern="^confirm_withdrawal$"))
 
