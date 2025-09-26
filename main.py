@@ -267,7 +267,7 @@ async def create_crypto_invoice(asset: str, amount: float, user_id: int, payload
             'expires_in': 3600,  # 1 hour expiration
             'allow_comments': False,
             'allow_anonymous': False,
-            'paid_btn_name': 'callback',
+            'paid_btn_name': 'viewItem',
             'paid_btn_url': f"https://t.me/{await get_bot_username()}?start=payment_success"
         }
         
@@ -1690,7 +1690,8 @@ async def process_deposit_payment(update, context, crypto_type: str, amount_usd:
             return
         
         invoice = invoice_data['result']
-        invoice_url = invoice['bot_invoice_url']
+        # Use mini_app_invoice_url for native mini app experience within your bot
+        invoice_url = invoice.get('mini_app_invoice_url') or invoice.get('bot_invoice_url')
         
         text = f"""
 💰 <b>CRYPTO PAY INVOICE READY</b> 💰
@@ -1701,17 +1702,17 @@ async def process_deposit_payment(update, context, crypto_type: str, amount_usd:
 • Rate: <b>${rate:.4f}</b> per {crypto_type}
 • Invoice ID: <code>{invoice['invoice_id']}</code>
 
-💳 <b>Pay with CryptoBot:</b>
-Click the button below to open CryptoBot's secure payment interface. You can pay directly within Telegram using your CryptoBot wallet.
+💳 <b>Pay with CryptoBot Mini App:</b>
+Click the button below to open the secure payment interface directly within this bot. Pay using your CryptoBot wallet without leaving our bot.
 
 ⏰ <b>Expires in 1 hour</b>
 🔔 <i>You'll be notified instantly when payment is confirmed!</i>
 
-💡 <b>Note:</b> The payment opens in CryptoBot's native interface for the best secure experience.
+💡 <b>Note:</b> The payment opens in a native mini app for the best user experience.
 """
         
         keyboard = [
-            [InlineKeyboardButton("💳 Pay with CryptoBot", url=invoice_url)],
+            [InlineKeyboardButton("💳 Pay Now", web_app=WebAppInfo(url=invoice_url))],
             [InlineKeyboardButton("🔄 Check Payment Status", callback_data=f"check_payment_{invoice['invoice_id']}")],
             [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
         ]
