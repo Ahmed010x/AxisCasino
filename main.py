@@ -1729,7 +1729,7 @@ Click the button below to open CryptoBot's secure payment interface. You can pay
         else:
             await update.message.reply_text(error_text)
 
-async def handle_deposit_amount_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_deposit_amount_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text input for deposit amount."""
     if 'awaiting_deposit_amount' not in context.user_data:
         return
@@ -1809,7 +1809,7 @@ We support Litecoin (LTC) withdrawals for fast and secure transactions.
 """
     
     keyboard = [
-        [InlineKeyboardButton("🪙 Withdraw Litecoin (LTC)", callback_data="withdraw_LTC")],
+                             [InlineKeyboardButton("🪙 Withdraw Litecoin (LTC)", callback_data="withdraw_LTC")],
         [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
     ]
     
@@ -2159,12 +2159,6 @@ async def support_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML, disable_web_page_preview=True)
     elif update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-
-async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show support/help info from the Support button."""
-    query = update.callback_query
-    await query.answer()
-    await support_command(update, context)
 
 # --- Main Bot Setup and Entry Point ---
 async def async_main():
