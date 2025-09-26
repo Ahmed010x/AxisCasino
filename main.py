@@ -1809,7 +1809,7 @@ We support Litecoin (LTC) withdrawals for fast and secure transactions.
 """
     
     keyboard = [
-                             [InlineKeyboardButton("🪙 Withdraw Litecoin (LTC)", callback_data="withdraw_LTC")],
+                                    [InlineKeyboardButton("🪙 Withdraw Litecoin (LTC)", callback_data="withdraw_LTC")],
         [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
     ]
     
@@ -2159,6 +2159,26 @@ async def support_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML, disable_web_page_preview=True)
     elif update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+
+async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle support/help callback query."""
+    query = update.callback_query
+    await query.answer()
+    text = (
+        "🆘 <b>Support & Help</b> 🆘\n\n"
+        "Need assistance? We're here to help!\n\n"
+        f"<b>Support Channel:</b> <a href='{SUPPORT_CHANNEL}'>{SUPPORT_CHANNEL}</a>\n"
+        "<b>Contact:</b> @casino_support_admin\n\n"
+        "• For FAQs, updates, and community help, join our support channel.\n"
+        "• For urgent issues, message our support admin.\n\n"
+        "<i>We aim to respond as quickly as possible!</i>"
+    )
+    keyboard = [
+        [InlineKeyboardButton("📢 Support Channel", url=SUPPORT_CHANNEL)],
+        [InlineKeyboardButton("👤 Contact Admin", url="https://t.me/casino_support_admin")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
 # --- Main Bot Setup and Entry Point ---
 async def async_main():
