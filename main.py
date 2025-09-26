@@ -1690,8 +1690,8 @@ async def process_deposit_payment(update, context, crypto_type: str, amount_usd:
             return
         
         invoice = invoice_data['result']
-        # Use mini_app_invoice_url for native mini app experience within your bot
-        invoice_url = invoice.get('mini_app_invoice_url') or invoice.get('bot_invoice_url')
+        # Use bot_invoice_url for Telegram integration - this opens CryptoBot's native interface
+        invoice_url = invoice.get('bot_invoice_url') or invoice.get('mini_app_invoice_url')
         
         text = f"""
 💰 <b>CRYPTO PAY INVOICE READY</b> 💰
@@ -1712,7 +1712,7 @@ Click the button below to open the secure payment interface directly within this
 """
         
         keyboard = [
-            [InlineKeyboardButton("💳 Pay Now", web_app=WebAppInfo(url=invoice_url))],
+            [InlineKeyboardButton("💳 Pay with CryptoBot", url=invoice_url)],
             [InlineKeyboardButton("🔄 Check Payment Status", callback_data=f"check_payment_{invoice['invoice_id']}")],
             [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
         ]
