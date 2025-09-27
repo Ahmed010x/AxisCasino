@@ -190,32 +190,32 @@ CRYPTO_ADDRESS_PATTERNS = {
     'SOL': r'^[1-9A-HJ-NP-Za-km-z]{32,44}$',
 }
 
+
+
 async def create_crypto_payment(asset: str, amount: float, user_id: int, payload: dict = None) -> dict:
-    """Create a Crypto Pay payment using CryptoBot's native payment system"""
+    """Create a crypto payment using CryptoBot API for native mini app experience."""
+    if not CRYPTOBOT_API_TOKEN:
+        return {"ok": False, "error": "CryptoBot API token not configured"}
+    
     try:
-        if not CRYPTOBOT_API_TOKEN:
-            return {"ok": False, "error": "API token not configured"}
-        
         headers = {
             'Crypto-Pay-API-Token': CRYPTOBOT_API_TOKEN,
             'Content-Type': 'application/json'
         }
         
-        # Set webhook URL for payment notifications
-        webhook_url = f'{RENDER_EXTERNAL_URL}/webhook/cryptobot' if RENDER_EXTERNAL_URL else 'https://axiscasino.onrender.com/webhook/cryptobot'
+        # Get USD amount for description
+        usd_rate = await get_crypto_usd_rate(asset)
+        usd_amount = amount * usd_rate if usd_rate > 0 else amount
         
-        # Generate unique payment ID
-        payment_id = f"casino_deposit_{user_id}_{int(time.time())}"
-        
+        # createPayment API data structure (different from createInvoice)
         data = {
             'asset': asset,
             'amount': f"{amount:.8f}",
-            'payment_id': payment_id,
-            'description': f'Casino deposit for user {user_id}',  # No emoji
-            'webhook_url': webhook_url,
+            'description': f'Casino deposit - ${usd_amount:.2f} USD',
+            'hidden_message': str(user_id),  # Used to identify user in webhook
             'expires_in': 3600,  # 1 hour expiration
-            'hide_message': True,  # Hide payment in chat
-            'pay_anonymously': False
+            'allow_comments': False,
+            'allow_anonymous': False,
         }
         
         if payload:
@@ -226,61 +226,8 @@ async def create_crypto_payment(asset: str, amount: float, user_id: int, payload
                                   headers=headers, json=data) as response:
                 if response.status == 200:
                     result = await response.json()
-                    logger.info(f"Crypto Pay payment created successfully: {result.get('result', {}).get('payment_id')}")
-                    return result
-                else:
-                    error_text = await response.text()
-                    logger.error(f"Crypto Pay API error {response.status}: {error_text}")
-                    return {"ok": False, "error": f"API error {response.status}: {error_text}"}
-                
-    except asyncio.TimeoutError:
-        logger.error("Timeout creating crypto payment")
-        return {"ok": False, "error": "Request timeout - please try again"}
-    except Exception as e:
-        logger.error(f"Error creating crypto payment: {e}")
-        return {"ok": False, "error": str(e)}
-
-async def create_crypto_invoice(asset: str, amount: float, user_id: int, payload: dict = None) -> dict:
-    """Create a crypto invoice using CryptoBot API."""
-    if not CRYPTOBOT_API_TOKEN:
-        return {"ok": False, "error": "CryptoBot API token not configured"}
-    
-    try:
-        headers = {
-            'Crypto-Pay-API-Token': CRYPTOBOT_API_TOKEN,
-            'Content-Type': 'application/json'
-        }
-        
-        # Set webhook URL for payment notifications
-        webhook_url = f'{RENDER_EXTERNAL_URL}/webhook/cryptobot' if RENDER_EXTERNAL_URL else 'https://axiscasino.onrender.com/webhook/cryptobot'
-        
-        # Get USD amount for description
-        usd_rate = await get_crypto_usd_rate(asset)
-        usd_amount = amount * usd_rate if usd_rate > 0 else amount
-        
-        data = {
-            'asset': asset,
-            'amount': f"{amount:.8f}",
-            'description': f'Casino deposit - ${usd_amount:.2f} USD',
-            'hidden_message': str(user_id),
-            'webhook_url': webhook_url,
-            'expires_in': 3600,  # 1 hour expiration
-            'allow_comments': False,
-            'allow_anonymous': False,
-            'paid_btn_name': 'viewItem',
-            'paid_btn_url': f"https://t.me/{await get_bot_username()}?start=payment_success"
-        }
-        
-        if payload:
-            data.update(payload)
-        
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
-            async with session.post('https://pay.crypt.bot/api/createInvoice', 
-                                  headers=headers, json=data) as response:
-                if response.status == 200:
-                    result = await response.json()
                     if result.get('ok'):
-                        logger.info(f"CryptoBot invoice created successfully: {result.get('result', {}).get('invoice_id')}")
+                        logger.info(f"CryptoBot payment created successfully: {result.get('result', {}).get('payment_id')}")
                         return result
                     else:
                         logger.error(f"CryptoBot API returned error: {result}")
@@ -291,10 +238,10 @@ async def create_crypto_invoice(asset: str, amount: float, user_id: int, payload
                     return {"ok": False, "error": f"API error {response.status}: {error_text}"}
                 
     except asyncio.TimeoutError:
-        logger.error("Timeout creating crypto invoice")
+        logger.error("Timeout creating crypto payment")
         return {"ok": False, "error": "Request timeout - please try again"}
     except Exception as e:
-        logger.error(f"Error creating crypto invoice: {e}")
+        logger.error(f"Error creating crypto payment: {e}")
         return {"ok": False, "error": str(e)}
 
 async def get_bot_username() -> str:
@@ -1678,42 +1625,42 @@ async def process_deposit_payment(update, context, crypto_type: str, amount_usd:
         crypto_amount = amount_usd / rate
         user_id = query.from_user.id if query else update.message.from_user.id
         
-        # Create invoice using CryptoBot
-        invoice_data = await create_crypto_invoice(crypto_type, crypto_amount, user_id)
+        # Create payment using CryptoBot
+        payment_data = await create_crypto_payment(crypto_type, crypto_amount, user_id)
         
-        if not invoice_data.get('ok'):
-            error_text = f"❌ Failed to create {crypto_type} invoice. Please try again."
+        if not payment_data.get('ok'):
+            error_text = f"❌ Failed to create {crypto_type} payment. Please try again."
             if query:
                 await query.edit_message_text(error_text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="deposit")]]))
             else:
                 await update.message.reply_text(error_text)
             return
         
-        invoice = invoice_data['result']
-        # Use bot_invoice_url for Telegram integration - this opens CryptoBot's native interface
-        invoice_url = invoice.get('bot_invoice_url') or invoice.get('mini_app_invoice_url')
+        payment = payment_data['result']
+        # Use pay_url for native mini app integration within Telegram
+        payment_url = payment.get('pay_url')
         
         text = f"""
-💰 <b>CRYPTO PAY INVOICE READY</b> 💰
+💰 <b>CRYPTO PAY PAYMENT READY</b> 💰
 
 📊 <b>Payment Details:</b>
 • Amount: <b>${amount_usd:.2f} USD</b>
 • Crypto: <b>{crypto_amount:.8f} {crypto_type}</b>
 • Rate: <b>${rate:.4f}</b> per {crypto_type}
-• Invoice ID: <code>{invoice['invoice_id']}</code>
+• Payment ID: <code>{payment['payment_id']}</code>
 
 💳 <b>Pay with CryptoBot Mini App:</b>
-Click the button below to open the secure payment interface directly within this bot. Pay using your CryptoBot wallet without leaving our bot.
+Click the button below to open the secure payment interface directly within this bot. This opens the native CryptoBot mini app for the best user experience.
 
 ⏰ <b>Expires in 1 hour</b>
 🔔 <i>You'll be notified instantly when payment is confirmed!</i>
 
-💡 <b>Note:</b> The payment opens in a native mini app for the best user experience.
+💡 <b>Note:</b> The payment opens natively within Telegram - no external redirects!
 """
         
         keyboard = [
-            [InlineKeyboardButton("💳 Pay with CryptoBot", url=invoice_url)],
-            [InlineKeyboardButton("🔄 Check Payment Status", callback_data=f"check_payment_{invoice['invoice_id']}")],
+            [InlineKeyboardButton("💳 Pay with CryptoBot", url=payment_url)],
+            [InlineKeyboardButton("🔄 Check Payment Status", callback_data=f"check_payment_{payment['payment_id']}")],
             [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
         ]
         
@@ -2735,13 +2682,13 @@ async def async_main():
                         logger.warning("Invalid webhook signature")
                         return {"status": "invalid_signature"}, 401
                 
-                # Process payment
-                if data and data.get('update_type') == 'invoice_paid':
-                    invoice_data = data.get('payload')
-                    user_id_str = invoice_data.get('hidden_message')
-                    amount = float(invoice_data.get('amount', 0))
-                    asset = invoice_data.get('asset', 'USDT')
-                    invoice_id = invoice_data.get('invoice_id')
+                # Process payment confirmation
+                if data and data.get('update_type') == 'payment_paid':
+                    payment_data = data.get('payload')
+                    user_id_str = payment_data.get('hidden_message')
+                    amount = float(payment_data.get('amount', 0))
+                    asset = payment_data.get('asset', 'USDT')
+                    payment_id = payment_data.get('payment_id')
                     
                     if user_id_str and amount > 0:
                         try:
@@ -2809,7 +2756,7 @@ async def async_main():
                                 except Exception as ref_error:
                                     logger.error(f"Error activating referral bonus: {ref_error}")
                                 
-                                logger.info(f"Payment processed: User {user_id}, Amount: {amount} {asset} (${usd_amount:.2f} USD), Invoice: {invoice_id}")
+                                logger.info(f"Payment processed: User {user_id}, Amount: {amount} {asset} (${usd_amount:.2f} USD), Payment: {payment_id}")
                                 
                                 # Try to notify user (best effort)
                                 try:
@@ -2821,7 +2768,7 @@ async def async_main():
                                         try:
                                             await application.bot.send_message(
                                                 chat_id=user_id,
-                                                text=f"✅ **Deposit Successful!**\n\n💰 **Amount:** ${usd_amount:.2f} USD\n🔗 **Transaction:** {invoice_id}\n\n🎮 Your balance has been updated. Ready to play!",
+                                                text=f"✅ **Deposit Successful!**\n\n💰 **Amount:** ${usd_amount:.2f} USD\n🔗 **Transaction:** {payment_id}\n\n🎮 Your balance has been updated. Ready to play!",
                                                 parse_mode=ParseMode.MARKDOWN
                                             )
                                         except Exception as e:
