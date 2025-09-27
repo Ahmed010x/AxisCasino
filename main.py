@@ -2558,6 +2558,9 @@ async def async_main():
         await query.answer()
         user_id = query.from_user.id
         
+        # Clear any previous states to prevent interference
+        context.user_data.clear()
+        
         user = await get_user(user_id)
         if not user:
             await query.edit_message_text("❌ User not found. Please use /start first.")
@@ -2666,13 +2669,27 @@ async def async_main():
             await update.message.reply_text("❌ Please enter a valid number")
             return SLOTS_BET_AMOUNT
 
+    async def cancel_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Cancel current game and return to games menu"""
+        context.user_data.clear()  # Clear all states
+        if update.callback_query:
+            await update.callback_query.answer()
+            await mini_app_centre_callback(update, context)
+        return ConversationHandler.END
+
     slots_conv_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(slots_start, pattern="^slots$")],
         states={
             SLOTS_BET_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, slots_bet_amount)]
         },
-        fallbacks=[CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^mini_app_centre$")],
-        name="slots_conv_handler"
+        fallbacks=[
+            CallbackQueryHandler(cancel_game, pattern="^mini_app_centre$"),
+            CallbackQueryHandler(cancel_game, pattern="^main_panel$")
+        ],
+        name="slots_conv_handler",
+        per_message=False,
+        per_chat=True,
+        per_user=True
     )
     # Coinflip game states  
     COINFLIP_BET_AMOUNT, COINFLIP_PREDICTION = range(2)
@@ -2682,6 +2699,9 @@ async def async_main():
         query = update.callback_query
         await query.answer()
         user_id = query.from_user.id
+        
+        # Clear any previous states to prevent interference
+        context.user_data.clear()
         
         user = await get_user(user_id)
         if not user:
@@ -2817,8 +2837,14 @@ Choose your prediction:
             COINFLIP_BET_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, coinflip_bet_amount)],
             COINFLIP_PREDICTION: [CallbackQueryHandler(coinflip_play, pattern="^coinflip_(heads|tails)$")]
         },
-        fallbacks=[CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^mini_app_centre$")],
-        name="coinflip_conv_handler"
+        fallbacks=[
+            CallbackQueryHandler(cancel_game, pattern="^mini_app_centre$"),
+            CallbackQueryHandler(cancel_game, pattern="^main_panel$")
+        ],
+        name="coinflip_conv_handler",
+        per_message=False,
+        per_chat=True,
+        per_user=True
     )
     # Dice game states
     DICE_BET_AMOUNT, DICE_PREDICTION = range(2)
@@ -2828,6 +2854,9 @@ Choose your prediction:
         query = update.callback_query
         await query.answer()
         user_id = query.from_user.id
+        
+        # Clear any previous states to prevent interference
+        context.user_data.clear()
         
         user = await get_user(user_id)
         if not user:
@@ -2964,8 +2993,14 @@ Choose your prediction:
             DICE_BET_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, dice_bet_amount)],
             DICE_PREDICTION: [CallbackQueryHandler(dice_play, pattern="^dice_(low|high)$")]
         },
-        fallbacks=[CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^mini_app_centre$")],
-        name="dice_conv_handler"
+        fallbacks=[
+            CallbackQueryHandler(cancel_game, pattern="^mini_app_centre$"),
+            CallbackQueryHandler(cancel_game, pattern="^main_panel$")
+        ],
+        name="dice_conv_handler",
+        per_message=False,
+        per_chat=True,
+        per_user=True
     )
     # Blackjack game states
     BLACKJACK_BET_AMOUNT, BLACKJACK_PLAYING = range(2)
@@ -3012,6 +3047,9 @@ Choose your prediction:
         query = update.callback_query
         await query.answer()
         user_id = query.from_user.id
+        
+        # Clear any previous states to prevent interference
+        context.user_data.clear()
         
         user = await get_user(user_id)
         if not user:
@@ -3243,8 +3281,14 @@ Choose your prediction:
                 CallbackQueryHandler(blackjack_stand, pattern="^blackjack_stand$")
             ]
         },
-        fallbacks=[CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^mini_app_centre$")],
-        name="blackjack_conv_handler"
+        fallbacks=[
+            CallbackQueryHandler(cancel_game, pattern="^mini_app_centre$"),
+            CallbackQueryHandler(cancel_game, pattern="^main_panel$")
+        ],
+        name="blackjack_conv_handler",
+        per_message=False,
+        per_chat=True,
+        per_user=True
     )
     # Roulette game states
     ROULETTE_BET_AMOUNT, ROULETTE_BET_TYPE = range(2)
@@ -3254,6 +3298,9 @@ Choose your prediction:
         query = update.callback_query
         await query.answer()
         user_id = query.from_user.id
+        
+        # Clear any previous states to prevent interference
+        context.user_data.clear()
         
         user = await get_user(user_id)
         if not user:
@@ -3478,8 +3525,14 @@ Choose your bet type:
                 MessageHandler(filters.TEXT & ~filters.COMMAND, roulette_single_number_input)
             ]
         },
-        fallbacks=[CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^mini_app_centre$")],
-        name="roulette_conv_handler"
+        fallbacks=[
+            CallbackQueryHandler(cancel_game, pattern="^mini_app_centre$"),
+            CallbackQueryHandler(cancel_game, pattern="^main_panel$")
+        ],
+        name="roulette_conv_handler",
+        per_message=False,
+        per_chat=True,
+        per_user=True
     )
     # Crash game states
     CRASH_BET_AMOUNT, CRASH_CASHOUT = range(2)
@@ -3489,6 +3542,9 @@ Choose your bet type:
         query = update.callback_query
         await query.answer()
         user_id = query.from_user.id
+        
+        # Clear any previous states to prevent interference
+        context.user_data.clear()
         
         user = await get_user(user_id)
         if not user:
@@ -3694,8 +3750,14 @@ Choose your bet type:
             CRASH_BET_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, crash_bet_amount)],
             CRASH_CASHOUT: [CallbackQueryHandler(crash_cashout, pattern="^crash_cashout$")]
         },
-        fallbacks=[CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^mini_app_centre$")],
-        name="crash_conv_handler"
+        fallbacks=[
+            CallbackQueryHandler(cancel_game, pattern="^mini_app_centre$"),
+            CallbackQueryHandler(cancel_game, pattern="^main_panel$")
+        ],
+        name="crash_conv_handler",
+        per_message=False,
+        per_chat=True,
+        per_user=True
     )
 
     application.add_handler(slots_conv_handler)
@@ -3724,19 +3786,22 @@ Choose your bet type:
     application.add_handler(CallbackQueryHandler(view_all_referrals_callback, pattern="^view_all_referrals$"))
     application.add_handler(CallbackQueryHandler(referral_stats_callback, pattern="^referral_stats$"))
     
-    # Message handlers for text input
+    # Message handlers for text input (only for deposit/withdrawal, not games)
     async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle text input for various states."""
-        # Handle deposit amount input
+        """Handle text input for deposit/withdrawal states only."""
+        # Only handle specific deposit/withdrawal states, not game states
         if 'awaiting_deposit_amount' in context.user_data:
             await handle_deposit_amount_input(update, context)
-        # Handle withdrawal amount input
         elif 'awaiting_withdraw_amount' in context.user_data:
             await handle_withdraw_amount_input(update, context)
-        # Handle withdrawal address input
         elif 'awaiting_withdraw_address' in context.user_data:
             await handle_withdraw_address_input(update, context)
+        else:
+            # Ignore text messages that don't match any expected state
+            # This prevents interference with conversation handlers
+            pass
     
+    # Add this handler with lower priority (after conversation handlers)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
     
     # Remove old weekly_bonus and redeem_panel handlers (do not re-register them)
