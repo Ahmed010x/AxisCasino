@@ -2580,7 +2580,7 @@ async def async_main():
 • Any other match = 1.5x payout
 
 💵 <b>Enter your bet amount in USD:</b>
-(Minimum: $1.00, Maximum: ${min(balance, MAX_BET_PER_GAME):.2f})
+(Minimum: $0.00, Maximum: ${min(balance, MAX_BET_PER_GAME):.2f})
 """
         
         keyboard = [[InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]]
@@ -2594,8 +2594,8 @@ async def async_main():
             user_id = update.message.from_user.id
             user = await get_user(user_id)
             
-            if amount < 1.0:
-                await update.message.reply_text("❌ Minimum bet is $1.00")
+            if amount < 0.0:
+                await update.message.reply_text("❌ Minimum bet is $0.00")
                 return SLOTS_BET_AMOUNT
                 
             if amount > user['balance']:
@@ -2720,7 +2720,7 @@ async def async_main():
 • Payout: 2x your bet
 
 💵 <b>Enter your bet amount in USD:</b>
-(Minimum: $1.00, Maximum: ${min(balance, MAX_BET_PER_GAME):.2f})
+(Minimum: $0.00, Maximum: ${min(balance, MAX_BET_PER_GAME):.2f})
 """
         
         keyboard = [[InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]]
@@ -2734,8 +2734,8 @@ async def async_main():
             user_id = update.message.from_user.id
             user = await get_user(user_id)
             
-            if amount < 1.0:
-                await update.message.reply_text("❌ Minimum bet is $1.00")
+            if amount < 0.0:
+                await update.message.reply_text("❌ Minimum bet is $0.00")
                 return COINFLIP_BET_AMOUNT
                 
             if amount > user['balance']:
@@ -2875,7 +2875,7 @@ Choose your prediction:
 • Payout: 2x your bet
 
 💵 <b>Enter your bet amount in USD:</b>
-(Minimum: $1.00, Maximum: ${min(balance, MAX_BET_PER_GAME):.2f})
+(Minimum: $0.00, Maximum: ${min(balance, MAX_BET_PER_GAME):.2f})
 """
         
         keyboard = [[InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]]
@@ -2889,8 +2889,8 @@ Choose your prediction:
             user_id = update.message.from_user.id
             user = await get_user(user_id)
             
-            if amount < 1.0:
-                await update.message.reply_text("❌ Minimum bet is $1.00")
+            if amount < 0.0:
+                await update.message.reply_text("❌ Minimum bet is $0.00")
                 return DICE_BET_AMOUNT
                 
             if amount > user['balance']:
@@ -3069,7 +3069,7 @@ Choose your prediction:
 • Blackjack pays 2.5x, regular win pays 2x
 
 💵 <b>Enter your bet amount in USD:</b>
-(Minimum: $1.00, Maximum: ${min(balance, MAX_BET_PER_GAME):.2f})
+(Minimum: $0.00, Maximum: ${min(balance, MAX_BET_PER_GAME):.2f})
 """
         
         keyboard = [[InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]]
@@ -3083,8 +3083,8 @@ Choose your prediction:
             user_id = update.message.from_user.id
             user = await get_user(user_id)
             
-            if amount < 1.0:
-                await update.message.reply_text("❌ Minimum bet is $1.00")
+            if amount < 0.0:
+                await update.message.reply_text("❌ Minimum bet is $0.00")
                 return BLACKJACK_BET_AMOUNT
                 
             if amount > user['balance']:
@@ -3320,7 +3320,7 @@ Choose your prediction:
 • Single number (36x payout)
 
 💵 <b>Enter your bet amount in USD:</b>
-(Minimum: $1.00, Maximum: ${min(balance, MAX_BET_PER_GAME):.2f})
+(Minimum: $0.00, Maximum: ${min(balance, MAX_BET_PER_GAME):.2f})
 """
         
         keyboard = [[InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]]
@@ -3334,8 +3334,8 @@ Choose your prediction:
             user_id = update.message.from_user.id
             user = await get_user(user_id)
             
-            if amount < 1.0:
-                await update.message.reply_text("❌ Minimum bet is $1.00")
+            if amount < 0.0:
+                await update.message.reply_text("❌ Minimum bet is $0.00")
                 return ROULETTE_BET_AMOUNT
                 
             if amount > user['balance']:
@@ -3564,7 +3564,7 @@ Choose your bet type:
 • Multiplier can crash at any time!
 
 💵 <b>Enter your bet amount in USD:</b>
-(Minimum: $1.00, Maximum: ${min(balance, MAX_BET_PER_GAME):.2f})
+(Minimum: $0.00, Maximum: ${min(balance, MAX_BET_PER_GAME):.2f})
 """
         
         keyboard = [[InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]]
@@ -3578,8 +3578,8 @@ Choose your bet type:
             user_id = update.message.from_user.id
             user = await get_user(user_id)
             
-            if amount < 1.0:
-                await update.message.reply_text("❌ Minimum bet is $1.00")
+            if amount < 0.0:
+                await update.message.reply_text("❌ Minimum bet is $0.00")
                 return CRASH_BET_AMOUNT
                 
             if amount > user['balance']:
