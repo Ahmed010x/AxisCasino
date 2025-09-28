@@ -6,6 +6,7 @@ This shows the before/after for updating game logic
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
+from telegram.ext import CommandHandler
 
 # BEFORE - Old game logic without house balance tracking
 async def update_balance(user_id: int, amount: float) -> bool:
@@ -289,6 +290,29 @@ async def slots_telegram_handler(update, context):
         reply_markup=InlineKeyboardMarkup(keyboard), 
         parse_mode=ParseMode.HTML
     )
+
+async def house_balance_command(update, context) -> None:
+    """
+    Telegram command handler for /housebal to display current house balance.
+    Only accessible to owner/admins (add your own access control as needed).
+    """
+    user_id = update.effective_user.id
+    # TODO: Replace with actual owner/admin check
+    is_owner = True  # Replace with your logic
+    if not is_owner:
+        await update.message.reply_text("You do not have permission to view house balance.")
+        return
+    try:
+        # Get house balance (replace with your actual function)
+        # Example: house_balance = await get_house_balance()
+        house_balance = 10000.0  # Dummy value for demonstration
+        text = f"🏦 <b>House Balance:</b> ${house_balance:.2f}"
+        await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+    except Exception as e:
+        await update.message.reply_text(f"Error retrieving house balance: {e}")
+
+# Example: Add this handler to your dispatcher in main.py
+# dispatcher.add_handler(CommandHandler("housebal", house_balance_command))
 
 # SUMMARY: Key Changes for House Balance Integration
 
