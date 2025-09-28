@@ -1524,6 +1524,10 @@ async def deposit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     """Handle deposit button - show deposit options."""
     query = update.callback_query
     await query.answer()
+    
+    # Clear any previous states to prevent input clashes
+    context.user_data.clear()
+    
     user_id = query.from_user.id
     
     user = await get_user(user_id)
@@ -1566,6 +1570,9 @@ async def deposit_crypto_callback(update: Update, context: ContextTypes.DEFAULT_
     """Handle specific crypto deposit selection."""
     query = update.callback_query
     await query.answer()
+    
+    # Clear any previous states to prevent input clashes
+    context.user_data.clear()
     
     # Extract crypto type from callback data
     crypto_type = query.data.split("_")[1]  # deposit_LTC -> LTC
@@ -1708,6 +1715,10 @@ async def withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     """Start the withdrawal process."""
     query = update.callback_query
     await query.answer()
+    
+    # Clear any previous states to prevent input clashes
+    context.user_data.clear()
+    
     user_id = query.from_user.id
     
     user = await get_user(user_id)
@@ -1768,6 +1779,12 @@ async def withdraw_crypto_callback(update: Update, context: ContextTypes.DEFAULT
     """Handle crypto withdrawal selection."""
     query = update.callback_query
     await query.answer()
+    
+    # Clear any previous states to prevent input clashes (but preserve withdraw context)
+    withdraw_crypto = context.user_data.get('withdraw_crypto')
+    context.user_data.clear()
+    if withdraw_crypto:
+        context.user_data['withdraw_crypto'] = withdraw_crypto
     
     crypto_type = query.data.split("_")[1]  # withdraw_LTC -> LTC
     user_id = query.from_user.id
@@ -2170,18 +2187,43 @@ async def cancel_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_text_input_main(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle text input for deposit/withdrawal states only - ignore game states to prevent interference."""
-    # Only handle specific deposit/withdrawal states, not game states
+    user_id = update.effective_user.id if update.effective_user else None
+    text_input = update.message.text if update.message else ""
+    
+    # Check if user has any pending deposit/withdrawal states
     if 'awaiting_deposit_amount' in context.user_data:
+        logger.info(f"Processing deposit amount input from user {user_id}: {text_input}")
         await handle_deposit_amount_input(update, context)
     elif 'awaiting_withdraw_amount' in context.user_data:
+        logger.info(f"Processing withdrawal amount input from user {user_id}: {text_input}")
         await handle_withdraw_amount_input(update, context)
     elif 'awaiting_withdraw_address' in context.user_data:
+        logger.info(f"Processing withdrawal address input from user {user_id}: {text_input}")
         await handle_withdraw_address_input(update, context)
     else:
-        # Ignore text messages that don't match any expected state
-        # This prevents interference with conversation handlers for games
-        # Log ignored input for debugging
-        logger.debug(f"Ignored text input from user {update.effective_user.id}: {update.message.text}")
+        # Check if this might be a stale input from a previous interaction
+        # Provide helpful feedback instead of silently ignoring
+        logger.debug(f"Received unexpected text input from user {user_id}: {text_input}")
+        
+        # If the input looks like an amount, suggest using the deposit/withdrawal buttons
+        try:
+            amount = float(text_input.replace('$', '').replace(',', ''))
+            if amount > 0:
+                keyboard = [
+                    [InlineKeyboardButton("💳 Deposit", callback_data="deposit"),
+                     InlineKeyboardButton("🏦 Withdraw", callback_data="withdraw")],
+                    [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+                ]
+                await update.message.reply_text(
+                    "💡 I see you entered an amount, but no deposit or withdrawal is currently active.\n\n"
+                    "Please use the buttons below to start a new transaction:",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+                return
+        except ValueError:
+            pass  # Not an amount, ignore silently
+        
+        # For other unexpected inputs, silently ignore to prevent spam
         pass
 
 async def async_main():
