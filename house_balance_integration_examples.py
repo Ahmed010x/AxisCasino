@@ -291,9 +291,24 @@ async def slots_telegram_handler(update, context):
         parse_mode=ParseMode.HTML
     )
 
+async def get_house_balance() -> float:
+    """
+    Returns the current house balance from the database.
+    Replace with actual aiosqlite query in production.
+    """
+    # Example: Fetch house balance from database (pseudo-code)
+    # async with aiosqlite.connect(DB_PATH) as db:
+    #     async with db.execute("SELECT balance FROM house WHERE id = 1") as cursor:
+    #         row = await cursor.fetchone()
+    #         if row:
+    #             return row[0]
+    #         else:
+    #             return 0.0
+    return 10000.0  # Dummy value for demonstration
+
 async def house_balance_command(update, context) -> None:
     """
-    Telegram command handler for /housebal to display current house balance.
+    Telegram command handler for /housebal to display all available house funds.
     Only accessible to owner/admins (add your own access control as needed).
     """
     user_id = update.effective_user.id
@@ -303,10 +318,8 @@ async def house_balance_command(update, context) -> None:
         await update.message.reply_text("You do not have permission to view house balance.")
         return
     try:
-        # Get house balance (replace with your actual function)
-        # Example: house_balance = await get_house_balance()
-        house_balance = 10000.0  # Dummy value for demonstration
-        text = f"🏦 <b>House Balance:</b> ${house_balance:.2f}"
+        house_balance = await get_house_balance()
+        text = f"🏦 <b>Available House Funds:</b> ${house_balance:.2f}"
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
     except Exception as e:
         await update.message.reply_text(f"Error retrieving house balance: {e}")
