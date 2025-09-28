@@ -2130,6 +2130,60 @@ async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
 # --- Main Bot Setup and Entry Point ---
+# Global utility functions for conversation handlers
+async def global_fallback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle any unexpected messages during conversation"""
+    # Clear any stale conversation state
+    context.user_data.clear()
+    
+    # If it's a callback query, answer it
+    if update.callback_query:
+        await update.callback_query.answer()
+        
+    # Dynamically call start_command (will be defined later in async_main)
+    # For now, just clear state and show a message
+    if update.callback_query:
+        keyboard = [[InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]]
+        await update.callback_query.edit_message_text(
+            "🔄 Returning to main menu...",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    elif update.message:
+        keyboard = [[InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]]
+        await update.message.reply_text(
+            "🔄 Returning to main menu...",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    return ConversationHandler.END
+
+async def cancel_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancel current game and return to games menu"""
+    context.user_data.clear()  # Clear all states
+    if update.callback_query:
+        await update.callback_query.answer()
+        keyboard = [[InlineKeyboardButton("🎮 Games", callback_data="mini_app_centre")]]
+        await update.callback_query.edit_message_text(
+            "🎮 Game cancelled. Choose another game:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    return ConversationHandler.END
+
+async def handle_text_input_main(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle text input for deposit/withdrawal states only - ignore game states to prevent interference."""
+    # Only handle specific deposit/withdrawal states, not game states
+    if 'awaiting_deposit_amount' in context.user_data:
+        await handle_deposit_amount_input(update, context)
+    elif 'awaiting_withdraw_amount' in context.user_data:
+        await handle_withdraw_amount_input(update, context)
+    elif 'awaiting_withdraw_address' in context.user_data:
+        await handle_withdraw_address_input(update, context)
+    else:
+        # Ignore text messages that don't match any expected state
+        # This prevents interference with conversation handlers for games
+        # Log ignored input for debugging
+        logger.debug(f"Ignored text input from user {update.effective_user.id}: {update.message.text}")
+        pass
+
 async def async_main():
     """Async main function to properly start both bot and keep-alive server."""
     logger.info("🚀 Starting Telegram Casino Bot...")
@@ -2669,13 +2723,7 @@ async def async_main():
             await update.message.reply_text("❌ Please enter a valid number")
             return SLOTS_BET_AMOUNT
 
-    async def cancel_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Cancel current game and return to games menu"""
-        context.user_data.clear()  # Clear all states
-        if update.callback_query:
-            await update.callback_query.answer()
-            await mini_app_centre_callback(update, context)
-        return ConversationHandler.END
+
 
     slots_conv_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(slots_start, pattern="^slots$")],
@@ -2684,7 +2732,8 @@ async def async_main():
         },
         fallbacks=[
             CallbackQueryHandler(cancel_game, pattern="^mini_app_centre$"),
-            CallbackQueryHandler(cancel_game, pattern="^main_panel$")
+            CallbackQueryHandler(cancel_game, pattern="^main_panel$"),
+            MessageHandler(filters.ALL, global_fallback_handler)
         ],
         name="slots_conv_handler",
         per_message=False,
@@ -2839,7 +2888,8 @@ Choose your prediction:
         },
         fallbacks=[
             CallbackQueryHandler(cancel_game, pattern="^mini_app_centre$"),
-            CallbackQueryHandler(cancel_game, pattern="^main_panel$")
+            CallbackQueryHandler(cancel_game, pattern="^main_panel$"),
+            MessageHandler(filters.ALL, global_fallback_handler)
         ],
         name="coinflip_conv_handler",
         per_message=False,
@@ -2995,7 +3045,8 @@ Choose your prediction:
         },
         fallbacks=[
             CallbackQueryHandler(cancel_game, pattern="^mini_app_centre$"),
-            CallbackQueryHandler(cancel_game, pattern="^main_panel$")
+            CallbackQueryHandler(cancel_game, pattern="^main_panel$"),
+            MessageHandler(filters.ALL, global_fallback_handler)
         ],
         name="dice_conv_handler",
         per_message=False,
@@ -3283,7 +3334,8 @@ Choose your prediction:
         },
         fallbacks=[
             CallbackQueryHandler(cancel_game, pattern="^mini_app_centre$"),
-            CallbackQueryHandler(cancel_game, pattern="^main_panel$")
+            CallbackQueryHandler(cancel_game, pattern="^main_panel$"),
+            MessageHandler(filters.ALL, global_fallback_handler)
         ],
         name="blackjack_conv_handler",
         per_message=False,
@@ -3527,7 +3579,8 @@ Choose your bet type:
         },
         fallbacks=[
             CallbackQueryHandler(cancel_game, pattern="^mini_app_centre$"),
-            CallbackQueryHandler(cancel_game, pattern="^main_panel$")
+            CallbackQueryHandler(cancel_game, pattern="^main_panel$"),
+            MessageHandler(filters.ALL, global_fallback_handler)
         ],
         name="roulette_conv_handler",
         per_message=False,
@@ -3592,38 +3645,59 @@ Choose your bet type:
             
             context.user_data['crash_bet'] = amount
             
-            # Simulate the crash game
-            import random
-            import asyncio
+            # For simplicity, we'll auto-play the crash game
+            # Random crash point between 1.01x and 5.0x
+            crash_point = random.uniform(1.01, 5.0)
             
-            # Random crash point between 1.01x and 20x (weighted towards lower values)
-            crash_point = random.uniform(1.01, 20.0)
-            if random.random() < 0.7:  # 70% chance of crashing before 3x
-                crash_point = random.uniform(1.01, 3.0)
+            # Random auto-cashout point (user "cashes out" automatically)
+            cashout_point = random.uniform(1.5, crash_point - 0.1) if crash_point > 1.5 else crash_point * 0.9
             
-            context.user_data['crash_point'] = crash_point
-            context.user_data['current_multiplier'] = 1.0
+            # Determine if user wins
+            if cashout_point < crash_point:
+                # User wins
+                win_amount = amount * cashout_point
+                await update_balance(user_id, win_amount - amount)  # Net win
+                result_text = "🎉 <b>YOU CASHED OUT!</b>"
+                emoji = "🎉"
+                status = f"Cashed out at {cashout_point:.2f}x"
+            else:
+                # User loses (crashed before cashout)
+                win_amount = 0
+                await deduct_balance(user_id, amount)
+                result_text = "💥 <b>CRASHED!</b>"
+                emoji = "💥"
+                status = f"Crashed at {crash_point:.2f}x"
+            
+            # Log the game session
+            await log_game_session(user_id, "crash", amount, win_amount, status)
+            
+            # Get updated balance
+            user = await get_user(user_id)
+            new_balance = user['balance'] if user else 0
             
             text = f"""
-🚀 <b>CRASH GAME STARTED</b> 🚀
+🚀 <b>CRASH RESULT</b> 🚀
 
-💰 <b>Bet:</b> ${amount:.2f}
-📈 <b>Multiplier:</b> 1.00x
-💎 <b>Current Value:</b> ${amount:.2f}
+� <b>Crashed at:</b> {crash_point:.2f}x
+🎯 <b>Result:</b> {status}
 
-🎯 <b>Cash out before it crashes!</b>
+{result_text}
+
+� <b>Bet:</b> ${amount:.2f}
+💎 <b>Win:</b> ${win_amount:.2f}
+� <b>New Balance:</b> {await format_usd(new_balance)}
+
+{emoji} <i>{"Perfect timing!" if win_amount > 0 else "Too risky!"}</i>
 """
             
             keyboard = [
-                [InlineKeyboardButton("💰 CASH OUT", callback_data="crash_cashout")],
-                [InlineKeyboardButton("❌ Cancel", callback_data="mini_app_centre")]
+                [InlineKeyboardButton("� Play Again", callback_data="crash")],
+                [InlineKeyboardButton("🎮 Other Games", callback_data="mini_app_centre"),
+                 InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
             ]
             
             await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-            
-            # Start the crash simulation
-            await crash_simulate(update, context)
-            return CRASH_CASHOUT
+            return ConversationHandler.END
             
         except ValueError:
             await update.message.reply_text("❌ Please enter a valid number")
@@ -3752,7 +3826,8 @@ Choose your bet type:
         },
         fallbacks=[
             CallbackQueryHandler(cancel_game, pattern="^mini_app_centre$"),
-            CallbackQueryHandler(cancel_game, pattern="^main_panel$")
+            CallbackQueryHandler(cancel_game, pattern="^main_panel$"),
+            MessageHandler(filters.ALL, global_fallback_handler)
         ],
         name="crash_conv_handler",
         per_message=False,
@@ -3787,22 +3862,10 @@ Choose your bet type:
     application.add_handler(CallbackQueryHandler(referral_stats_callback, pattern="^referral_stats$"))
     
     # Message handlers for text input (only for deposit/withdrawal, not games)
-    async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle text input for deposit/withdrawal states only."""
-        # Only handle specific deposit/withdrawal states, not game states
-        if 'awaiting_deposit_amount' in context.user_data:
-            await handle_deposit_amount_input(update, context)
-        elif 'awaiting_withdraw_amount' in context.user_data:
-            await handle_withdraw_amount_input(update, context)
-        elif 'awaiting_withdraw_address' in context.user_data:
-            await handle_withdraw_address_input(update, context)
-        else:
-            # Ignore text messages that don't match any expected state
-            # This prevents interference with conversation handlers
-            pass
+    # The deposit/withdrawal handlers are already defined above in the file
     
     # Add this handler with lower priority (after conversation handlers)
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input_main))
     
     # Remove old weekly_bonus and redeem_panel handlers (do not re-register them)
     # ...existing code...
