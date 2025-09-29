@@ -1543,7 +1543,7 @@ async def run_telegram_bot_async():
     await application.updater.idle()
 
 def run_telegram_bot():
-    asyncio.run(run_telegram_bot_async())
+    asyncio.get_event_loop().run_until_complete(run_telegram_bot_async())
 
 if __name__ == "__main__":
     flask_thread = threading.Thread(target=run_flask)
