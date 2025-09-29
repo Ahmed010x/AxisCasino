@@ -1935,23 +1935,32 @@ async def async_main():
 
     async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle support/help callback query."""
-        query = update.callback_query
-        await query.answer()
-        text = (
-            "🆘 <b>Support & Help</b> 🆘\n\n"
-            "Need assistance? We're here to help!\n\n"
-            f"<b>Support Channel:</b> <a href='{SUPPORT_CHANNEL}'>{SUPPORT_CHANNEL}</a>\n"
-            "<b>Contact:</b> @casino_support_admin\n\n"
-            "• For FAQs, updates, and community help, join our support channel.\n"
-            "• For urgent issues, message our support admin.\n\n"
-            "<i>We aim to respond as quickly as possible!</i>"
-        )
-        keyboard = [
-            [InlineKeyboardButton("📢 Support Channel", url=SUPPORT_CHANNEL)],
-            [InlineKeyboardButton("👤 Contact Admin", url="https://t.me/casino_support_admin")],
-            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-        ]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        query = getattr(update, "callback_query", None)
+        if query is not None:
+            await query.answer()
+            text = (
+                "🆘 <b>Support & Help</b> 🆘\n\n"
+                "Need assistance? We're here to help!\n\n"
+                f"<b>Support Channel:</b> <a href='{SUPPORT_CHANNEL}'>{SUPPORT_CHANNEL}</a>\n"
+                "<b>Contact:</b> @casino_support_admin\n\n"
+                "• For FAQs, updates, and community help, join our support channel.\n"
+                "• For urgent issues, message our support admin.\n\n"
+                "<i>We aim to respond as quickly as possible!</i>"
+            )
+            keyboard = [
+                [InlineKeyboardButton("📢 Support Channel", url=SUPPORT_CHANNEL)],
+                [InlineKeyboardButton("👤 Contact Admin", url="https://t.me/casino_support_admin")],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+            ]
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        else:
+            # Handle as a message or send a fallback response
+            await update.message.reply_text(
+                "Support is available via the main menu or by clicking a button.\n\n" 
+                f"<b>Support Channel:</b> <a href='{SUPPORT_CHANNEL}'>{SUPPORT_CHANNEL}</a>\n"
+                "<b>Contact:</b> @casino_support_admin",
+                parse_mode=ParseMode.HTML
+            )
 
     async def rewards_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Show the combined rewards and weekly bonus panel."""
