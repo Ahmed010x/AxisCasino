@@ -1749,9 +1749,29 @@ app = Flask(__name__)
 def keep_alive():
     return "OK", 200
 
-if __name__ == "__main__":
+# --- Flask and Telegram Bot Runner ---
+
+import threading
+
+def run_flask():
     port = int(os.environ.get("PORT", 8001))
     app.run(host="0.0.0.0", port=port)
+
+def run_telegram_bot():
+    # Build and run the Telegram bot application
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
+    # Register your handlers here, e.g.:
+    # application.add_handler(CommandHandler("start", start_handler))
+    # application.add_handler(CallbackQueryHandler(callback_handler))
+    # application.add_handler(MessageHandler(filters.TEXT, text_handler))
+    application.run_polling()
+
+if __name__ == "__main__":
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+
+    run_telegram_bot()
 
 # --- Main Bot Setup and Entry Point ---
 
