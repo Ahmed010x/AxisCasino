@@ -6,12 +6,6 @@ This shows the before/after for updating game logic
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
-from telegram.ext import CommandHandler
-import asyncio
-import time
-from flask import Flask, jsonify
-import threading
-import os
 
 # BEFORE - Old game logic without house balance tracking
 async def update_balance(user_id: int, amount: float) -> bool:
@@ -295,119 +289,6 @@ async def slots_telegram_handler(update, context):
         reply_markup=InlineKeyboardMarkup(keyboard), 
         parse_mode=ParseMode.HTML
     )
-
-async def get_house_balance() -> float:
-    """
-    Returns the current house balance from the database.
-    Replace with actual aiosqlite query in production.
-    """
-    # Example: Fetch house balance from database (pseudo-code)
-    # async with aiosqlite.connect(DB_PATH) as db:
-    #     async with db.execute("SELECT balance FROM house WHERE id = 1") as cursor:
-    #         row = await cursor.fetchone()
-    #         if row:
-    #             return row[0]
-    #         else:
-    #             return 0.0
-    return 10000.0  # Dummy value for demonstration
-
-async def house_balance_command(update, context) -> None:
-    """
-    Telegram command handler for /housebal to display all available house funds.
-    Only accessible to owner/admins (add your own access control as needed).
-    """
-    user_id = update.effective_user.id
-    # TODO: Replace with actual owner/admin check
-    is_owner = True  # Replace with your logic
-    if not is_owner:
-        await update.message.reply_text("You do not have permission to view house balance.")
-        return
-    try:
-        house_balance = await get_house_balance()
-        text = f"🏦 <b>Available House Funds:</b> ${house_balance:.2f}"
-        await update.message.reply_text(text, parse_mode=ParseMode.HTML)
-    except Exception as e:
-        await update.message.reply_text(f"Error retrieving house balance: {e}")
-
-async def keep_alive_pinger(interval: int = 300) -> None:
-    """
-    Periodically prints a keep-alive message to prevent service timeout.
-    Can be run as a background task in your bot startup.
-    """
-    while True:
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Keep-alive ping...")
-        await asyncio.sleep(interval)
-
-# ===============================
-# WEB SERVER AND KEEP ALIVE
-# ===============================
-
-# Flask app for health checks and keep-alive
-app = Flask(__name__)
-
-@app.route('/')
-def health_check():
-    """Health check endpoint for deployment services"""
-    return jsonify({
-        "status": "healthy",
-        "service": "Enhanced Telegram Casino Bot",
-        "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
-        "uptime": "Running"
-    })
-
-@app.route('/health')
-def health():
-    """Additional health endpoint"""
-    return jsonify({"status": "ok", "bot": "running"})
-
-@app.route('/stats')
-def bot_stats():
-    """Bot statistics endpoint"""
-    return jsonify({
-        "active_users": "N/A",  # Would fetch from database
-        "games_played_today": "N/A",
-        "house_balance": "10000.00",
-        "server_time": time.strftime('%Y-%m-%d %H:%M:%S')
-    })
-
-def run_web_server():
-    """Run Flask web server in background thread"""
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
-
-def start_web_server():
-    """Start web server in background thread"""
-    web_thread = threading.Thread(target=run_web_server, daemon=True)
-    web_thread.start()
-    print(f"✅ Web server started on port {os.environ.get('PORT', 8080)}")
-
-async def enhanced_keep_alive_pinger(interval: int = 300) -> None:
-    """
-    Enhanced keep-alive pinger with web server integration.
-    Periodically logs system status and keeps service active.
-    """
-    startup_time = time.time()
-    
-    while True:
-        current_time = time.time()
-        uptime_seconds = int(current_time - startup_time)
-        uptime_hours = uptime_seconds // 3600
-        uptime_minutes = (uptime_seconds % 3600) // 60
-        
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 🚀 Casino Bot Keep-Alive Status:")
-        print(f"  • Uptime: {uptime_hours}h {uptime_minutes}m")
-        print(f"  • Web Server: Running on port {os.environ.get('PORT', 8080)}")
-        print(f"  • Bot Status: Active")
-        print(f"  • House Balance: Available")
-        print(f"  • Database: Connected")
-        print(f"  • Memory: Optimal")
-        print("  ✅ All systems operational")
-        
-        await asyncio.sleep(interval)
-
-# Example usage in your bot startup:
-# start_web_server()  # Start Flask server
-# asyncio.create_task(enhanced_keep_alive_pinger())  # Start enhanced keep-alive
 
 # SUMMARY: Key Changes for House Balance Integration
 
