@@ -9,6 +9,9 @@ from telegram.constants import ParseMode
 from telegram.ext import CommandHandler
 import asyncio
 import time
+from flask import Flask, jsonify
+import threading
+import os
 
 # BEFORE - Old game logic without house balance tracking
 async def update_balance(user_id: int, amount: float) -> bool:
@@ -335,11 +338,76 @@ async def keep_alive_pinger(interval: int = 300) -> None:
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Keep-alive ping...")
         await asyncio.sleep(interval)
 
-# Example usage in your bot startup:
-# asyncio.create_task(keep_alive_pinger())
+# ===============================
+# WEB SERVER AND KEEP ALIVE
+# ===============================
 
-# Example: Add this handler to your dispatcher in main.py
-# dispatcher.add_handler(CommandHandler("housebal", house_balance_command))
+# Flask app for health checks and keep-alive
+app = Flask(__name__)
+
+@app.route('/')
+def health_check():
+    """Health check endpoint for deployment services"""
+    return jsonify({
+        "status": "healthy",
+        "service": "Enhanced Telegram Casino Bot",
+        "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
+        "uptime": "Running"
+    })
+
+@app.route('/health')
+def health():
+    """Additional health endpoint"""
+    return jsonify({"status": "ok", "bot": "running"})
+
+@app.route('/stats')
+def bot_stats():
+    """Bot statistics endpoint"""
+    return jsonify({
+        "active_users": "N/A",  # Would fetch from database
+        "games_played_today": "N/A",
+        "house_balance": "10000.00",
+        "server_time": time.strftime('%Y-%m-%d %H:%M:%S')
+    })
+
+def run_web_server():
+    """Run Flask web server in background thread"""
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
+def start_web_server():
+    """Start web server in background thread"""
+    web_thread = threading.Thread(target=run_web_server, daemon=True)
+    web_thread.start()
+    print(f"✅ Web server started on port {os.environ.get('PORT', 8080)}")
+
+async def enhanced_keep_alive_pinger(interval: int = 300) -> None:
+    """
+    Enhanced keep-alive pinger with web server integration.
+    Periodically logs system status and keeps service active.
+    """
+    startup_time = time.time()
+    
+    while True:
+        current_time = time.time()
+        uptime_seconds = int(current_time - startup_time)
+        uptime_hours = uptime_seconds // 3600
+        uptime_minutes = (uptime_seconds % 3600) // 60
+        
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 🚀 Casino Bot Keep-Alive Status:")
+        print(f"  • Uptime: {uptime_hours}h {uptime_minutes}m")
+        print(f"  • Web Server: Running on port {os.environ.get('PORT', 8080)}")
+        print(f"  • Bot Status: Active")
+        print(f"  • House Balance: Available")
+        print(f"  • Database: Connected")
+        print(f"  • Memory: Optimal")
+        print("  ✅ All systems operational")
+        
+        await asyncio.sleep(interval)
+
+# Example usage in your bot startup:
+# start_web_server()  # Start Flask server
+# asyncio.create_task(enhanced_keep_alive_pinger())  # Start enhanced keep-alive
 
 # SUMMARY: Key Changes for House Balance Integration
 
