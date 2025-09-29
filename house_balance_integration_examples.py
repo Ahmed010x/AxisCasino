@@ -7,6 +7,8 @@ This shows the before/after for updating game logic
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import CommandHandler
+import asyncio
+import time
 
 # BEFORE - Old game logic without house balance tracking
 async def update_balance(user_id: int, amount: float) -> bool:
@@ -323,6 +325,18 @@ async def house_balance_command(update, context) -> None:
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
     except Exception as e:
         await update.message.reply_text(f"Error retrieving house balance: {e}")
+
+async def keep_alive_pinger(interval: int = 300) -> None:
+    """
+    Periodically prints a keep-alive message to prevent service timeout.
+    Can be run as a background task in your bot startup.
+    """
+    while True:
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Keep-alive ping...")
+        await asyncio.sleep(interval)
+
+# Example usage in your bot startup:
+# asyncio.create_task(keep_alive_pinger())
 
 # Example: Add this handler to your dispatcher in main.py
 # dispatcher.add_handler(CommandHandler("housebal", house_balance_command))
