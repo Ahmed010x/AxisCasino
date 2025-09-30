@@ -1537,10 +1537,7 @@ async def run_telegram_bot_async():
     # application.add_handler(CallbackQueryHandler(callback_handler))
     # application.add_handler(MessageHandler(filters.TEXT, handle_text_input_main))
 
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling()
-    await application.updater.idle()
+    await application.run_polling()
 
 def run_telegram_bot():
     asyncio.get_event_loop().run_until_complete(run_telegram_bot_async())
