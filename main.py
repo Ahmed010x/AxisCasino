@@ -20,6 +20,7 @@ import sqlite3
 import aiosqlite
 import aiohttp
 import nest_asyncio
+import json
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
@@ -1000,443 +1001,604 @@ async def log_game_session(user_id: int, game_type: str, bet_amount: float, win_
     except Exception as e:
         logger.error(f"Error logging game session: {e}")
 
-# --- House Balance System ---
+# --- Enhanced House Balance Management System ---
 
-async def get_house_balance() -> dict:
-    """Get current house balance data"""
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            db.row_factory = aiosqlite.Row
-            cursor = await db.execute("""
-                SELECT * FROM house_balance WHERE id = 1
-            """)
-            result = await cursor.fetchone()
-            
-            if result:
-                return dict(result)
-            else:
-                # Initialize if not exists
+class HouseBalanceManager:
+    """Comprehensive house balance management system"""
+    
+    def __init__(self):
+        self.daily_stats_cache = {}
+        self.last_cache_update = None
+    
+    async def initialize_house_balance(self):
+        """Initialize house balance with default values"""
+        try:
+            async with aiosqlite.connect(DB_PATH) as db:
                 await db.execute("""
-                    INSERT INTO house_balance (id, balance) VALUES (1, 10000.0)
-                """)
+                    INSERT OR IGNORE INTO house_balance 
+                    (id, balance, total_player_losses, total_player_wins, 
+                     total_deposits, total_withdrawals, total_fees_collected,
+                     total_bonuses_paid, games_played_today, revenue_today, 
+                     profit_today, last_updated, last_daily_reset)
+                    VALUES (1, 10000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, 0.0, 0.0, ?, ?)
+                """, (datetime.now().isoformat(), datetime.now().isoformat()))
                 await db.commit()
-                return {
-                    'id': 1,
-                    'balance': 10000.0,
-                    'total_player_losses': 0.0,
-                    'total_player_wins': 0.0,
-                    'total_deposits': 0.0,
-                    'total_withdrawals': 0.0,
-                    'last_updated': datetime.now().isoformat()
-                }
+                logger.info("House balance initialized with $10,000")
+        except Exception as e:
+            logger.error(f"Error initializing house balance: {e}")
+    
+    async def get_house_balance_detailed(self) -> dict:
+        """Get detailed house balance information"""
+        try:
+            async with aiosqlite.connect(DB_PATH) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute("SELECT * FROM house_balance WHERE id = 1")
+                result = await cursor.fetchone()
                 
-    except Exception as e:
-        logger.error(f"Error getting house balance: {e}")
+                if result:
+                    return dict(result)
+                else:
+                    await self.initialize_house_balance()
+                    return await self.get_house_balance_detailed()
+                    
+        except Exception as e:
+            logger.error(f"Error getting house balance: {e}")
+            return self._get_default_house_balance()
+    
+    def _get_default_house_balance(self) -> dict:
+        """Get default house balance structure"""
         return {
+            'id': 1,
             'balance': 10000.0,
             'total_player_losses': 0.0,
             'total_player_wins': 0.0,
             'total_deposits': 0.0,
-            'total_withwithdrawals': 0.0
-        }
-
-async def update_house_balance_on_game(bet_amount: float, win_amount: float) -> bool:
-    """Update house balance based on game outcome"""
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            # Calculate house profit/loss
-            house_change = bet_amount - win_amount  # Positive = house wins, Negative = house loses
-            
-            await db.execute("""
-                UPDATE house_balance 
-                SET balance = balance + ?,
-                    total_player_losses = total_player_losses + ?,
-                    total_player_wins = total_player_wins + ?,
-                    last_updated = ?
-                WHERE id = 1
-            """, (house_change, bet_amount, win_amount, datetime.now().isoformat()))
-            
-            await db.commit()
-            logger.debug(f"House balance updated: {house_change:+.2f} (bet: {bet_amount}, win: {win_amount})")
-            return True
-            
-    except Exception as e:
-        logger.error(f"Error updating house balance on game: {e}")
-        return False
-
-async def update_house_balance_on_deposit(amount: float) -> bool:
-    """Update house balance when user deposits (house gains funds)"""
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("""
-                UPDATE house_balance 
-                SET balance = balance + ?,
-                    total_deposits = total_deposits + ?,
-                    last_updated = ?
-                WHERE id = 1
-            """, (amount, amount, datetime.now().isoformat()))
-            
-            await db.commit()
-            logger.debug(f"House balance increased by deposit: +{amount:.2f}")
-            return True
-            
-    except Exception as e:
-        logger.error(f"Error updating house balance on deposit: {e}")
-        return False
-
-async def update_house_balance_on_withdrawal(amount: float) -> bool:
-    """Update house balance when user withdraws (house loses funds)"""
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("""
-                UPDATE house_balance 
-                SET balance = balance - ?,
-                    total_withdrawals = total_withdrawals + ?,
-                    last_updated = ?
-                WHERE id = 1
-            """, (amount, amount, datetime.now().isoformat()))
-            
-            await db.commit()
-            logger.debug(f"House balance decreased by withdrawal: -{amount:.2f}")
-            return True
-            
-    except Exception as e:
-        logger.error(f"Error updating house balance on withdrawal: {e}")
-        return False
-
-async def get_house_profit_loss() -> dict:
-    """Calculate house profit/loss statistics"""
-    try:
-        house_data = await get_house_balance()
-        
-        total_in = house_data.get('total_deposits', 0.0)
-        total_out = house_data.get('total_withdrawals', 0.0) + house_data.get('total_player_wins', 0.0)
-        total_received = house_data.get('total_player_losses', 0.0)
-        
-        net_profit = total_received + total_in - total_out
-        house_edge = (total_received / (total_received + house_data.get('total_player_wins', 0.001))) * 100 if (total_received + house_data.get('total_player_wins', 0)) > 0 else 0
-        
-        return {
-            'current_balance': house_data.get('balance', 0.0),
-            'total_deposits': total_in,
-            'total_withdrawals': house_data.get('total_withdrawals', 0.0),
-            'total_player_losses': total_received,
-            'total_player_wins': house_data.get('total_player_wins', 0.0),
-            'net_profit': net_profit,
-            'house_edge_percent': house_edge
-        }
-        
-    except Exception as e:
-        logger.error(f"Error calculating house profit/loss: {e}")
-        return {
-            'current_balance': 0.0,
-            'total_deposits': 0.0,
             'total_withdrawals': 0.0,
-            'total_player_losses': 0.0,
-            'total_player_wins': 0.0,
-            'net_profit': 0.0,
-            'house_edge_percent': 0.0
+            'total_fees_collected': 0.0,
+            'total_bonuses_paid': 0.0,
+            'games_played_today': 0,
+            'revenue_today': 0.0,
+            'profit_today': 0.0,
+            'last_updated': datetime.now().isoformat(),
+            'last_daily_reset': datetime.now().isoformat()
         }
-
-async def update_balance_with_house(user_id: int, bet_amount: float, win_amount: float) -> bool:
-    """Update user balance and house balance for game outcomes"""
-    try:
-        # Update user balance with net result
-        net_result = win_amount - bet_amount
-        user_updated = await update_balance(user_id, net_result)
-        
-        # Update house balance
-        house_updated = await update_house_balance_on_game(bet_amount, win_amount)
-        
-        return user_updated and house_updated
-        
-    except Exception as e:
-        logger.error(f"Error updating balances for game: {e}")
-        return False
-
-async def deduct_balance_with_house(user_id: int, bet_amount: float) -> bool:
-    """Deduct balance for game bet and update house balance"""
-    try:
-        # Deduct from user
-        user_updated = await deduct_balance(user_id, bet_amount)
-        
-        if user_updated:
-            # Update house balance (house gains the bet amount, user wins 0)
-            house_updated = await update_house_balance_on_game(bet_amount, 0.0)
-            return house_updated
-        
-        return False
-        
-    except Exception as e:
-        logger.error(f"Error deducting balance with house update: {e}")
-        return False
-
-# --- Deposit/Withdrawal House Balance Integration ---
-
-async def process_deposit_with_house_balance(user_id: int, amount: float) -> bool:
-    """Process a user deposit and update house balance"""
-    try:
-        # Update user balance
-        user_updated = await update_balance(user_id, amount)
-        
-        if user_updated:
-            # Update house balance (house gains funds from deposit)
-            house_updated = await update_house_balance_on_deposit(amount)
-            return house_updated
-        
-        return False
-        
-    except Exception as e:
-        logger.error(f"Error processing deposit with house balance: {e}")
-        return False
-
-async def process_withdrawal_with_house_balance(user_id: int, amount: float) -> bool:
-    """Process a user withdrawal and update house balance"""
-    try:
-        # Deduct from user balance
-        user_updated = await deduct_balance(user_id, amount)
-        
-        if user_updated:
-            # Update house balance (house loses funds from withdrawal)
-            house_updated = await update_house_balance_on_withdrawal(amount)
-            return house_updated
-        
-        return False
-        
-    except Exception as e:
-        logger.error(f"Error processing withdrawal with house balance: {e}")
-        return False
-
-# --- House Balance Display Helper ---
-
-async def get_house_balance_display() -> str:
-    """Get formatted house balance information for owner panel"""
-    try:
-        house_stats = await get_house_profit_loss()
-        
-        balance_str = await format_usd(house_stats['current_balance'])
-        deposits_str = await format_usd(house_stats['total_deposits'])
-        withdrawals_str = await format_usd(house_stats['total_withdrawals'])
-        player_losses_str = await format_usd(house_stats['total_player_losses'])
-        player_wins_str = await format_usd(house_stats['total_player_wins'])
-        net_profit_str = await format_usd(house_stats['net_profit'])
-        house_edge = house_stats['house_edge_percent']
-        
-        profit_emoji = "📈" if house_stats['net_profit'] >= 0 else "📉"
-        
-        return f"""
-🏦 <b>HOUSE BALANCE</b> 🏦
+    
+    async def process_game_outcome(self, user_id: int, game_type: str, bet_amount: float, 
+                                 win_amount: float, house_edge: float = 0.0) -> bool:
+        """Process game outcome and update house balance"""
+        try:
+            house_profit = bet_amount - win_amount
+            
+            async with aiosqlite.connect(DB_PATH) as db:
+                # Update house balance
+                await db.execute("""
+                    UPDATE house_balance 
+                    SET balance = balance + ?,
+                        total_player_losses = total_player_losses + ?,
+                        total_player_wins = total_player_wins + ?,
+                        games_played_today = games_played_today + 1,
+                        revenue_today = revenue_today + ?,
+                        profit_today = profit_today + ?,
+                        last_updated = ?
+                    WHERE id = 1
+                """, (house_profit, bet_amount, win_amount, bet_amount, house_profit, 
+                      datetime.now().isoformat()))
+                
+                # Log transaction for house
+                await self._log_house_transaction(
+                    'game_profit' if house_profit > 0 else 'game_loss',
+                    abs(house_profit),
+                    f"{game_type} game - User {user_id}",
+                    {'user_id': user_id, 'game_type': game_type, 'bet': bet_amount, 'win': win_amount}
+                )
+                
+                await db.commit()
+                logger.debug(f"House balance updated: {house_profit:+.2f} from {game_type} game")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error processing game outcome for house balance: {e}")
+            return False
+    
+    async def process_deposit(self, user_id: int, amount: float, asset: str = 'USD',
+                            fee: float = 0.0) -> bool:
+        """Process user deposit and update house balance"""
+        try:
+            net_house_gain = amount - fee  # House gains deposit minus any fees paid
+            
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute("""
+                    UPDATE house_balance 
+                    SET balance = balance + ?,
+                        total_deposits = total_deposits + ?,
+                        total_fees_collected = total_fees_collected + ?,
+                        last_updated = ?
+                    WHERE id = 1
+                """, (net_house_gain, amount, fee, datetime.now().isoformat()))
+                
+                await self._log_house_transaction(
+                    'deposit_received',
+                    amount,
+                    f"Deposit from user {user_id}",
+                    {'user_id': user_id, 'asset': asset, 'fee': fee}
+                )
+                
+                await db.commit()
+                logger.debug(f"House balance increased by deposit: +{net_house_gain:.2f}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error processing deposit for house balance: {e}")
+            return False
+    
+    async def process_withdrawal(self, user_id: int, amount: float, fee: float = 0.0) -> bool:
+        """Process user withdrawal and update house balance"""
+        try:
+            house_loss = amount - fee  # House loses withdrawal amount but keeps fee
+            
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute("""
+                    UPDATE house_balance 
+                    SET balance = balance - ?,
+                        total_withdrawals = total_withdrawals + ?,
+                        total_fees_collected = total_fees_collected + ?,
+                        last_updated = ?
+                    WHERE id = 1
+                """, (house_loss, amount, fee, datetime.now().isoformat()))
+                
+                await self._log_house_transaction(
+                    'withdrawal_paid',
+                    amount,
+                    f"Withdrawal to user {user_id}",
+                    {'user_id': user_id, 'fee': fee}
+                )
+                
+                await db.commit()
+                logger.debug(f"House balance decreased by withdrawal: -{house_loss:.2f}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error processing withdrawal for house balance: {e}")
+            return False
+    
+    async def process_bonus_payment(self, user_id: int, amount: float, bonus_type: str) -> bool:
+        """Process bonus payment and update house balance"""
+        try:
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute("""
+                    UPDATE house_balance 
+                    SET balance = balance - ?,
+                        total_bonuses_paid = total_bonuses_paid + ?,
+                        last_updated = ?
+                    WHERE id = 1
+                """, (amount, amount, datetime.now().isoformat()))
+                
+                await self._log_house_transaction(
+                    'bonus_paid',
+                    amount,
+                    f"{bonus_type} bonus to user {user_id}",
+                    {'user_id': user_id, 'bonus_type': bonus_type}
+                )
+                
+                await db.commit()
+                logger.debug(f"House balance decreased by bonus: -{amount:.2f}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error processing bonus payment for house balance: {e}")
+            return False
+    
+    async def _log_house_transaction(self, transaction_type: str, amount: float, 
+                                   description: str, metadata: dict = None):
+        """Log house balance transaction"""
+        try:
+            async with aiosqlite.connect(DB_PATH) as db:
+                metadata_json = json.dumps(metadata) if metadata else None
+                await db.execute("""
+                    INSERT INTO transactions 
+                    (user_id, type, subtype, amount, description, metadata, created_at)
+                    VALUES (0, 'house_operation', ?, ?, ?, ?, ?)
+                """, (transaction_type, amount, description, metadata_json, datetime.now().isoformat()))
+                await db.commit()
+        except Exception as e:
+            logger.error(f"Error logging house transaction: {e}")
+    
+    async def reset_daily_stats(self):
+        """Reset daily statistics (call daily)"""
+        try:
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute("""
+                    UPDATE house_balance 
+                    SET games_played_today = 0,
+                        revenue_today = 0.0,
+                        profit_today = 0.0,
+                        last_daily_reset = ?
+                    WHERE id = 1
+                """, (datetime.now().isoformat(),))
+                await db.commit()
+                logger.info("Daily house balance stats reset")
+        except Exception as e:
+            logger.error(f"Error resetting daily stats: {e}")
+    
+    async def get_house_analytics(self, days: int = 30) -> dict:
+        """Get comprehensive house analytics"""
+        try:
+            house_data = await self.get_house_balance_detailed()
+            
+            async with aiosqlite.connect(DB_PATH) as db:
+                db.row_factory = aiosqlite.Row
+                
+                # Get daily trends
+                cursor = await db.execute("""
+                    SELECT 
+                        DATE(created_at) as date,
+                        SUM(CASE WHEN type = 'deposit' THEN amount ELSE 0 END) as daily_deposits,
+                        SUM(CASE WHEN type = 'withdrawal' THEN amount ELSE 0 END) as daily_withdrawals,
+                        SUM(CASE WHEN type = 'bet' THEN amount ELSE 0 END) as daily_bets,
+                        SUM(CASE WHEN type = 'win' THEN amount ELSE 0 END) as daily_wins,
+                        COUNT(CASE WHEN type = 'bet' THEN 1 END) as daily_games
+                    FROM transactions 
+                    WHERE created_at >= datetime('now', '-{} days')
+                    GROUP BY DATE(created_at)
+                    ORDER BY date DESC
+                """.format(days))
+                daily_trends = [dict(row) for row in await cursor.fetchall()]
+                
+                # Get game profitability
+                cursor = await db.execute("""
+                    SELECT 
+                        gs.game_type,
+                        COUNT(*) as sessions,
+                        SUM(gs.bet_amount) as total_wagered,
+                        SUM(gs.win_amount) as total_paid,
+                        SUM(gs.bet_amount - gs.win_amount) as house_profit,
+                        AVG(gs.bet_amount) as avg_bet,
+                        MAX(gs.win_amount) as max_win
+                    FROM game_sessions gs
+                    WHERE gs.created_at >= datetime('now', '-{} days')
+                    GROUP BY gs.game_type
+                    ORDER BY house_profit DESC
+                """.format(days))
+                game_profitability = [dict(row) for row in await cursor.fetchall()]
+                
+                # Calculate key metrics
+                total_in = house_data['total_deposits']
+                total_out = house_data['total_withdrawals'] + house_data['total_player_wins'] + house_data['total_bonuses_paid']
+                net_profit = house_data['total_player_losses'] + total_in - total_out
+                
+                rtp = (house_data['total_player_wins'] / house_data['total_player_losses'] * 100) if house_data['total_player_losses'] > 0 else 0
+                house_edge = 100 - rtp
+                
+                return {
+                    'current_balance': house_data['balance'],
+                    'net_profit': net_profit,
+                    'total_revenue': house_data['total_player_losses'] + house_data['total_deposits'],
+                    'total_expenses': house_data['total_player_wins'] + house_data['total_withdrawals'] + house_data['total_bonuses_paid'],
+                    'house_edge_percent': house_edge,
+                    'rtp_percent': rtp,
+                    'daily_trends': daily_trends,
+                    'game_profitability': game_profitability,
+                    'fees_collected': house_data['total_fees_collected'],
+                    'bonuses_paid': house_data['total_bonuses_paid'],
+                    'today_stats': {
+                        'games_played': house_data['games_played_today'],
+                        'revenue': house_data['revenue_today'],
+                        'profit': house_data['profit_today']
+                    }
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting house analytics: {e}")
+            return {}
+    
+    async def check_house_balance_health(self) -> dict:
+        """Check house balance health and return warnings"""
+        try:
+            house_data = await self.get_house_balance_detailed()
+            warnings = []
+            status = "healthy"
+            
+            # Check if balance is too low
+            if house_data['balance'] < 1000:
+                warnings.append("House balance is critically low")
+                status = "critical"
+            elif house_data['balance'] < 5000:
+                warnings.append("House balance is low")
+                status = "warning"
+            
+            # Check if too much is being paid out
+            if house_data['total_player_wins'] > 0:
+                payout_ratio = house_data['total_player_wins'] / house_data['total_player_losses']
+                if payout_ratio > 0.98:  # More than 98% payout
+                    warnings.append("Payout ratio is very high")
+                    status = "warning"
+            
+            # Check daily performance
+            if house_data['profit_today'] < -1000:
+                warnings.append("Significant daily losses")
+                status = "warning"
+            
+            return {
+                'status': status,
+                'warnings': warnings,
+                'balance': house_data['balance'],
+                'daily_profit': house_data['profit_today']
+            }
+            
+        except Exception as e:
+            logger.error(f"Error checking house balance health: {e}")
+            return {'status': 'error', 'warnings': ['Unable to check balance health']}
+    
+    async def get_formatted_house_display(self) -> str:
+        """Get formatted house balance display for admin panel"""
+        try:
+            analytics = await self.get_house_analytics()
+            health = await self.check_house_balance_health()
+            
+            status_emoji = {
+                'healthy': '🟢',
+                'warning': '🟡', 
+                'critical': '🔴',
+                'error': '⚫'
+            }
+            
+            balance_str = await format_usd(analytics.get('current_balance', 0))
+            net_profit_str = await format_usd(analytics.get('net_profit', 0))
+            revenue_str = await format_usd(analytics.get('total_revenue', 0))
+            expenses_str = await format_usd(analytics.get('total_expenses', 0))
+            
+            today_profit_str = await format_usd(analytics.get('today_stats', {}).get('profit', 0))
+            today_revenue_str = await format_usd(analytics.get('today_stats', {}).get('revenue', 0))
+            
+            house_edge = analytics.get('house_edge_percent', 0)
+            rtp = analytics.get('rtp_percent', 0)
+            
+            profit_emoji = "📈" if analytics.get('net_profit', 0) >= 0 else "📉"
+            
+            display = f"""
+{status_emoji.get(health['status'], '⚫')} <b>HOUSE BALANCE SYSTEM</b> {status_emoji.get(health['status'], '⚫')}
 
 💰 <b>Current Balance:</b> {balance_str}
 {profit_emoji} <b>Net Profit:</b> {net_profit_str}
-🎯 <b>House Edge:</b> {house_edge:.2f}%
+📊 <b>House Edge:</b> {house_edge:.2f}% | <b>RTP:</b> {rtp:.2f}%
 
-💳 <b>Deposits:</b> {deposits_str}
-🏦 <b>Withdrawals:</b> {withdrawals_str}
-📉 <b>Paid to Players:</b> {player_wins_str}
-📈 <b>From Players:</b> {player_losses_str}
+📈 <b>Total Revenue:</b> {revenue_str}
+📉 <b>Total Expenses:</b> {expenses_str}
 
-<i>Real-time casino financial tracking</i>
+🔥 <b>Today's Performance:</b>
+💵 Revenue: {today_revenue_str}
+💎 Profit: {today_profit_str}
+🎮 Games: {analytics.get('today_stats', {}).get('games_played', 0)}
+
+💳 <b>Fees Collected:</b> {await format_usd(analytics.get('fees_collected', 0))}
+🎁 <b>Bonuses Paid:</b> {await format_usd(analytics.get('bonuses_paid', 0))}
+"""
+            
+            if health['warnings']:
+                display += f"\n⚠️ <b>Warnings:</b>\n"
+                for warning in health['warnings']:
+                    display += f"• {warning}\n"
+            
+            display += f"\n<i>Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</i>"
+            
+            return display
+            
+        except Exception as e:
+            logger.error(f"Error formatting house display: {e}")
+            return "❌ <b>House Balance:</b> Unable to load data"
+
+# Initialize global house balance manager
+house_balance_manager = HouseBalanceManager()
+
+# --- Message Handlers ---
+
+async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the /start command"""
+    user_id = update.effective_user.id
+    username = update.effective_user.username or "Unknown"
+    
+    # Register or update user in the database
+    await create_user(user_id, username)
+    
+    # Send welcome message with main menu
+    await update.message.reply_text(
+        "Welcome to the Enhanced Telegram Casino Bot! 🎉\n\n"
+        "Use the menu below to navigate the casino, play games, or manage your account.\n\n"
+        "For assistance, contact our support team.",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎮 Play Now", callback_data="mini_app_centre")],
+            [InlineKeyboardButton("💰 Deposit", callback_data="deposit")],
+            [InlineKeyboardButton("🏦 Withdraw", callback_data="withdraw")],
+            [InlineKeyboardButton("📊 My Stats", callback_data="user_stats")],
+            [InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
+            [InlineKeyboardButton("🆘 Support", url="https://t.me/casino_support")]
+        ])
+    )
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the /help command"""
+    await update.message.reply_text(
+        "Need assistance? Contact our support team:\n"
+        "Telegram: @casino_support\n"
+        "Email: support@casino.com\n\n"
+        "For instant answers, visit our FAQ section in the mini app.",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("📖 FAQ", callback_data="faq")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ])
+    )
+
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Echo the received message (for testing)"""
+    await update.message.reply_text(f"🔄 You said: {update.message.text}")
+
+# --- Owner/Admin Commands ---
+
+async def owner_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Owner command to check house balance"""
+    if not is_owner(update.effective_user.id):
+        await update.message.reply_text("Unauthorized access.")
+        return
+    
+    balance = await house_balance_manager.get_formatted_house_display()
+    await update.message.reply_text(f"🏦 House Balance System:\n{balance}", parse_mode=ParseMode.HTML)
+
+async def owner_set_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Owner command to set house balance"""
+    if not is_owner(update.effective_user.id):
+        await update.message.reply_text("Unauthorized access.")
+        return
+    
+    try:
+        amount = float(context.args[0])
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("""
+                UPDATE house_balance 
+                SET balance = ?, last_updated = ?
+                WHERE id = 1
+            """, (amount, datetime.now().isoformat()))
+            await db.commit()
+        
+        await update.message.reply_text(f"✅ House balance updated to {amount:.2f} USD.")
+    except Exception as e:
+        await update.message.reply_text(f"Error updating balance: {e}")
+
+async def owner_daily_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Owner command to reset daily stats"""
+    if not is_owner(update.effective_user.id):
+        await update.message.reply_text("Unauthorized access.")
+        return
+    
+    await house_balance_manager.reset_daily_stats()
+    await update.message.reply_text("✅ Daily stats reset.")
+
+async def owner_set_edge(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Owner command to set house edge"""
+    if not is_owner(update.effective_user.id):
+        await update.message.reply_text("Unauthorized access.")
+        return
+    
+    try:
+        game_type = context.args[0]
+        edge = float(context.args[1])
+        
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(f"""
+                UPDATE system_config 
+                SET value = ? 
+                WHERE key = 'house_edge_{game_type}'
+            """, (edge,))
+            await db.commit()
+        
+        await update.message.reply_text(f"✅ House edge for {game_type} set to {edge:.2f}%.")
+    except Exception as e:
+        await update.message.reply_text(f"Error setting house edge: {e}")
+
+# --- Owner House Balance Management Commands ---
+
+async def owner_house_analytics(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Owner command to view detailed house analytics"""
+    if not is_owner(update.effective_user.id):
+        await update.message.reply_text("Unauthorized access.")
+        return
+    
+    try:
+        analytics = await house_balance_manager.get_house_analytics(30)
+        health = await house_balance_manager.check_house_balance_health()
+        
+        status_text = {
+            'healthy': '🟢 Healthy',
+            'warning': '🟡 Warning', 
+            'critical': '🔴 Critical',
+            'error': '⚫ Error'
+        }
+        
+        text = f"""
+📊 <b>HOUSE ANALYTICS (30 Days)</b>
+
+🏥 <b>Status:</b> {status_text.get(health['status'], 'Unknown')}
+💰 <b>Current Balance:</b> {await format_usd(analytics.get('current_balance', 0))}
+📈 <b>Net Profit:</b> {await format_usd(analytics.get('net_profit', 0))}
+
+📊 <b>Financial Overview:</b>
+💵 Total Revenue: {await format_usd(analytics.get('total_revenue', 0))}
+💸 Total Expenses: {await format_usd(analytics.get('total_expenses', 0))}
+🎯 House Edge: {analytics.get('house_edge_percent', 0):.2f}%
+🔄 RTP: {analytics.get('rtp_percent', 0):.2f}%
+
+🔥 <b>Today's Performance:</b>
+🎮 Games Played: {analytics.get('today_stats', {}).get('games_played', 0)}
+💵 Revenue: {await format_usd(analytics.get('today_stats', {}).get('revenue', 0))}
+💎 Profit: {await format_usd(analytics.get('today_stats', {}).get('profit', 0))}
+
+💳 <b>Fees & Bonuses:</b>
+💰 Fees Collected: {await format_usd(analytics.get('fees_collected', 0))}
+🎁 Bonuses Paid: {await format_usd(analytics.get('bonuses_paid', 0))}
 """
         
+        if health['warnings']:
+            text += f"\n⚠️ <b>Warnings:</b>\n"
+            for warning in health['warnings']:
+                text += f"• {warning}\n"
+        
+        await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+        
     except Exception as e:
-        logger.error(f"Error getting house balance display: {e}")
-        return "❌ <b>House Balance:</b> Unable to load data"
+        await update.message.reply_text(f"Error getting analytics: {e}")
 
-# --- Weekly Bonus Helpers ---
-WEEKLY_BONUS_AMOUNT = float(os.environ.get("WEEKLY_BONUS_AMOUNT", "5.0"))
-WEEKLY_BONUS_INTERVAL = 7  # days
-
-# --- Referral System Configuration ---
-REFERRAL_BONUS_REFERRER = float(os.environ.get("REFERRAL_BONUS_REFERRER", "10.0"))  # Bonus for person who refers
-REFERRAL_BONUS_REFEREE = float(os.environ.get("REFERRAL_BONUS_REFERRER", "5.0"))    # Bonus for new user
-REFERRAL_MIN_DEPOSIT = float(os.environ.get("REFERRAL_MIN_DEPOSIT", "10.0"))       # Min deposit to activate referral
-MAX_REFERRALS_PER_USER = int(os.environ.get("MAX_REFERRALS_PER_USER", "50"))       # Max referrals per user
-
-async def ensure_weekly_bonus_column():
-    """Ensure weekly bonus column exists in users table"""
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("ALTER TABLE users ADD COLUMN last_weekly_bonus TEXT DEFAULT NULL")
-            await db.commit()
-    except Exception:
-        pass  # Column already exists
-
-async def ensure_referral_columns():
-    """Ensure referral system columns exist"""
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            # Add referral columns to users table
-            await db.execute("ALTER TABLE users ADD COLUMN referral_code TEXT DEFAULT NULL")
-            await db.execute("ALTER TABLE users ADD COLUMN referred_by TEXT DEFAULT NULL")
-            await db.execute("ALTER TABLE users ADD COLUMN referral_earnings REAL DEFAULT 0.0")
-            await db.execute("ALTER TABLE users ADD COLUMN referral_count INTEGER DEFAULT 0")
-            
-            # Create referrals table if it doesn't exist
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS referrals (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    referrer_id INTEGER NOT NULL,
-                    referee_id INTEGER NOT NULL,
-                    referral_code TEXT NOT NULL,
-                    bonus_paid REAL DEFAULT 0.0,
-                    status TEXT DEFAULT 'pending',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    activated_at TIMESTAMP DEFAULT NULL,
-                    FOREIGN KEY (referrer_id) REFERENCES users (user_id),
-                    FOREIGN KEY (referee_id) REFERENCES users (user_id)
-                )
-            """)
-            await db.commit()
-    except Exception as e:
-        logger.error(f"Error ensuring referral columns: {e}")
-
-async def can_claim_weekly_bonus(user_id: int) -> Tuple[bool, Optional[int]]:
-    """Check if user can claim weekly bonus. Returns (can_claim, seconds_remaining)."""
-    user = await get_user(user_id)
-    if not user:
-        return False, None
+async def owner_reset_daily_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Owner command to reset daily statistics"""
+    if not is_owner(update.effective_user.id):
+        await update.message.reply_text("Unauthorized access.")
+        return
     
-    last_claim = user.get('last_weekly_bonus')
-    if not last_claim:
-        return True, None
-    
-    last_dt = datetime.fromisoformat(last_claim)
-    now = datetime.now()
-    delta = now - last_dt
-    if delta.days >= WEEKLY_BONUS_INTERVAL:
-        return True, None
-    
-    seconds_remaining = (WEEKLY_BONUS_INTERVAL * 86400) - int(delta.total_seconds())
-    return False, seconds_remaining
-
-async def claim_weekly_bonus(user_id: int) -> bool:
-    """Grant the weekly bonus and update last_weekly_bonus."""
     try:
-        success = await update_balance(user_id, WEEKLY_BONUS_AMOUNT)
-        if success:
-            async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute("""
-                    UPDATE users SET last_weekly_bonus = ? WHERE user_id = ?
-                """, (datetime.now().isoformat(), user_id))
-                await db.commit()
-        return success
+        await house_balance_manager.reset_daily_stats()
+        await update.message.reply_text("✅ Daily statistics have been reset.")
     except Exception as e:
-        logger.error(f"Error claiming weekly bonus: {e}")
-        return False
+        await update.message.reply_text(f"Error resetting daily stats: {e}")
 
-# --- Referral System Helpers ---
-
-def generate_referral_code(user_id: int) -> str:
-    """Generate a unique referral code for a user."""
-    import time
-    import random
-    import hashlib
+async def owner_game_profitability(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Owner command to view game profitability"""
+    if not is_owner(update.effective_user.id):
+        await update.message.reply_text("Unauthorized access.")
+        return
     
-    # Create a base from user_id and current timestamp
-    base = f"{user_id}_{int(time.time())}_{random.randint(1000, 9999)}"
-    hash_obj = hashlib.md5(base.encode())
-    
-    # Take first 8 characters and make it alphanumeric
-    code = hash_obj.hexdigest()[:6].upper()
-    return f"REF{code}"
-
-async def get_or_create_referral_code(user_id: int) -> str:
-    """Get existing referral code or create a new one."""
     try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            cursor = await db.execute("SELECT referral_code FROM users WHERE user_id = ?", (user_id,))
-            row = await cursor.fetchone()
-            if row and row[0]:
-                return row[0]
+        analytics = await house_balance_manager.get_house_analytics(30)
+        games = analytics.get('game_profitability', [])
+        
+        if not games:
+            await update.message.reply_text("No game data available.")
+            return
+        
+        text = "🎮 <b>GAME PROFITABILITY (30 Days)</b>\n\n"
+        
+        for game in games[:10]:  # Top 10 games
+            game_type = game.get('game_type', 'Unknown')
+            sessions = game.get('sessions', 0)
+            profit = game.get('house_profit', 0)
+            wagered = game.get('total_wagered', 0)
             
-            # Create new code
-            code = generate_referral_code(user_id)
-            await db.execute("UPDATE users SET referral_code = ? WHERE user_id = ?", (code, user_id))
-            await db.commit()
-            return code
+            profit_emoji = "📈" if profit >= 0 else "📉"
+            
+            text += f"{profit_emoji} <b>{game_type.title()}</b>\n"
+            text += f"Sessions: {sessions} | Profit: {await format_usd(profit)}\n"
+            text += f"Wagered: {await format_usd(wagered)}\n\n"
+        
+        await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+        
     except Exception as e:
-        logger.error(f"Error getting/creating referral code: {e}")
-        return generate_referral_code(user_id)
+        await update.message.reply_text(f"Error getting game profitability: {e}")
 
-async def get_referral_stats(user_id: int) -> dict:
-    """Get referral statistics for a user."""
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            # Get user's referral data
-            cursor = await db.execute("""
-                SELECT referral_earnings, referral_count FROM users WHERE user_id = ?
-            """, (user_id,))
-            row = await cursor.fetchone()
-            earnings = row[0] if row else 0.0
-            count = row[1] if row else 0
-            
-            # Get recent referrals
-            cursor = await db.execute("""
-                SELECT r.referee_id, u.username, r.created_at, r.bonus_paid
-                FROM referrals r
-                JOIN users u ON r.referee_id = u.user_id
-                WHERE r.referrer_id = ?
-                ORDER BY r.created_at DESC
-                LIMIT 10
-            """, (user_id,))
-            recent_refs = await cursor.fetchall()
-            
-            return {
-                'earnings': earnings,
-                'count': count,
-                'recent': [{'user_id': r[0], 'username': r[1], 'date': r[2], 'bonus': r[3]} for r in recent_refs]
-            }
-    except Exception as e:
-        logger.error(f"Error getting referral stats: {e}")
-        return {'earnings': 0.0, 'count': 0, 'recent': []}
-
-async def process_referral(referee_id: int, referral_code: str) -> bool:
-    """Process a new referral when user registers with a code."""
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            # Find referrer by code
-            cursor = await db.execute("SELECT user_id FROM users WHERE referral_code = ?", (referral_code,))
-            row = await cursor.fetchone()
-            if not row:
-                return False
-            
-            referrer_id = row[0]
-            if referrer_id == referee_id:
-                return False  # Can't refer yourself
-            
-            # Check if referee was already referred
-            cursor = await db.execute("SELECT referred_by FROM users WHERE user_id = ?", (referee_id,))
-            row = await cursor.fetchone()
-            if row and row[0]:
-                return False  # Already referred
-            
-            # Update referee with referrer info
-            await db.execute("UPDATE users SET referred_by = ? WHERE user_id = ?", (referral_code, referee_id))
-            
-            # Create referral record
-            await db.execute("""
-                INSERT INTO referrals (referrer_id, referee_id, referral_code, status)
-                VALUES (?, ?, ?, 'active')
-            """, (referrer_id, referee_id, referral_code))
-            
-            # Give bonuses
-            await update_balance(referee_id, REFERRAL_BONUS_REFERRER)
-            await update_balance(referrer_id, REFERRAL_BONUS_REFERRER)
-            
-            # Update referrer stats
-            await db.execute("""
-                UPDATE users 
-                SET referral_count = referral_count + 1,
-                    referral_earnings = referral_earnings + ?
-                WHERE user_id = ?
-            """, (REFERRAL_BONUS_REFERRER, referrer_id))
-            
-            await db.commit()
-            return True
-    except Exception as e:
-        logger.error(f"Error processing referral: {e}")
-        return False
+# Add these commands to the bot handlers
+async def register_owner_commands(application: Application):
+    """Register owner-only commands"""
+    application.add_handler(CommandHandler("house_balance", owner_balance))
+    application.add_handler(CommandHandler("house_analytics", owner_house_analytics))
+    application.add_handler(CommandHandler("reset_daily", owner_reset_daily_stats))
+    application.add_handler(CommandHandler("game_profits", owner_game_profitability))
+    application.add_handler(CommandHandler("set_balance", owner_set_balance))
 
 # --- Main Bot Handlers ---
 
@@ -1768,7 +1930,11 @@ async def handle_withdraw_address_input(update: Update, context: ContextTypes.DE
             f"✅ Withdrawal request submitted!\nAmount: {crypto_amount:.8f} {crypto_type}\nFee: {fee:.8f} {crypto_type}\nNet: {net_amount:.8f} {crypto_type}\nAddress: {address}\nYour withdrawal will be processed soon."
         )
         # Update balances atomically
-        await process_withdrawal_with_house_balance(user_id, amount_usd)
+        if not await deduct_balance(user_id, amount_usd):
+            await update.message.reply_text("❌ Failed to process withdrawal. Please try again.")
+        else:
+            # Update house balance using new system
+            await house_balance_manager.process_withdrawal(user_id, amount_usd, fee)
     else:
         await update.message.reply_text("❌ Error submitting withdrawal request. Please try again later.")
     del context.user_data['awaiting_withdraw_address']
@@ -1807,6 +1973,7 @@ def run_flask():
 
 async def run_telegram_bot_async():
     await init_db()  # Ensure DB is ready
+    await house_balance_manager.initialize_house_balance()  # Initialize house balance system
 
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
