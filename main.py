@@ -49,8 +49,12 @@ from telegram.ext import (
 )
 from telegram.error import BadRequest, TelegramError
 
-# Apply nest_asyncio to allow nested event loops
-nest_asyncio.apply()
+# Apply nest_asyncio only if needed
+try:
+    import nest_asyncio
+    nest_asyncio.apply()
+except ImportError:
+    pass  # nest_asyncio not available
 
 # Configure logging
 logging.basicConfig(
@@ -1848,23 +1852,6 @@ async def handle_withdraw_address_input(update: Update, context: ContextTypes.DE
             f"<i>You'll receive a confirmation shortly</i>",
             parse_mode=ParseMode.HTML
         )
-    try:
-        amount_usd = float(update.message.text.replace('$', '').replace(',', ''))
-        if amount_usd < MIN_WITHDRAWAL_USD:
-            await update.message.reply_text(f"❌ Minimum withdrawal is {await format_usd(MIN_WITHDRAWAL_USD)}.")
-            return
-        if amount_usd > MAX_WITHDRAWAL_USD:
-            await update.message.reply_text(f"❌ Maximum withdrawal is {await format_usd(MAX_WITHDRAWAL_USD)} per transaction.")
-            return
-        if amount_usd > user['balance']:
-            await update.message.reply_text("❌ Insufficient balance.")
-            return
-        del context.user_data['awaiting_withdraw_amount']
-        context.user_data['pending_withdraw_amount'] = amount_usd
-        await update.message.reply_text("Please enter your Litecoin (LTC) withdrawal address:")
-        context.user_data['awaiting_withdraw_address'] = 'LTC'
-    except ValueError:
-        await update.message.reply_text("❌ Invalid amount. Please enter a valid number (e.g., 50 for $50).")
 
 async def handle_withdraw_address_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if 'awaiting_withdraw_address' not in context.user_data:
@@ -2316,11 +2303,46 @@ Contact our support team for assistance.
     await application.run_polling()
 
 def run_telegram_bot():
-    asyncio.run(run_telegram_bot_async())
+    """Run the telegram bot with proper event loop management for deployment"""
+    try:
+        # Simple direct approach for deployment
+        asyncio.run(run_telegram_bot_async())
+    except RuntimeError as e:
+        if "cannot be called from a running event loop" in str(e):
+            # We're in an environment with an existing event loop
+            # Create and run in a new thread
+            import threading
+            def run_in_thread():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(run_telegram_bot_async())
+                loop.close()
+            
+            thread = threading.Thread(target=run_in_thread)
+            thread.daemon = True
+            thread.start()
+            thread.join()  # Wait for completion in deployment
+        else:
+            raise
 
 if __name__ == "__main__":
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-
-    run_telegram_bot()
+    # Environment detection for proper startup
+    is_deployment = bool(os.environ.get("RENDER") or os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("HEROKU"))
+    
+    if is_deployment:
+        # In deployment, run bot directly and Flask on different port
+        print("🚀 Starting in deployment mode...")
+        # Start Flask in background for health checks
+        flask_thread = threading.Thread(target=run_flask)
+        flask_thread.daemon = True
+        flask_thread.start()
+        
+        # Run telegram bot in main thread
+        run_telegram_bot()
+    else:
+        # Local development
+        print("🏠 Starting in development mode...")
+        flask_thread = threading.Thread(target=run_flask)
+        flask_thread.daemon = True
+        flask_thread.start()
+        run_telegram_bot()
