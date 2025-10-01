@@ -18,6 +18,4 @@ python-dotenv==1.0.0
 nest-asyncio==1.5.8
 
 # Additional utilities for production
-gunicorn==21.2.0
-waitress==2.1.2
 python-dateutil==2.8.2

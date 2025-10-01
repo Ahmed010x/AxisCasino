@@ -315,3 +315,33 @@ async def slots_telegram_handler(update, context):
 This ensures all financial transactions are tracked at both user and house level,
 providing complete visibility into casino operations and profitability.
 """
+
+# --- KEEP-ALIVE / PORT CONFIGURATION EXAMPLES ---
+
+"""
+Example: Flask keep-alive endpoint for deployment
+This can be used to keep the bot alive on platforms like Heroku, Railway, etc.
+"""
+
+from flask import Flask
+import os
+
+app = Flask(__name__)
+
+@app.route("/keepalive")
+def keepalive():
+    return "OK", 200
+
+if __name__ == "__main__":
+    # Use PORT from environment variable or default to 8080
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
+
+"""
+How to use:
+- Deploy this Flask app alongside your bot (can be in the same process or separate).
+- Set the PORT environment variable if your platform requires a specific port.
+- The /keepalive endpoint can be pinged by an external service to prevent idling.
+
+For advanced setups, you can integrate this keep-alive Flask app with your main bot process using threading or asyncio.
+"""

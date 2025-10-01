@@ -3,7 +3,7 @@ services:
     name: telegram-casino-bot
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python start_production.py
+    startCommand: python main.py
     plan: free
     autoDeploy: false
     envVars:
