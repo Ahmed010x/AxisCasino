@@ -1989,7 +1989,8 @@ async def run_telegram_bot_async():
             ],
             [
                 InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"),
-                InlineKeyboardButton("👥 Referrals", callback_data="referral_menu")
+                InlineKeyboardButton("👥 Referrals", callback_data="referral_menu"),
+                InlineKeyboardButton("🎁 Bonuses", callback_data="bonus_menu")
             ],
             [
                 InlineKeyboardButton("📊 Statistics", callback_data="user_stats"),
@@ -2035,6 +2036,8 @@ async def run_telegram_bot_async():
             await help_menu_callback(update, context)
         elif data == "admin_panel" and (is_admin(user_id) or is_owner(user_id)):
             await admin_panel_callback(update, context)
+        elif data == "bonus_menu":
+            await bonus_menu_callback(update, context)
         else:
             await query.edit_message_text("❌ Unknown action. Returning to main menu.")
             await start_panel_callback(update, context)
@@ -2093,7 +2096,8 @@ async def run_telegram_bot_async():
             ],
             [
                 InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"),
-                InlineKeyboardButton("👥 Referrals", callback_data="referral_menu")
+                InlineKeyboardButton("👥 Referrals", callback_data="referral_menu"),
+                InlineKeyboardButton("🎁 Bonuses", callback_data="bonus_menu")
             ],
             [
                 InlineKeyboardButton("📊 Statistics", callback_data="user_stats"),
@@ -2291,6 +2295,16 @@ Contact our support team for assistance.
             [
                 InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")
             ]
+        ]
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    async def bonus_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show bonuses menu"""
+        text = """
+🎁 <b>BONUSES & REWARDS</b> 🎁\n\nClaim your available bonuses and see current promotions!\n\n• <b>Weekly Bonus</b>: Claim every 7 days\n• <b>Referral Bonus</b>: Earn for inviting friends\n• <b>Special Events</b>: Watch for announcements\n\n<i>More bonus types coming soon!</i>\n"""
+        keyboard = [
+            [InlineKeyboardButton("🎉 Claim Weekly Bonus", callback_data="claim_weekly_bonus")],
+            [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
         ]
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     
