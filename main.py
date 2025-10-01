@@ -1964,22 +1964,7 @@ async def run_telegram_bot_async():
         
         # Build user panel message
         welcome_text = f"""
-🎰 <b>AXIS CASINO</b> 🎰
-<i>Welcome back, {username}!</i>
-
-💰 <b>Balance:</b> {balance_str}
-🎮 <b>Games Played:</b> {games_played:,}
-💸 <b>Total Wagered:</b> {wagered_str}
-🏆 <b>Total Won:</b> {won_str}
-{net_emoji} <b>Net Result:</b> {net_str} {"profit" if net_result >= 0 else "loss"}
-🔥 <b>Win Streak:</b> {win_streak}
-👥 <b>Referrals:</b> {referral_count}
-
-🔗 <b>Your Referral Code:</b> <code>{referral_code}</code>
-<i>Share to earn bonuses!</i>
-
-🎯 <b>Choose an action below:</b>
-"""
+🎰 <b>AXIS CASINO</b> 🎰\n<i>Welcome, {username}!</i>\n\n💰 <b>Balance:</b> {balance_str}\n🔗 <b>Referral Code:</b> <code>{referral_code}</code>\n\n<b>Choose an action:</b>\n"""
         
         # Create navigation keyboard
         keyboard = [
@@ -2072,22 +2057,7 @@ async def run_telegram_bot_async():
         net_str = await format_usd(abs(net_result))
         
         welcome_text = f"""
-🎰 <b>AXIS CASINO</b> 🎰
-<i>Welcome back, {username}!</i>
-
-💰 <b>Balance:</b> {balance_str}
-🎮 <b>Games Played:</b> {games_played:,}
-💸 <b>Total Wagered:</b> {wagered_str}
-🏆 <b>Total Won:</b> {won_str}
-{net_emoji} <b>Net Result:</b> {net_str} {"profit" if net_result >= 0 else "loss"}
-🔥 <b>Win Streak:</b> {win_streak}
-👥 <b>Referrals:</b> {referral_count}
-
-🔗 <b>Your Referral Code:</b> <code>{referral_code}</code>
-<i>Share to earn bonuses!</i>
-
-🎯 <b>Choose an action below:</b>
-"""
+🎰 <b>AXIS CASINO</b> 🎰\n<i>Welcome, {username}!</i>\n\n💰 <b>Balance:</b> {balance_str}\n🔗 <b>Referral Code:</b> <code>{referral_code}</code>\n\n<b>Choose an action:</b>\n"""
         
         keyboard = [
             [
