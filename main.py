@@ -49,6 +49,9 @@ from telegram.ext import (
 )
 from telegram.error import BadRequest, TelegramError
 
+# Apply nest_asyncio to allow nested event loops
+nest_asyncio.apply()
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -514,64 +517,150 @@ async def init_db():
     """Initialize the database with required tables"""
     try:
         async with aiosqlite.connect(DB_PATH) as db:
-            # Users table
+            # Enhanced Users table with comprehensive tracking
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     user_id INTEGER PRIMARY KEY,
                     username TEXT NOT NULL,
+                    first_name TEXT,
+                    last_name TEXT,
                     balance REAL DEFAULT 0.0,
                     games_played INTEGER DEFAULT 0,
                     total_wagered REAL DEFAULT 0.0,
+                    total_won REAL DEFAULT 0.0,
+                    total_deposited REAL DEFAULT 0.0,
                     total_withdrawn REAL DEFAULT 0.0,
+                    win_streak INTEGER DEFAULT 0,
+                    max_win_streak INTEGER DEFAULT 0,
+                    loss_streak INTEGER DEFAULT 0,
+                    max_loss_streak INTEGER DEFAULT 0,
+                    biggest_win REAL DEFAULT 0.0,
+                    biggest_loss REAL DEFAULT 0.0,
+                    vip_level INTEGER DEFAULT 0,
+                    loyalty_points REAL DEFAULT 0.0,
+                    referral_code TEXT DEFAULT NULL,
+                    referred_by TEXT DEFAULT NULL,
+                    referral_earnings REAL DEFAULT 0.0,
+                    referral_count INTEGER DEFAULT 0,
+                    last_weekly_bonus TEXT DEFAULT NULL,
+                    is_banned BOOLEAN DEFAULT FALSE,
+                    ban_reason TEXT DEFAULT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_game_at TIMESTAMP DEFAULT NULL,
+                    timezone TEXT DEFAULT 'UTC'
                 )
             """)
             
-            # Withdrawals table
+            # Detailed Game sessions table with comprehensive data
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS game_sessions (
+                    session_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    game_type TEXT NOT NULL,
+                    game_variant TEXT DEFAULT NULL,
+                    bet_amount REAL NOT NULL,
+                    win_amount REAL DEFAULT 0.0,
+                    net_result REAL DEFAULT 0.0,
+                    multiplier REAL DEFAULT 0.0,
+                    game_data TEXT DEFAULT NULL,  -- JSON data for game specifics
+                    result TEXT,
+                    is_jackpot BOOLEAN DEFAULT FALSE,
+                    house_edge REAL DEFAULT 0.0,
+                    rtp REAL DEFAULT 0.0,  -- Return to Player percentage
+                    session_duration INTEGER DEFAULT 0,  -- in seconds
+                    ip_address TEXT DEFAULT NULL,
+                    user_agent TEXT DEFAULT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (user_id)
+                )
+            """)
+            
+            # Enhanced Transactions table for all financial activities
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS transactions (
+                    transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    type TEXT NOT NULL,  -- deposit, withdrawal, bet, win, bonus, refund, etc.
+                    subtype TEXT DEFAULT NULL,  -- crypto_deposit, bank_deposit, game_win, referral_bonus, etc.
+                    amount REAL NOT NULL,
+                    currency TEXT DEFAULT 'USD',
+                    crypto_asset TEXT DEFAULT NULL,
+                    crypto_amount REAL DEFAULT NULL,
+                    exchange_rate REAL DEFAULT NULL,
+                    fee_amount REAL DEFAULT 0.0,
+                    net_amount REAL DEFAULT NULL,
+                    balance_before REAL DEFAULT 0.0,
+                    balance_after REAL DEFAULT 0.0,
+                    reference_id TEXT DEFAULT NULL,  -- external transaction ID
+                    game_session_id INTEGER DEFAULT NULL,
+                    status TEXT DEFAULT 'completed',  -- pending, completed, failed, cancelled
+                    payment_method TEXT DEFAULT NULL,
+                    payment_address TEXT DEFAULT NULL,
+                    confirmation_blocks INTEGER DEFAULT NULL,
+                    description TEXT,
+                    metadata TEXT DEFAULT NULL,  -- JSON for additional data
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    confirmed_at TIMESTAMP DEFAULT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users (user_id),
+                    FOREIGN KEY (game_session_id) REFERENCES game_sessions (session_id)
+                )
+            """)
+            
+            # Enhanced Withdrawals table
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS withdrawals (
                     withdrawal_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
                     asset TEXT NOT NULL,
                     amount REAL NOT NULL,
+                    amount_usd REAL NOT NULL,
                     address TEXT NOT NULL,
                     fee REAL NOT NULL,
+                    fee_usd REAL NOT NULL,
                     net_amount REAL NOT NULL,
+                    net_amount_usd REAL NOT NULL,
                     rate_usd REAL NOT NULL,
-                    amount_usd REAL NOT NULL,
                     status TEXT DEFAULT 'pending',
                     transaction_hash TEXT DEFAULT '',
+                    confirmation_blocks INTEGER DEFAULT 0,
+                    required_confirmations INTEGER DEFAULT 6,
                     error_msg TEXT DEFAULT '',
+                    admin_notes TEXT DEFAULT '',
+                    processed_by INTEGER DEFAULT NULL,  -- admin user_id
+                    priority INTEGER DEFAULT 0,  -- 0=normal, 1=high, 2=urgent
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    processed_at TIMESTAMP DEFAULT NULL,
+                    confirmed_at TIMESTAMP DEFAULT NULL,
                     FOREIGN KEY (user_id) REFERENCES users (user_id)
                 )
             """)
             
-            # Game sessions table
+            # Deposits table
             await db.execute("""
-                CREATE TABLE IF NOT EXISTS game_sessions (
-                    session_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                CREATE TABLE IF NOT EXISTS deposits (
+                    deposit_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
-                    game_type TEXT NOT NULL,
-                    bet_amount REAL NOT NULL,
-                    win_amount REAL DEFAULT 0.0,
-                    result TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users (user_id)
-                )
-            """)
-            
-            # Transactions table (for deposits, withdrawals, etc.)
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS transactions (
-                    transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    type TEXT NOT NULL,  -- deposit, withdrawal, etc.
+                    asset TEXT NOT NULL,
                     amount REAL NOT NULL,
-                    description TEXT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    amount_usd REAL NOT NULL,
+                    rate_usd REAL NOT NULL,
+                    payment_method TEXT NOT NULL,  -- crypto, bank_transfer, etc.
+                    payment_address TEXT DEFAULT NULL,
+                    invoice_id TEXT DEFAULT NULL,
+                    transaction_hash TEXT DEFAULT NULL,
+                    confirmation_blocks INTEGER DEFAULT 0,
+                    required_confirmations INTEGER DEFAULT 6,
+                    status TEXT DEFAULT 'pending',  -- pending, confirming, completed, failed, expired
+                    expires_at TIMESTAMP DEFAULT NULL,
+                    bonus_applied REAL DEFAULT 0.0,
+                    bonus_type TEXT DEFAULT NULL,
+                    metadata TEXT DEFAULT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    confirmed_at TIMESTAMP DEFAULT NULL,
                     FOREIGN KEY (user_id) REFERENCES users (user_id)
                 )
             """)
@@ -585,17 +674,210 @@ async def init_db():
                     total_player_wins REAL DEFAULT 0.0,
                     total_deposits REAL DEFAULT 0.0,
                     total_withdrawals REAL DEFAULT 0.0,
-                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    total_fees_collected REAL DEFAULT 0.0,
+                    total_bonuses_paid REAL DEFAULT 0.0,
+                    games_played_today INTEGER DEFAULT 0,
+                    revenue_today REAL DEFAULT 0.0,
+                    profit_today REAL DEFAULT 0.0,
+                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_daily_reset TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            
+            # User achievements table
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS user_achievements (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    achievement_id TEXT NOT NULL,
+                    achievement_name TEXT NOT NULL,
+                    description TEXT DEFAULT NULL,
+                    reward_amount REAL DEFAULT 0.0,
+                    unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    progress_data TEXT DEFAULT NULL,  -- JSON for tracking progress
+                    FOREIGN KEY (user_id) REFERENCES users (user_id),
+                    UNIQUE(user_id, achievement_id)
+                )
+            """)
+            
+            # Referrals table
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS referrals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    referrer_id INTEGER NOT NULL,
+                    referee_id INTEGER NOT NULL,
+                    referral_code TEXT NOT NULL,
+                    bonus_paid_referrer REAL DEFAULT 0.0,
+                    bonus_paid_referee REAL DEFAULT 0.0,
+                    total_referee_wagered REAL DEFAULT 0.0,
+                    commission_earned REAL DEFAULT 0.0,
+                    status TEXT DEFAULT 'pending',  -- pending, active, inactive
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    activated_at TIMESTAMP DEFAULT NULL,
+                    FOREIGN KEY (referrer_id) REFERENCES users (user_id),
+                    FOREIGN KEY (referee_id) REFERENCES users (user_id),
+                    UNIQUE(referee_id)
+                )
+            """)
+            
+            # Admin actions log
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS admin_actions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    admin_user_id INTEGER NOT NULL,
+                    action_type TEXT NOT NULL,  -- ban_user, adjust_balance, approve_withdrawal, etc.
+                    target_user_id INTEGER DEFAULT NULL,
+                    amount REAL DEFAULT NULL,
+                    old_value TEXT DEFAULT NULL,
+                    new_value TEXT DEFAULT NULL,
+                    reason TEXT DEFAULT NULL,
+                    ip_address TEXT DEFAULT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (admin_user_id) REFERENCES users (user_id),
+                    FOREIGN KEY (target_user_id) REFERENCES users (user_id)
+                )
+            """)
+            
+            # System configuration table
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS system_config (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    data_type TEXT DEFAULT 'string',  -- string, number, boolean, json
+                    description TEXT DEFAULT NULL,
+                    updated_by INTEGER DEFAULT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (updated_by) REFERENCES users (user_id)
+                )
+            """)
+            
+            # User sessions table for tracking logins and activity
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS user_sessions (
+                    session_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    session_token TEXT DEFAULT NULL,
+                    ip_address TEXT DEFAULT NULL,
+                    user_agent TEXT DEFAULT NULL,
+                    platform TEXT DEFAULT NULL,  -- telegram, web, mobile
+                    country TEXT DEFAULT NULL,
+                    city TEXT DEFAULT NULL,
+                    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    ended_at TIMESTAMP DEFAULT NULL,
+                    session_duration INTEGER DEFAULT 0,  -- in seconds
+                    actions_count INTEGER DEFAULT 0,
+                    FOREIGN KEY (user_id) REFERENCES users (user_id)
+                )
+            """)
+            
+            # Game statistics table for analytics
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS game_statistics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    game_type TEXT NOT NULL,
+                    date DATE NOT NULL,
+                    total_sessions INTEGER DEFAULT 0,
+                    total_players INTEGER DEFAULT 0,
+                    total_wagered REAL DEFAULT 0.0,
+                    total_won REAL DEFAULT 0.0,
+                    house_profit REAL DEFAULT 0.0,
+                    rtp REAL DEFAULT 0.0,
+                    avg_bet REAL DEFAULT 0.0,
+                    max_win REAL DEFAULT 0.0,
+                    jackpots_hit INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(game_type, date)
+                )
+            """)
+            
+            # Bonus campaigns table
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS bonus_campaigns (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    type TEXT NOT NULL,  -- deposit_bonus, free_spins, cashback, etc.
+                    amount REAL DEFAULT 0.0,
+                    percentage REAL DEFAULT 0.0,
+                    min_deposit REAL DEFAULT 0.0,
+                    max_bonus REAL DEFAULT 0.0,
+                    wagering_requirement REAL DEFAULT 0.0,
+                    valid_games TEXT DEFAULT NULL,  -- JSON array of game types
+                    is_active BOOLEAN DEFAULT TRUE,
+                    start_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    end_date TIMESTAMP DEFAULT NULL,
+                    usage_limit INTEGER DEFAULT NULL,
+                    usage_count INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # User bonus claims table
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS user_bonus_claims (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    campaign_id INTEGER NOT NULL,
+                    amount REAL NOT NULL,
+                    wagering_requirement REAL DEFAULT 0.0,
+                    wagered_amount REAL DEFAULT 0.0,
+                    status TEXT DEFAULT 'active',  -- active, completed, expired, cancelled
+                    claimed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP DEFAULT NULL,
+                    expires_at TIMESTAMP DEFAULT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users (user_id),
+                    FOREIGN KEY (campaign_id) REFERENCES bonus_campaigns (id)
+                )
+            """)
+            
+            # Create indexes for better performance
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_users_last_active ON users(last_active)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_game_sessions_user_id ON game_sessions(user_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_game_sessions_game_type ON game_sessions(game_type)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_game_sessions_created_at ON game_sessions(created_at)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_withdrawals_user_id ON withdrawals(user_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_withdrawals_status ON withdrawals(status)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_deposits_user_id ON deposits(user_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_deposits_status ON deposits(status)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referrer_id ON referrals(referrer_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referee_id ON referrals(referee_id)")
             
             # Initialize house balance if it doesn't exist
             await db.execute("""
                 INSERT OR IGNORE INTO house_balance (id, balance) VALUES (1, 10000.0)
             """)
             
+            # Initialize default system configuration
+            system_configs = [
+                ('maintenance_mode', 'false', 'boolean', 'Enable/disable maintenance mode'),
+                ('min_bet_amount', '1.0', 'number', 'Minimum bet amount in USD'),
+                ('max_bet_amount', '1000.0', 'number', 'Maximum bet amount in USD'),
+                ('house_edge_slots', '3.5', 'number', 'House edge for slots games (%)'),
+                ('house_edge_blackjack', '1.5', 'number', 'House edge for blackjack (%)'),
+                ('house_edge_roulette', '2.7', 'number', 'House edge for roulette (%)'),
+                ('welcome_bonus_amount', '10.0', 'number', 'Welcome bonus amount in USD'),
+                ('daily_bonus_amount', '5.0', 'number', 'Daily bonus amount in USD'),
+                ('referral_bonus_amount', '25.0', 'number', 'Referral bonus amount in USD'),
+                ('max_withdrawal_daily', '10000.0', 'number', 'Maximum daily withdrawal in USD'),
+                ('kyc_required_amount', '1000.0', 'number', 'Amount requiring KYC verification'),
+                ('support_email', 'support@casino.com', 'string', 'Support email address'),
+                ('bot_version', '2.1.0', 'string', 'Current bot version')
+            ]
+            
+            for config in system_configs:
+                await db.execute("""
+                    INSERT OR IGNORE INTO system_config (key, value, data_type, description)
+                    VALUES (?, ?, ?, ?)
+                """, config)
+            
             await db.commit()
-            logger.info("✅ Database initialized successfully")
+            logger.info("✅ Enhanced database initialized successfully with comprehensive schema")
             
     except Exception as e:
         logger.error(f"Error initializing database: {e}")
@@ -755,7 +1037,7 @@ async def get_house_balance() -> dict:
             'total_player_losses': 0.0,
             'total_player_wins': 0.0,
             'total_deposits': 0.0,
-            'total_withdrawals': 0.0
+            'total_withwithdrawals': 0.0
         }
 
 async def update_house_balance_on_game(bet_amount: float, win_amount: float) -> bool:
@@ -1540,7 +1822,7 @@ async def run_telegram_bot_async():
     await application.run_polling()
 
 def run_telegram_bot():
-    asyncio.get_event_loop().run_until_complete(run_telegram_bot_async())
+    asyncio.run(run_telegram_bot_async())
 
 if __name__ == "__main__":
     flask_thread = threading.Thread(target=run_flask)
