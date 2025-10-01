@@ -970,7 +970,7 @@ async def deduct_balance(user_id: int, amount: float) -> bool:
 
 def calculate_withdrawal_fee(amount: float) -> float:
     """Calculate withdrawal fee"""
-    fee = amount * (WITHDRAWAL_FEE_PERCENT / 100)
+    fee = amount * WITHDRAWAL_FEE_PERCENT  # WITHDRAWAL_FEE_PERCENT is already a decimal (0.02 = 2%)
     return max(fee, MIN_WITHDRAWAL_FEE)
 
 def validate_crypto_address(address: str, asset: str) -> bool:
@@ -1726,7 +1726,7 @@ async def withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 • Minimum: {await format_usd(MIN_WITHDRAWAL_USD)}
 • Maximum: {await format_usd(MAX_WITHDRAWAL_USD)} per transaction
 • Daily Limit: {await format_usd(MAX_WITHDRAWAL_USD_DAILY)}
-• Fee: {WITHDRAWAL_FEE_PERCENT}% (min ${MIN_WITHDRAWAL_FEE:.2f})
+• Fee: {WITHDRAWAL_FEE_PERCENT * 100:.1f}% (min ${MIN_WITHDRAWAL_FEE:.2f})
 
 🔒 <b>Supported Cryptocurrency:</b>
 We support Litecoin (LTC) withdrawals for fast and secure transactions.
