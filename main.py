@@ -250,6 +250,8 @@ async def create_crypto_invoice(asset: str, amount: float, user_id: int, payload
     except Exception as e:
         logger.error(f"Error creating crypto invoice: {e}")
         return {"ok": False, "error": str(e)}
+        logger.error(f"Error creating crypto invoice: {e}")
+        return {"ok": False, "error": str(e)}
 
 async def get_bot_username() -> str:
     """Get bot username, cached for performance."""
@@ -433,7 +435,6 @@ async def update_withdrawal_limits(user_id: int, amount_usd: float) -> bool:
         return False
 
 # --- CryptoBot Real-Time Rate Fetch ---
-import aiohttp
 
 async def get_crypto_usd_rate(asset: str) -> float:
     """
@@ -467,8 +468,6 @@ async def get_crypto_usd_rate(asset: str) -> float:
                                     if price > 0:
                                         logger.info(f"CryptoBot API: {asset}/USD rate = ${price:.6f}")
                                         return price
-                                        logger.info(f"CryptoBot API: {asset}/USD rate = ${price:.6f}")
-                                        return price
                             logger.warning(f"CryptoBot API: No rate found for {asset}/USD in response")
                             rate_pairs = [f"{r.get('source')}/{r.get('target')}" for r in rates]
                             logger.debug(f"Available rates: {rate_pairs}")
@@ -496,6 +495,7 @@ async def get_crypto_usd_rate(asset: str) -> float:
             await asyncio.sleep(1)
     
     logger.error(f"Failed to get live rate for {asset} after {max_retries} attempts")
+    return 0.0
     return 0.0
 
 async def get_ltc_usd_rate() -> float:
@@ -1605,49 +1605,68 @@ async def handle_deposit_amount_input(update: Update, context: ContextTypes.DEFA
         await update.message.reply_text("❌ Invalid amount. Please enter a valid number (e.g., 10 or 25.50)")
 
 async def process_deposit_payment(update: Update, context: ContextTypes.DEFAULT_TYPE, crypto_type: str, amount_usd: float) -> None:
-    """Process deposit payment"""
+    """Process deposit payment and create CryptoBot invoice"""
     user_id = update.effective_user.id
     
-    text = f"""
-💳 <b>DEPOSIT PROCESSING</b> 💳
-
-Processing your {crypto_type} deposit...
-Amount: ${amount_usd:.2f} USD
-
-<i>This is a demo - deposits are simulated</i>
-"""
-    
-    # In demo mode, just add the balance
-    if DEMO_MODE:
-        success = await update_balance(user_id, amount_usd)
-        if success:
-            keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]]
-            await update.message.reply_text(
-                f"✅ Demo deposit successful! Added ${amount_usd:.2f} to your balance.",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-        else:
-            await update.message.reply_text("❌ Error processing deposit. Please try again.")
-    else:
-        await update.message.reply_text(text, parse_mode=ParseMode.HTML)
-        await update.message.reply_text("❌ Invalid amount. Please enter a valid number (e.g., 50 for $50).")
-
-async def process_deposit_payment(update: Update, context: ContextTypes.DEFAULT_TYPE, crypto_type: str, amount_usd: float) -> None:
-    """Process deposit payment and create CryptoBot invoice"""
-    query = getattr(update, 'callback_query', None)
     try:
+        # In demo mode, just add the balance
+        if DEMO_MODE:
+            success = await update_balance(user_id, amount_usd)
+            if success:
+                keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]]
+                await update.message.reply_text(
+                    f"✅ Demo deposit successful! Added ${amount_usd:.2f} to your balance.",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+            else:
+                await update.message.reply_text("❌ Error processing deposit. Please try again.")
+            return
+        
+        # Get crypto rate and calculate amount
         rate = await get_crypto_usd_rate(crypto_type)
         if rate <= 0:
             await update.message.reply_text("❌ Unable to fetch crypto rate. Please try again later.")
             return
+            
         crypto_amount = amount_usd / rate
-        user_id = query.from_user.id if query else update.message.from_user.id
+        
+        # Create CryptoBot invoice
         invoice_data = await create_crypto_invoice(crypto_type, crypto_amount, user_id)
+        
         if not invoice_data.get('ok'):
             await update.message.reply_text(f"❌ Error creating invoice: {invoice_data.get('error', 'Unknown error')}")
             return
+            
         invoice = invoice_data['result']
         payment_url = invoice.get('mini_app_invoice_url') or invoice.get('web_app_invoice_url') or invoice.get('bot_invoice_url')
+        
+        text = f"""
+💰 <b>CRYPTO PAY INVOICE READY</b> 💰
+
+📊 <b>Payment Details:</b>
+• Amount: <b>${amount_usd:.2f} USD</b>
+• Crypto: <b>{crypto_amount:.8f} {crypto_type}</b>
+• Rate: <b>${rate:.4f}</b> per {crypto_type}
+• Invoice ID: <code>{invoice['invoice_id']}</code>
+
+💳 <b>Pay with CryptoBot:</b>
+Click the button below to open the secure payment interface.
+
+⏰ <b>Expires in 1 hour</b>
+🔔 <i>You'll be notified instantly when payment is confirmed!</i>
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("💳 Pay with CryptoBot", url=payment_url)],
+            [InlineKeyboardButton("🔄 Check Payment Status", callback_data=f"check_payment_{invoice['invoice_id']}")],
+            [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
+        ]
+        
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        
+    except Exception as e:
+        logger.error(f"Error processing deposit payment: {e}")
+        await update.message.reply_text("❌ Error processing deposit. Please try again later.")
         text = f"""
 💰 <b>CRYPTO PAY INVOICE READY</b> 💰
 
@@ -1668,10 +1687,9 @@ Click the button below to open the secure payment interface directly within this
             [InlineKeyboardButton("🔄 Check Payment Status", callback_data=f"check_payment_{invoice['invoice_id']}")],
             [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
         ]
-        if query:
-            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-        else:
-            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        
     except Exception as e:
         logger.error(f"Error processing deposit payment: {e}")
         await update.message.reply_text("❌ Error processing deposit. Please try again later.")
@@ -1845,49 +1863,40 @@ async def handle_withdraw_address_input(update: Update, context: ContextTypes.DE
         else:
             await update.message.reply_text("❌ Error processing withdrawal.")
     else:
-        await update.message.reply_text(
-            f"🔄 Processing withdrawal...\n\n"
-            f"Amount: ${amount_usd:.2f} USD\n"
-            f"Address: {address}\n\n"
-            f"<i>You'll receive a confirmation shortly</i>",
-            parse_mode=ParseMode.HTML
-        )
+        # Real mode - process actual withdrawal
+        rate = await get_crypto_usd_rate(crypto_type)
+        if rate <= 0:
+            await update.message.reply_text("❌ Unable to fetch crypto rate. Please try again later.")
+            return
+            
+        crypto_amount = amount_usd / rate
+        net_crypto_amount = crypto_amount - (fee / rate)
+        
+        # Log withdrawal
+        withdrawal_id = await log_withdrawal(user_id, crypto_type, crypto_amount, address, fee / rate, net_crypto_amount)
+        
+        if withdrawal_id:
+            # Deduct balance
+            success = await deduct_balance(user_id, amount_usd)
+            if success:
+                await update.message.reply_text(
+                    f"✅ Withdrawal request submitted!\n\n"
+                    f"Amount: ${amount_usd:.2f} USD\n"
+                    f"Crypto: {crypto_amount:.8f} {crypto_type}\n"
+                    f"Fee: {fee / rate:.8f} {crypto_type}\n"
+                    f"Net: {net_crypto_amount:.8f} {crypto_type}\n"
+                    f"Address: {address}\n\n"
+                    f"Your withdrawal will be processed within 24 hours."
+                )
+                # Update house balance
+                await update_house_balance_on_withdrawal(amount_usd)
+            else:
+                await update.message.reply_text("❌ Insufficient balance for withdrawal.")
+                await update_withdrawal_status(withdrawal_id, "failed", "", "Insufficient balance")
+        else:
+            await update.message.reply_text("❌ Error submitting withdrawal request. Please try again later.")
 
-async def handle_withdraw_address_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if 'awaiting_withdraw_address' not in context.user_data:
-        return
-    crypto_type = context.user_data['awaiting_withdraw_address']
-    address = update.message.text.strip()
-    user_id = update.message.from_user.id
-    amount_usd = context.user_data.get('pending_withdraw_amount', 0.0)
-    if not validate_crypto_address(address, crypto_type):
-        await update.message.reply_text("❌ Invalid Litecoin address format. Please try again.")
-        return
-    # Check withdrawal limits
-    limits = await check_withdrawal_limits(user_id, amount_usd)
-    if not limits['allowed']:
-        await update.message.reply_text(f"❌ {limits['reason']}")
-        return
-    # Calculate crypto amount
-    rate = await get_crypto_usd_rate(crypto_type)
-    if rate <= 0:
-        await update.message.reply_text("❌ Unable to fetch crypto rate. Please try again later.")
-        return
-    crypto_amount = amount_usd / rate
-    fee = calculate_withdrawal_fee(crypto_amount)
-    net_amount = crypto_amount - fee
-    # Log withdrawal
-    withdrawal_id = await log_withdrawal(user_id, crypto_type, crypto_amount, address, fee, net_amount)
-    if withdrawal_id:
-        await update.message.reply_text(
-            f"✅ Withdrawal request submitted!\nAmount: {crypto_amount:.8f} {crypto_type}\nFee: {fee:.8f} {crypto_type}\nNet: {net_amount:.8f} {crypto_type}\nAddress: {address}\nYour withdrawal will be processed soon."
-        )
-        # Update balances atomically
-        await process_withdrawal_with_house_balance(user_id, amount_usd)
-    else:
-        await update.message.reply_text("❌ Error submitting withdrawal request. Please try again later.")
-    del context.user_data['awaiting_withdraw_address']
-    context.user_data.pop('pending_withdraw_amount', None)
+
 
 # Register handlers in main bot setup (ensure these are present in Application setup)
 def register_casino_handlers(application: Application) -> None:
@@ -2010,7 +2019,7 @@ async def run_telegram_bot_async():
         elif data == "deposit":
             await deposit_callback(update, context)
         elif data == "withdraw":
-            await withdraw_callback(update, context)
+            await withdraw_start(update, context)
         elif data == "mini_app_centre":
             await games_menu_callback(update, context)
         elif data == "referral_menu":
