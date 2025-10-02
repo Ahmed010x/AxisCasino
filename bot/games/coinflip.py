@@ -209,16 +209,15 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result_text = "BITCOIN" if result == "bitcoin" else "ETHEREUM"
     result_color = "🟠" if result == "bitcoin" else "🔷"  # Orange for BTC, Blue for ETH
     
-    # Try to send sticker first (if sticker IDs are provided)
+    # Send sticker animation first for visual effect
     sticker_sent = False
     try:
         sticker_id = BITCOIN_STICKER_ID if result == "bitcoin" else ETHEREUM_STICKER_ID
-        # Only send if sticker IDs have been updated from placeholders
-        if not sticker_id.startswith("CAACAgQAAxkBAAEBm7"):
-            await context.bot.send_sticker(chat_id=query.message.chat_id, sticker=sticker_id)
-            sticker_sent = True
+        await context.bot.send_sticker(chat_id=query.message.chat_id, sticker=sticker_id)
+        sticker_sent = True
+        logger.info(f"Sent {result} sticker to user {user_id}")
     except Exception as e:
-        logger.debug(f"Could not send sticker: {e}")
+        logger.error(f"Could not send sticker: {e}")
     
     if won:
         text = f"""
