@@ -70,11 +70,11 @@ logger = logging.getLogger(__name__)
 # Import game modules
 try:
     from bot.games.slots import handle_slots_callback
-    from bot.games.dice import handle_dice_callback
-    from bot.games.blackjack import handle_blackjack_callback
-    from bot.games.roulette import handle_roulette_callback
-    from bot.games.poker import handle_poker_callback
-    from bot.games.coinflip import handle_coinflip_callback
+    from bot.games.dice import handle_dice_callback, handle_custom_bet_input as handle_dice_custom_bet
+    from bot.games.blackjack import handle_blackjack_callback, handle_custom_bet_input as handle_blackjack_custom_bet
+    from bot.games.roulette import handle_roulette_callback, handle_custom_bet_input as handle_roulette_custom_bet
+    from bot.games.poker import handle_poker_callback, handle_custom_bet_input as handle_poker_custom_bet
+    from bot.games.coinflip import handle_coinflip_callback, handle_custom_bet_input as handle_coinflip_custom_bet
 except ImportError as e:
     logger.warning(f"Could not import game modules: {e}")
     # Define placeholder functions
@@ -1094,6 +1094,11 @@ async def log_game_session(user_id: int, game_type: str, bet_amount: float, win_
             """, (bet_amount, datetime.now().isoformat(), user_id))
             
             await db.commit()
+        
+        # Process referral commission if player lost
+        if win_amount < bet_amount:
+            loss_amount = bet_amount - win_amount
+            await process_referral_commission(user_id, loss_amount)
             
     except Exception as e:
         logger.error(f"Error logging game session: {e}")
@@ -1346,10 +1351,9 @@ WEEKLY_BONUS_AMOUNT = float(os.environ.get("WEEKLY_BONUS_AMOUNT", "5.0"))
 WEEKLY_BONUS_INTERVAL = 7  # days
 
 # --- Referral System Configuration ---
-REFERRAL_BONUS_REFERRER = float(os.environ.get("REFERRAL_BONUS_REFERRER", "10.0"))  # Bonus for person who refers
-REFERRAL_BONUS_REFEREE = float(os.environ.get("REFERRAL_BONUS_REFERRER", "5.0"))    # Bonus for new user
-REFERRAL_MIN_DEPOSIT = float(os.environ.get("REFERRAL_MIN_DEPOSIT", "10.0"))       # Min deposit to activate referral
-MAX_REFERRALS_PER_USER = int(os.environ.get("MAX_REFERRALS_PER_USER", "50"))       # Max referrals per user
+REFERRAL_COMMISSION_PERCENT = float(os.environ.get("REFERRAL_COMMISSION_PERCENT", "0.20"))  # 20% commission on referee losses
+REFERRAL_BONUS_REFEREE = float(os.environ.get("REFERRAL_BONUS_REFEREE", "5.0"))    # Welcome bonus for new user
+MAX_REFERRALS_PER_USER = int(os.environ.get("MAX_REFERRALS_PER_USER", "1000"))       # Max referrals per user
 
 async def ensure_weekly_bonus_column():
     """Ensure weekly bonus column exists in users table"""
@@ -1518,23 +1522,78 @@ async def process_referral(referee_id: int, referral_code: str) -> bool:
                 VALUES (?, ?, ?, 'active')
             """, (referrer_id, referee_id, referral_code))
             
-            # Give bonuses
-            await update_balance(referee_id, REFERRAL_BONUS_REFERRER)
-            await update_balance(referrer_id, REFERRAL_BONUS_REFEREE)
+            # Give welcome bonus to referee
+            await update_balance(referee_id, REFERRAL_BONUS_REFEREE)
             
             # Update referrer stats
             await db.execute("""
                 UPDATE users 
-                SET referral_count = referral_count + 1,
-                    referral_earnings = referral_earnings + ?
+                SET referral_count = referral_count + 1
                 WHERE user_id = ?
-            """, (REFERRAL_BONUS_REFERRER, referrer_id))
+            """, (referrer_id,))
             
             await db.commit()
+            logger.info(f"Referral processed: {referee_id} referred by {referrer_id} using code {referral_code}")
             return True
     except Exception as e:
         logger.error(f"Error processing referral: {e}")
         return False
+
+async def process_referral_commission(referee_id: int, loss_amount: float) -> bool:
+    """Give referrer 20% commission on referee's loss."""
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            # Check if user was referred
+            cursor = await db.execute("SELECT referred_by FROM users WHERE user_id = ?", (referee_id,))
+            row = await cursor.fetchone()
+            if not row or not row[0]:
+                return False  # Not referred by anyone
+            
+            referral_code = row[0]
+            
+            # Find referrer
+            cursor = await db.execute("SELECT user_id FROM users WHERE referral_code = ?", (referral_code,))
+            row = await cursor.fetchone()
+            if not row:
+                return False
+            
+            referrer_id = row[0]
+            
+            # Calculate commission (20% of loss)
+            commission = loss_amount * REFERRAL_COMMISSION_PERCENT
+            
+            if commission <= 0:
+                return False
+            
+            # Give commission to referrer
+            await update_balance(referrer_id, commission)
+            
+            # Update referrer's total earnings
+            await db.execute("""
+                UPDATE users 
+                SET referral_earnings = referral_earnings + ?
+                WHERE user_id = ?
+            """, (commission, referrer_id))
+            
+            # Update referral record
+            await db.execute("""
+                UPDATE referrals 
+                SET bonus_paid = bonus_paid + ?,
+                    total_referee_wagered = total_referee_wagered + ?
+                WHERE referee_id = ?
+            """, (commission, loss_amount, referee_id))
+            
+            await db.commit()
+            logger.info(f"Referral commission: ${commission:.2f} to user {referrer_id} from referee {referee_id}'s loss of ${loss_amount:.2f}")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Error processing referral commission: {e}")
+        return False
+
+def get_referral_link(bot_username: str, referral_code: str) -> str:
+    """Generate referral deep link."""
+    return f"https://t.me/{bot_username}?start={referral_code}"
 
 # --- Main Bot Handlers ---
 
@@ -1576,14 +1635,25 @@ async def cancel_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def handle_text_input_main(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle text input for deposit/withdrawal states only - ignore game states to prevent interference."""
-    # Only handle specific deposit/withdrawal states, not game states
+    """Handle text input for deposit/withdrawal/game custom bet states."""
+    # Check for deposit/withdrawal states
     if 'awaiting_deposit_amount' in context.user_data:
         await handle_deposit_amount_input(update, context)
     elif 'awaiting_withdraw_amount' in context.user_data:
         await handle_withdraw_amount_input(update, context)
     elif 'awaiting_withdraw_address' in context.user_data:
         await handle_withdraw_address_input(update, context)
+    # Check for game custom bet states
+    elif 'awaiting_coinflip_custom_bet' in context.user_data:
+        await handle_coinflip_custom_bet(update, context)
+    elif 'awaiting_dice_custom_bet' in context.user_data:
+        await handle_dice_custom_bet(update, context)
+    elif 'awaiting_blackjack_bet' in context.user_data:
+        await handle_blackjack_custom_bet(update, context)
+    elif 'awaiting_roulette_bet' in context.user_data or 'awaiting_roulette_number_bet' in context.user_data:
+        await handle_roulette_custom_bet(update, context)
+    elif 'awaiting_poker_ante' in context.user_data:
+        await handle_poker_custom_bet(update, context)
     else:
         # Ignore text messages that don't match any expected state
         # This prevents interference with conversation handlers for games
@@ -2298,6 +2368,69 @@ async def run_telegram_bot_async():
 
     application.add_handler(CommandHandler("start", start_handler))
     
+    # Referral command handler
+    async def referral_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /referral command"""
+        user_id = update.effective_user.id
+        referral_code = await get_or_create_referral_code(user_id)
+        stats = await get_referral_stats(user_id)
+        
+        # Get bot username
+        try:
+            bot = await context.bot.get_me()
+            bot_username = bot.username
+        except:
+            bot_username = "AxisCasinoBot"
+        
+        # Generate referral link
+        referral_link = get_referral_link(bot_username, referral_code)
+        
+        earnings_str = await format_usd(stats['earnings'])
+        
+        text = f"""
+👥 <b>REFERRAL PROGRAM</b> 👥
+
+💰 <b>Earn 20% Commission!</b>
+
+Share your unique referral link and earn <b>20% of what your referrals lose</b> in games!
+
+🔗 <b>Your Referral Link:</b>
+<code>{referral_link}</code>
+
+📊 <b>Your Stats:</b>
+👥 Total Referrals: <b>{stats['count']}</b>
+💵 Total Earned: <b>{earnings_str}</b>
+
+<b>How it works:</b>
+1. Share your link with friends
+2. They sign up using your link
+3. They get a ${REFERRAL_BONUS_REFEREE:.2f} welcome bonus
+4. You earn 20% commission every time they lose a game
+
+💡 <b>Example:</b>
+If your referral loses $100, you earn $20!
+
+<i>Start sharing and earning today!</i>
+"""
+        
+        # Add recent referrals if any
+        if stats['recent']:
+            text += "\n\n📋 <b>Recent Referrals:</b>\n"
+            for ref in stats['recent'][:5]:
+                username = ref['username'] or 'User'
+                bonus = ref['bonus']
+                text += f"• {username} - Earned: ${bonus:.2f}\n"
+        
+        keyboard = [
+            [InlineKeyboardButton("📤 Share Link", url=f"https://t.me/share/url?url={referral_link}&text=Join this amazing casino bot!")],
+            [InlineKeyboardButton("🔄 Refresh Stats", callback_data="referral_menu")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        ]
+        
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    application.add_handler(CommandHandler("referral", referral_command_handler))
+    
     # Basic callback handlers for user panel navigation
     async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle callback queries from inline keyboards (general fallback)"""
@@ -2477,26 +2610,55 @@ Withdraw your winnings securely:
         referral_code = await get_or_create_referral_code(user_id)
         stats = await get_referral_stats(user_id)
         
+        # Get bot username
+        try:
+            bot = await context.bot.get_me()
+            bot_username = bot.username
+        except:
+            bot_username = "AxisCasinoBot"
+        
+        # Generate referral link
+        referral_link = get_referral_link(bot_username, referral_code)
+        
         earnings_str = await format_usd(stats['earnings'])
         
         text = f"""
-👥 <b>REFERRAL SYSTEM</b> 👥
+👥 <b>REFERRAL PROGRAM</b> 👥
 
-🔗 <b>Your Referral Code:</b> <code>{referral_code}</code>
+� <b>Earn 20% Commission!</b>
+
+Share your unique referral link and earn <b>20% of what your referrals lose</b> in games!
+
+�🔗 <b>Your Referral Link:</b>
+<code>{referral_link}</code>
 
 📊 <b>Your Stats:</b>
-💰 <b>Earnings:</b> {earnings_str}
-👥 <b>Referrals:</b> {stats['count']}
+� Total Referrals: <b>{stats['count']}</b>
+� Total Earned: <b>{earnings_str}</b>
 
-💡 <b>How it works:</b>
-• Share your code with friends
-• They get a bonus when they join
-• You earn when they play
+<b>How it works:</b>
+1. Share your link with friends
+2. They sign up using your link
+3. They get a ${REFERRAL_BONUS_REFEREE:.2f} welcome bonus
+4. You earn 20% commission every time they lose a game
+
+💡 <b>Example:</b>
+If your referral loses $100, you earn $20!
 
 <i>Start sharing and earning today!</i>
 """
+        
+        # Add recent referrals if any
+        if stats['recent']:
+            text += "\n\n📋 <b>Recent Referrals:</b>\n"
+            for ref in stats['recent'][:5]:
+                username = ref['username'] or 'User'
+                bonus = ref['bonus']
+                text += f"• {username} - Earned: ${bonus:.2f}\n"
+        
         keyboard = [
-            [InlineKeyboardButton("📋 Copy Referral Link", callback_data=f"copy_ref_{referral_code}")],
+            [InlineKeyboardButton("� Share Link", url=f"https://t.me/share/url?url={referral_link}&text=Join this amazing casino bot!")],
+            [InlineKeyboardButton("🔄 Refresh Stats", callback_data="referral_menu")],
             [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
         ]
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
