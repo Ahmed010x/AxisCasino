@@ -74,6 +74,7 @@ try:
     from bot.games.blackjack import handle_blackjack_callback
     from bot.games.roulette import handle_roulette_callback
     from bot.games.poker import handle_poker_callback
+    from bot.games.coinflip import handle_coinflip_callback
 except ImportError as e:
     logger.warning(f"Could not import game modules: {e}")
     # Define placeholder functions
@@ -87,6 +88,8 @@ except ImportError as e:
         await update.callback_query.edit_message_text("🚧 Roulette game temporarily unavailable")
     async def handle_poker_callback(update, context):
         await update.callback_query.edit_message_text("🚧 Poker game temporarily unavailable")
+    async def handle_coinflip_callback(update, context):
+        await update.callback_query.edit_message_text("🚧 Coin Flip game temporarily unavailable")
 
 # --- Owner (Super Admin) Configuration ---
 load_dotenv(".env.owner")  # Load owner ID from dedicated file
@@ -2334,6 +2337,8 @@ async def run_telegram_bot_async():
             await game_blackjack_callback(update, context)
         elif data == "game_dice":
             await game_dice_callback(update, context)
+        elif data == "game_coinflip":
+            await handle_coinflip_callback(update, context)
         elif data == "game_roulette":
             await game_roulette_callback(update, context)
         elif data == "game_poker":
@@ -2347,6 +2352,8 @@ async def run_telegram_bot_async():
             await handle_dice_bet(update, context)
         elif data.startswith("dice_play_"):
             await handle_dice_play(update, context)
+        elif data.startswith("coinflip_"):
+            await handle_coinflip_callback(update, context)
         else:
             await query.edit_message_text("❌ Unknown action. Returning to main menu.")
             await start_panel_callback(update, context)
@@ -2419,6 +2426,7 @@ Choose your game:
 🎰 <b>Slots</b> - Classic slot machine
 🃏 <b>Blackjack</b> - Beat the dealer
 🎲 <b>Dice</b> - Roll to win
+🪙 <b>Coin Flip</b> - Heads or Tails
 🎯 <b>Roulette</b> - European roulette
 🂠 <b>Poker</b> - Texas Hold'em
 
@@ -2431,9 +2439,10 @@ Choose your game:
             ],
             [
                 InlineKeyboardButton("🎲 Dice", callback_data="game_dice"),
-                InlineKeyboardButton("🎯 Roulette", callback_data="game_roulette")
+                InlineKeyboardButton("🪙 Coin Flip", callback_data="game_coinflip")
             ],
             [
+                InlineKeyboardButton("🎯 Roulette", callback_data="game_roulette"),
                 InlineKeyboardButton("🂠 Poker", callback_data="game_poker")
             ],
             [
@@ -2552,6 +2561,10 @@ Withdraw your winnings securely:
 • VIP rewards
 • 24/7 support
 
+• Referral system
+• VIP rewards
+• 24/7 support
+
 📞 <b>Need Help?</b>
 Contact our support team for assistance.
 """
@@ -2651,10 +2664,6 @@ if __name__ == "__main__":
     else:
         # Local development
         print("🏠 Starting in development mode...")
-        flask_thread = threading.Thread(target=run_flask)
-        flask_thread.daemon = True
-        flask_thread.start()
-        run_telegram_bot()
 
 # --- Game Callback Handlers ---
 
