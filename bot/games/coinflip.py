@@ -1,7 +1,7 @@
 # bot/games/coinflip.py
 """
 Coin Flip Game Module
-Simple 50/50 game - bet on Heads or Tails
+Simple 50/50 game - bet on Bitcoin or Ethereum
 """
 
 import random
@@ -16,6 +16,10 @@ logger = logging.getLogger(__name__)
 MIN_BET = 1.0
 MAX_BET = 1000.0
 WIN_MULTIPLIER = 1.95  # 95% payout (5% house edge)
+
+# Sticker IDs for Bitcoin and Ethereum (you'll provide these)
+BITCOIN_STICKER_ID = "CAACAgQAAxkBAAEBm7Rmh3K5_YOUR_BITCOIN_STICKER_ID"  # Replace with actual sticker ID
+ETHEREUM_STICKER_ID = "CAACAgQAAxkBAAEBm7Zmh3K5_YOUR_ETHEREUM_STICKER_ID"  # Replace with actual sticker ID
 
 async def handle_coinflip_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Main handler for coin flip game"""
@@ -51,18 +55,18 @@ async def show_coinflip_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
     balance_str = await format_usd(user['balance'])
     
     text = f"""
-🪙 <b>COIN FLIP</b> 🪙
+🪙 <b>CRYPTO FLIP</b> 🪙
 
 💰 <b>Your Balance:</b> {balance_str}
 
 🎮 <b>How to Play:</b>
 • Choose your bet amount
-• Pick Heads or Tails
+• Pick Bitcoin ₿ or Ethereum Ξ
 • Win {WIN_MULTIPLIER}x your bet!
 
 💡 <b>Game Info:</b>
 • Fair 50/50 odds
-• Instant results
+• Instant results with stickers
 • Win probability: 50%
 • Payout: {WIN_MULTIPLIER}x bet
 
@@ -115,19 +119,19 @@ async def show_coinflip_choice(update: Update, context: ContextTypes.DEFAULT_TYP
     potential_win = bet_amount * WIN_MULTIPLIER
     
     text = f"""
-🪙 <b>COIN FLIP</b> 🪙
+🪙 <b>CRYPTO FLIP</b> 🪙
 
 💰 <b>Bet Amount:</b> ${bet_amount:.2f}
 💵 <b>Potential Win:</b> ${potential_win:.2f}
 
-<b>Choose your side:</b>
-Will the coin land on Heads or Tails?
+<b>Choose your crypto:</b>
+Will it be Bitcoin ₿ or Ethereum Ξ?
 """
     
     keyboard = [
         [
-            InlineKeyboardButton("🔴 HEADS", callback_data=f"coinflip_play_heads_{bet_amount}"),
-            InlineKeyboardButton("⚫ TAILS", callback_data=f"coinflip_play_tails_{bet_amount}")
+            InlineKeyboardButton("₿ BITCOIN", callback_data=f"coinflip_play_bitcoin_{bet_amount}"),
+            InlineKeyboardButton("Ξ ETHEREUM", callback_data=f"coinflip_play_ethereum_{bet_amount}")
         ],
         [InlineKeyboardButton("🔙 Back", callback_data="game_coinflip")]
     ]
@@ -141,7 +145,7 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_id = query.from_user.id
     data_parts = query.data.split("_")
-    choice = data_parts[2]  # "heads" or "tails"
+    choice = data_parts[2]  # "bitcoin" or "ethereum"
     bet_amount = float(data_parts[3])
     
     # Import here to avoid circular dependency
@@ -173,7 +177,7 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Flip the coin
-    result = random.choice(['heads', 'tails'])
+    result = random.choice(['bitcoin', 'ethereum'])
     won = (result == choice)
     
     # Calculate winnings
@@ -200,15 +204,27 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     updated_user = await get_user(user_id)
     new_balance_str = await format_usd(updated_user['balance'])
     
-    # Build result message
-    coin_emoji = "🔴" if result == "heads" else "⚫"
-    result_text = "HEADS" if result == "heads" else "TAILS"
+    # Build result message with crypto theme
+    coin_emoji = "₿" if result == "bitcoin" else "Ξ"
+    result_text = "BITCOIN" if result == "bitcoin" else "ETHEREUM"
+    result_color = "🟠" if result == "bitcoin" else "🔷"  # Orange for BTC, Blue for ETH
+    
+    # Try to send sticker first (if sticker IDs are provided)
+    sticker_sent = False
+    try:
+        sticker_id = BITCOIN_STICKER_ID if result == "bitcoin" else ETHEREUM_STICKER_ID
+        # Only send if sticker IDs have been updated from placeholders
+        if not sticker_id.startswith("CAACAgQAAxkBAAEBm7"):
+            await context.bot.send_sticker(chat_id=query.message.chat_id, sticker=sticker_id)
+            sticker_sent = True
+    except Exception as e:
+        logger.debug(f"Could not send sticker: {e}")
     
     if won:
         text = f"""
 🎉 <b>YOU WIN!</b> 🎉
 
-{coin_emoji} <b>Coin landed on: {result_text}</b>
+{result_color} <b>Result: {coin_emoji} {result_text}</b>
 
 💰 <b>Bet:</b> ${bet_amount:.2f}
 💵 <b>Won:</b> ${win_amount:.2f}
@@ -216,20 +232,20 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 💳 <b>New Balance:</b> {new_balance_str}
 
-<i>Congratulations! You guessed correctly!</i>
+<i>🎊 Congratulations! You predicted correctly!</i>
 """
     else:
         text = f"""
 😔 <b>YOU LOSE</b> 😔
 
-{coin_emoji} <b>Coin landed on: {result_text}</b>
+{result_color} <b>Result: {coin_emoji} {result_text}</b>
 
 💰 <b>Bet:</b> ${bet_amount:.2f}
 💸 <b>Lost:</b> ${bet_amount:.2f}
 
 💳 <b>New Balance:</b> {new_balance_str}
 
-<i>Better luck next time!</i>
+<i>🍀 Better luck next time!</i>
 """
     
     keyboard = [
