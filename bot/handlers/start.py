@@ -16,8 +16,32 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     
     # Create user in database if doesn't exist
+    is_new_user = False
+    existing_user = await get_user(user.id)
+    if not existing_user:
+        is_new_user = True
+    
     await create_user(user.id, user.username or user.first_name)
     user_data = await get_user(user.id)
+    
+    # Check for referral code in start parameter
+    if context.args and len(context.args) > 0 and is_new_user:
+        referral_code = context.args[0].upper()
+        # Import process_referral from main
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        from main import process_referral
+        
+        success = await process_referral(user.id, referral_code)
+        if success:
+            await update.message.reply_text(
+                f"🎉 Welcome bonus applied! You've been referred successfully.\n"
+                f"💰 You received a welcome bonus!\n\n",
+                parse_mode='Markdown'
+            )
+            # Refresh user data to show updated balance
+            user_data = await get_user(user.id)
     
     # Check for achievements
     newly_earned = await check_achievements(user.id)

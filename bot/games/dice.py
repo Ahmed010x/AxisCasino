@@ -9,7 +9,12 @@ import random
 from typing import Tuple
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+from telegram.constants import ParseMode
 from bot.database.user import get_user, add_game_result
+
+# Bet limits
+MIN_BET = 1.0
+MAX_BET = 1000.0
 
 
 def roll_dice() -> Tuple[int, int]:
@@ -79,36 +84,66 @@ async def play_dice_game(user_id: int, bet_type: str, bet_amount: int, target_su
     return die1, die2, total, is_win, win_amount, new_balance
 
 
-async def show_dice_menu(update: Update, balance: int):
+async def show_dice_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show dice betting menu."""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    # Import to avoid circular dependency
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    from main import get_user, format_usd
+    
+    user = await get_user(user_id)
+    if not user:
+        await query.edit_message_text("❌ User not found. Please restart with /start")
+        return
+    
+    balance_str = await format_usd(user['balance'])
+    
+    # Calculate half and all-in amounts
+    half_balance = user['balance'] / 2
+    all_balance = user['balance']
+    
     dice_text = f"""
-🎲 **DICE GAME** 🎲
+🎲 <b>DICE GAME</b> 🎲
 
-Current Balance: **{balance} chips**
+💰 <b>Your Balance:</b> {balance_str}
 
-**Game Rules:**
+🎮 <b>Game Rules:</b>
 Roll two dice and bet on the outcome!
 
-**Betting Options:**
-🔺 **HIGH (8-12)** - 1:1 payout - 20 chips
-🔻 **LOW (3-7)** - 1:1 payout - 20 chips  
-🎯 **EXACT NUMBER** - Variable payouts - 10 chips
+📊 <b>Betting Options:</b>
+🔺 <b>HIGH (8-12)</b> - 1:1 payout
+🔻 <b>LOW (3-7)</b> - 1:1 payout  
+🎯 <b>EXACT NUMBER</b> - Variable payouts
 
-Choose your bet:
+<b>Choose your bet amount:</b>
 """
     
     keyboard = [
         [
-            InlineKeyboardButton("🔺 HIGH (8-12)", callback_data="dice_bet_high_20"),
-            InlineKeyboardButton("🔻 LOW (3-7)", callback_data="dice_bet_low_20")
+            InlineKeyboardButton("$5", callback_data="dice_preset_5"),
+            InlineKeyboardButton("$10", callback_data="dice_preset_10"),
+            InlineKeyboardButton("$25", callback_data="dice_preset_25")
         ],
         [
-            InlineKeyboardButton("🎯 Exact Number", callback_data="dice_exact_menu")
-        ]
+            InlineKeyboardButton("$50", callback_data="dice_preset_50"),
+            InlineKeyboardButton("$100", callback_data="dice_preset_100"),
+            InlineKeyboardButton("$200", callback_data="dice_preset_200")
+        ],
+        [
+            InlineKeyboardButton(f"💰 Half (${half_balance:.2f})", callback_data=f"dice_preset_{half_balance:.2f}"),
+            InlineKeyboardButton(f"🎰 All-In (${all_balance:.2f})", callback_data=f"dice_preset_{all_balance:.2f}")
+        ],
+        [InlineKeyboardButton("✏️ Custom Amount", callback_data="dice_custom_bet")],
+        [InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(dice_text, reply_markup=reply_markup, parse_mode='Markdown')
+    await query.edit_message_text(dice_text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
 
 async def show_exact_number_menu(query):
@@ -158,6 +193,21 @@ Choose your number:
     await query.edit_message_text(exact_text, reply_markup=reply_markup, parse_mode='Markdown')
 
 
+async def show_custom_bet_menu(update: Update, balance: int):
+    """Show custom bet menu."""
+    custom_bet_text = f"""
+💰 **CUSTOM BET**
+
+Set your own bet amount (min: {MIN_BET}, max: {MAX_BET}):
+
+Your current balance: **{balance} chips**
+
+Enter bet amount:
+"""
+    
+    await update.message.reply_text(custom_bet_text, parse_mode='Markdown')
+
+
 async def handle_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle dice game callbacks."""
     query = update.callback_query
@@ -171,6 +221,16 @@ async def handle_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     
     if data == "dice_exact_menu":
         await show_exact_number_menu(query)
+        return
+    
+    if data == "dice_custom_bet":
+        user_data = await get_user(user_id)
+        context.user_data['awaiting_dice_custom_bet'] = True
+        await query.edit_message_text(
+            f"💰 Current Balance: **{user_data['balance']:.2f}**\n\n"
+            "✏️ Please enter your bet amount (e.g., 15.50):",
+            parse_mode='Markdown'
+        )
         return
     
     if data.startswith("dice_bet_"):
@@ -240,3 +300,86 @@ Better luck next time! 🍀
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(result_message, reply_markup=reply_markup, parse_mode='Markdown')
+
+
+async def handle_custom_bet_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle custom bet amount input from user"""
+    if not context.user_data.get('awaiting_dice_custom_bet'):
+        return
+    
+    user_id = update.message.from_user.id
+    user_data = await get_user(user_id)
+    
+    try:
+        # Parse bet amount
+        bet_amount = float(update.message.text.strip().replace('$', '').replace(',', ''))
+        
+        # Validate bet amount
+        if bet_amount < MIN_BET:
+            await update.message.reply_text(
+                f"❌ Bet amount too low!\n\nMinimum bet: ${MIN_BET:.2f}\nYour input: ${bet_amount:.2f}\n\nPlease try again.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="game_dice")]])
+            )
+            return
+        
+        if bet_amount > MAX_BET:
+            await update.message.reply_text(
+                f"❌ Bet amount too high!\n\nMaximum bet: ${MAX_BET:.2f}\nYour input: ${bet_amount:.2f}\n\nPlease try again.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="game_dice")]])
+            )
+            return
+        
+        if not user_data:
+            await update.message.reply_text("❌ User not found. Please restart with /start")
+            return
+        
+        if bet_amount > user_data['balance']:
+            await update.message.reply_text(
+                f"❌ Insufficient balance!\n\nYour balance: ${user_data['balance']:.2f}\nBet amount: ${bet_amount:.2f}\n\nPlease try again.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="game_dice")]])
+            )
+            return
+        
+        # Clear the awaiting state
+        context.user_data['awaiting_dice_custom_bet'] = False
+        
+        # Show bet type selection with custom amount
+        dice_text = f"""
+🎲 <b>DICE GAME</b> 🎲
+
+💰 <b>Bet Amount:</b> ${bet_amount:.2f}
+📊 <b>Balance:</b> ${user_data['balance']:.2f}
+
+<b>Choose your bet type:</b>
+
+🔺 <b>HIGH (8-12)</b> - 1:1 payout  
+🔻 <b>LOW (3-7)</b> - 1:1 payout  
+🎯 <b>EXACT NUMBER</b> - Variable payouts
+
+<i>Select your bet type below:</i>
+"""
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("🔺 High (8-12)", callback_data=f"dice_bet_high_{int(bet_amount)}"),
+                InlineKeyboardButton("🔻 Low (3-7)", callback_data=f"dice_bet_low_{int(bet_amount)}")
+            ],
+            [
+                InlineKeyboardButton("🎯 Exact Number", callback_data=f"dice_exact_menu_{int(bet_amount)}")
+            ],
+            [
+                InlineKeyboardButton("🔙 Back", callback_data="game_dice")
+            ]
+        ]
+        
+        await update.message.reply_text(dice_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        
+    except ValueError:
+        await update.message.reply_text(
+            f"❌ Invalid input!\n\nPlease enter a valid number (e.g., 15.50)\n\nTry again:",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="game_dice")]])
+        )
+
+
+# Export handlers
+__all__ = ['handle_dice_callback', 'handle_custom_bet_input', 'show_dice_menu']

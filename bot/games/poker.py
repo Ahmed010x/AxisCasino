@@ -255,7 +255,14 @@ Choose your ante:
             InlineKeyboardButton("200 chips", callback_data="poker_ante_200")
         ],
         [
-            InlineKeyboardButton("📖 Hand Rankings", callback_data="poker_rankings")
+            InlineKeyboardButton("� Half", callback_data="poker_ante_half"),
+            InlineKeyboardButton("🎯 All-In", callback_data="poker_ante_allin")
+        ],
+        [
+            InlineKeyboardButton("✏️ Custom Amount", callback_data="poker_ante_custom")
+        ],
+        [
+            InlineKeyboardButton("�📖 Hand Rankings", callback_data="poker_rankings")
         ]
     ]
     
@@ -431,12 +438,39 @@ async def handle_poker_callback(update: Update, context: ContextTypes.DEFAULT_TY
     
     if data.startswith("poker_ante_"):
         # Starting a new game
-        ante = int(data.split('_')[2])
+        ante_suffix = data.split('_')[2]
         
         # Check balance
         user_data = await get_user(user_id)
-        if not user_data or user_data['balance'] < ante:
+        if not user_data:
+            await query.edit_message_text("❌ User not found. Please use /start first.")
+            return
+        
+        # Handle different ante types
+        if ante_suffix == "half":
+            ante = max(25, user_data['balance'] // 2)
+        elif ante_suffix == "allin":
+            ante = user_data['balance']
+        elif ante_suffix == "custom":
+            # Request custom amount from user
+            context.user_data['awaiting_poker_ante'] = True
+            await query.edit_message_text(
+                f"💰 Current Balance: **{user_data['balance']} chips**\n\n"
+                "✏️ Please enter your ante amount (minimum 25 chips):",
+                parse_mode='Markdown'
+            )
+            return
+        else:
+            # Fixed ante amount
+            ante = int(ante_suffix)
+        
+        # Validate ante
+        if user_data['balance'] < ante:
             await query.edit_message_text("❌ Insufficient balance! Use /daily for free chips.")
+            return
+        
+        if ante < 25:
+            await query.edit_message_text("❌ Minimum ante is 25 chips!")
             return
         
         # Start new game
@@ -498,3 +532,85 @@ async def handle_poker_callback(update: Update, context: ContextTypes.DEFAULT_TY
         
         elif action == "showdown":
             await end_poker_game(query, game, session_id, user_id)
+
+async def handle_custom_bet_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle custom ante amount input from user"""
+    if not context.user_data.get('awaiting_poker_ante'):
+        return
+    
+    user_id = update.message.from_user.id
+    user_data = await get_user(user_id)
+    
+    try:
+        # Parse ante amount
+        ante = int(update.message.text.strip())
+        
+        # Validate ante amount
+        if ante < 25:
+            await update.message.reply_text(
+                f"❌ Ante amount too low!\n\nMinimum ante: 25 chips\nYour input: {ante} chips\n\nPlease try again.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="game_poker")]])
+            )
+            return
+        
+        if not user_data:
+            await update.message.reply_text("❌ User not found. Please restart with /start")
+            return
+        
+        if ante > user_data['balance']:
+            await update.message.reply_text(
+                f"❌ Insufficient balance!\n\nYour balance: {user_data['balance']} chips\nAnte amount: {ante} chips\n\nPlease try again.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="game_poker")]])
+            )
+            return
+        
+        # Clear the awaiting state
+        context.user_data['awaiting_poker_ante'] = False
+        
+        # Start new game with custom ante
+        session_id = await start_poker_game(user_id, ante)
+        session_data = await get_game_session(session_id)
+        game = PokerGame.from_dict(json.loads(session_data['game_data']))
+        
+        # Send game state as a new message
+        game_text = f"""
+🃏 **TEXAS HOLD'EM POKER** 🃏
+
+**Your Hand:** {game.format_cards(game.player_hand)}
+
+**Community Cards:** {game.format_cards(game.community_cards) if game.community_cards else 'None yet'}
+
+**Stage:** {game.game_stage.upper()}
+**Ante:** {game.ante} chips
+**Current Bet:** {game.current_bet} chips
+
+What would you like to do?
+"""
+        
+        keyboard = []
+        if game.game_stage != 'river':
+            keyboard.append([
+                InlineKeyboardButton("✅ Call", callback_data=f"poker_action_call_{session_id}"),
+                InlineKeyboardButton("⬆️ Raise", callback_data=f"poker_action_raise_{session_id}")
+            ])
+        keyboard.append([
+            InlineKeyboardButton("❌ Fold", callback_data=f"poker_action_fold_{session_id}")
+        ])
+        
+        if game.game_stage == 'river':
+            keyboard.append([
+                InlineKeyboardButton("🎲 Showdown", callback_data=f"poker_action_showdown_{session_id}")
+            ])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(game_text, reply_markup=reply_markup, parse_mode='Markdown')
+        
+    except ValueError:
+        await update.message.reply_text(
+            f"❌ Invalid input!\n\nPlease enter a valid number (e.g., 100)\n\nTry again:",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="game_poker")]])
+        )
+
+
+# Export handlers
+__all__ = ['start_poker_game', 'handle_poker_callback', 'handle_custom_bet_input', 'show_poker_menu']

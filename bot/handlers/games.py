@@ -74,7 +74,7 @@ async def blackjack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("❌ You need at least 20 chips to play blackjack! Use /daily for free chips.")
         return
     
-    # Show betting options
+    # Show betting options with custom bet support
     keyboard = [
         [
             InlineKeyboardButton("20 chips", callback_data="blackjack_bet_20"),
@@ -83,6 +83,13 @@ async def blackjack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         [
             InlineKeyboardButton("100 chips", callback_data="blackjack_bet_100"),
             InlineKeyboardButton("200 chips", callback_data="blackjack_bet_200")
+        ],
+        [
+            InlineKeyboardButton("💰 Half", callback_data="blackjack_bet_half"),
+            InlineKeyboardButton("🎯 All-In", callback_data="blackjack_bet_allin")
+        ],
+        [
+            InlineKeyboardButton("✏️ Custom Amount", callback_data="blackjack_bet_custom")
         ]
     ]
     

@@ -30,6 +30,8 @@ async def handle_coinflip_callback(update: Update, context: ContextTypes.DEFAULT
     
     if data == "game_coinflip":
         await show_coinflip_menu(update, context)
+    elif data == "coinflip_custom_bet":
+        await request_custom_bet(update, context)
     elif data.startswith("coinflip_bet_"):
         bet_amount = float(data.split("_")[2])
         await show_coinflip_choice(update, context, bet_amount)
@@ -53,6 +55,10 @@ async def show_coinflip_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     
     balance_str = await format_usd(user['balance'])
+    
+    # Calculate half and all-in amounts
+    half_balance = user['balance'] / 2
+    all_balance = user['balance']
     
     text = f"""
 🪙 <b>CRYPTO FLIP</b> 🪙
@@ -84,6 +90,11 @@ async def show_coinflip_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
             InlineKeyboardButton("$50", callback_data="coinflip_bet_50"),
             InlineKeyboardButton("$100", callback_data="coinflip_bet_100")
         ],
+        [
+            InlineKeyboardButton(f"💰 Half (${half_balance:.2f})", callback_data=f"coinflip_bet_{half_balance:.2f}"),
+            InlineKeyboardButton(f"🎰 All-In (${all_balance:.2f})", callback_data=f"coinflip_bet_{all_balance:.2f}")
+        ],
+        [InlineKeyboardButton("✏️ Custom Amount", callback_data="coinflip_custom_bet")],
         [InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]
     ]
     
@@ -255,5 +266,123 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
-# Export the main handler
-__all__ = ['handle_coinflip_callback']
+async def request_custom_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Request custom bet amount from user"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    # Import here to avoid circular dependency
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    from main import get_user, format_usd
+    
+    user = await get_user(user_id)
+    if not user:
+        await query.edit_message_text("❌ User not found. Please restart with /start")
+        return
+    
+    balance_str = await format_usd(user['balance'])
+    
+    # Set state to await custom bet input
+    context.user_data['awaiting_coinflip_custom_bet'] = True
+    
+    text = f"""
+✏️ <b>CUSTOM BET AMOUNT</b> ✏️
+
+💰 <b>Your Balance:</b> {balance_str}
+
+Please enter your custom bet amount in USD.
+
+<b>Bet Limits:</b>
+• Minimum: ${MIN_BET:.2f}
+• Maximum: ${MAX_BET:.2f}
+• Your Balance: {balance_str}
+
+💡 <i>Type a number (e.g., "15.50" for $15.50)</i>
+
+⌨️ <b>Waiting for your input...</b>
+"""
+    
+    keyboard = [[InlineKeyboardButton("🔙 Back to Coin Flip", callback_data="game_coinflip")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def handle_custom_bet_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle custom bet amount input from user"""
+    if not context.user_data.get('awaiting_coinflip_custom_bet'):
+        return
+    
+    user_id = update.message.from_user.id
+    
+    # Import here to avoid circular dependency
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    from main import get_user, format_usd
+    
+    try:
+        # Parse bet amount
+        bet_amount = float(update.message.text.strip().replace('$', '').replace(',', ''))
+        
+        # Validate bet amount
+        if bet_amount < MIN_BET:
+            await update.message.reply_text(
+                f"❌ Bet amount too low!\n\nMinimum bet: ${MIN_BET:.2f}\nYour input: ${bet_amount:.2f}\n\nPlease try again.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="game_coinflip")]])
+            )
+            return
+        
+        if bet_amount > MAX_BET:
+            await update.message.reply_text(
+                f"❌ Bet amount too high!\n\nMaximum bet: ${MAX_BET:.2f}\nYour input: ${bet_amount:.2f}\n\nPlease try again.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="game_coinflip")]])
+            )
+            return
+        
+        user = await get_user(user_id)
+        if not user:
+            await update.message.reply_text("❌ User not found. Please restart with /start")
+            return
+        
+        if bet_amount > user['balance']:
+            balance_str = await format_usd(user['balance'])
+            await update.message.reply_text(
+                f"❌ Insufficient balance!\n\nYour balance: {balance_str}\nBet amount: ${bet_amount:.2f}\n\nPlease try again.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="game_coinflip")]])
+            )
+            return
+        
+        # Clear the awaiting state
+        context.user_data['awaiting_coinflip_custom_bet'] = False
+        
+        # Show the choice screen with custom bet amount
+        potential_win = bet_amount * WIN_MULTIPLIER
+        
+        text = f"""
+🪙 <b>CRYPTO FLIP</b> 🪙
+
+💰 <b>Bet Amount:</b> ${bet_amount:.2f}
+💵 <b>Potential Win:</b> ${potential_win:.2f}
+
+<b>Choose your crypto:</b>
+Will it be Bitcoin ₿ or Ethereum Ξ?
+"""
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("₿ BITCOIN", callback_data=f"coinflip_play_bitcoin_{bet_amount}"),
+                InlineKeyboardButton("Ξ ETHEREUM", callback_data=f"coinflip_play_ethereum_{bet_amount}")
+            ],
+            [InlineKeyboardButton("🔙 Back", callback_data="game_coinflip")]
+        ]
+        
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        
+    except ValueError:
+        await update.message.reply_text(
+            f"❌ Invalid input!\n\nPlease enter a valid number (e.g., 15.50)\n\nTry again:",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="game_coinflip")]])
+        )
+
+# Export handlers
+__all__ = ['handle_coinflip_callback', 'handle_custom_bet_input']

@@ -182,12 +182,39 @@ async def handle_blackjack_callback(update: Update, context: ContextTypes.DEFAUL
     
     if data.startswith("blackjack_bet_"):
         # Starting a new game
-        bet_amount = int(data.split('_')[-1])
+        bet_suffix = data.split('_')[-1]
         
         # Check balance
         user_data = await get_user(user_id)
-        if not user_data or user_data['balance'] < bet_amount:
+        if not user_data:
+            await query.edit_message_text("❌ User not found! Use /start first.")
+            return
+        
+        # Handle different bet types
+        if bet_suffix == "half":
+            bet_amount = max(20, user_data['balance'] // 2)
+        elif bet_suffix == "allin":
+            bet_amount = user_data['balance']
+        elif bet_suffix == "custom":
+            # Request custom amount from user
+            context.user_data['awaiting_blackjack_bet'] = True
+            await query.edit_message_text(
+                f"💰 Current Balance: **{user_data['balance']} chips**\n\n"
+                "✏️ Please enter your bet amount (minimum 20 chips):",
+                parse_mode='Markdown'
+            )
+            return
+        else:
+            # Fixed bet amount
+            bet_amount = int(bet_suffix)
+        
+        # Validate bet amount
+        if user_data['balance'] < bet_amount:
             await query.edit_message_text("❌ Insufficient balance! Use /daily for free chips.")
+            return
+        
+        if bet_amount < 20:
+            await query.edit_message_text("❌ Minimum bet is 20 chips!")
             return
         
         # Start new game
@@ -323,3 +350,123 @@ async def end_game(query, game: BlackjackGame, session_id: str, user_id: int):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(final_text, reply_markup=reply_markup, parse_mode='Markdown')
+
+
+async def handle_custom_bet_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle custom bet amount input from user"""
+    if not context.user_data.get('awaiting_blackjack_bet'):
+        return
+    
+    user_id = update.message.from_user.id
+    user_data = await get_user(user_id)
+    
+    try:
+        # Parse bet amount
+        bet_amount = int(update.message.text.strip())
+        
+        # Validate bet amount
+        if bet_amount < 20:
+            await update.message.reply_text(
+                f"❌ Bet amount too low!\n\nMinimum bet: 20 chips\nYour input: {bet_amount} chips\n\nPlease try again.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="game_blackjack")]])
+            )
+            return
+        
+        if not user_data:
+            await update.message.reply_text("❌ User not found. Please restart with /start")
+            return
+        
+        if bet_amount > user_data['balance']:
+            await update.message.reply_text(
+                f"❌ Insufficient balance!\n\nYour balance: {user_data['balance']} chips\nBet amount: {bet_amount} chips\n\nPlease try again.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="game_blackjack")]])
+            )
+            return
+        
+        # Clear the awaiting state
+        context.user_data['awaiting_blackjack_bet'] = False
+        
+        # Start new game with custom bet
+        session_id = await start_blackjack(user_id, bet_amount)
+        session_data = await get_game_session(session_id)
+        game = BlackjackGame.from_dict(json.loads(session_data['game_data']))
+        
+        # Send game state as a new message
+        player_value = game.get_hand_value(game.player_hand)
+        
+        # Check for immediate blackjack
+        if game.is_blackjack(game.player_hand):
+            result_text, win_amount = game.get_result()
+            await add_game_result(user_id, 'blackjack', game.bet_amount, win_amount, result_text)
+            await delete_game_session(session_id)
+            
+            user_data = await get_user(user_id)
+            new_balance = user_data['balance'] if user_data else 0
+            
+            dealer_value = game.get_hand_value(game.dealer_hand)
+            
+            final_text = f"""
+🃏 **BLACKJACK RESULT** 🃏
+
+**Dealer's Hand:** {game.format_hand(game.dealer_hand)}
+**Dealer Value:** {dealer_value}
+
+**Your Hand:** {game.format_hand(game.player_hand)}
+**Your Value:** {player_value}
+
+**Result:** {result_text}
+
+💰 **Bet:** {game.bet_amount} chips
+{'🏆' if win_amount > game.bet_amount else '💸'} **{'Won' if win_amount > game.bet_amount else 'Lost'}:** {abs(win_amount - game.bet_amount)} chips
+📊 **Balance:** {new_balance} chips
+
+{'🎉 Congratulations!' if win_amount > game.bet_amount else 'Better luck next time! 🍀'}
+"""
+            
+            keyboard = [
+                [
+                    InlineKeyboardButton("🃏 Play Again", callback_data="game_blackjack"),
+                    InlineKeyboardButton("🏠 Main Menu", callback_data="help")
+                ]
+            ]
+            await update.message.reply_text(final_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+            return
+        
+        game_text = f"""
+🃏 **BLACKJACK** 🃏
+
+**Dealer's Hand:** {game.format_hand(game.dealer_hand, hide_first=True)}
+
+**Your Hand:** {game.format_hand(game.player_hand)}
+**Value:** {player_value}
+
+**Bet:** {game.bet_amount} chips
+
+What would you like to do?
+"""
+        
+        keyboard = []
+        if not game.game_over:
+            action_row = [
+                InlineKeyboardButton("👊 Hit", callback_data=f"blackjack_action_hit_{session_id}"),
+                InlineKeyboardButton("✋ Stand", callback_data=f"blackjack_action_stand_{session_id}")
+            ]
+            keyboard.append(action_row)
+            
+            if len(game.player_hand) == 2 and not game.doubled_down:
+                keyboard.append([
+                    InlineKeyboardButton("💰 Double Down", callback_data=f"blackjack_action_double_{session_id}")
+                ])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(game_text, reply_markup=reply_markup, parse_mode='Markdown')
+        
+    except ValueError:
+        await update.message.reply_text(
+            f"❌ Invalid input!\n\nPlease enter a valid number (e.g., 100)\n\nTry again:",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="game_blackjack")]])
+        )
+
+
+# Export handlers
+__all__ = ['start_blackjack', 'handle_blackjack_callback', 'handle_custom_bet_input']
