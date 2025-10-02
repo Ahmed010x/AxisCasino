@@ -1041,7 +1041,7 @@ async def get_house_balance() -> dict:
             'total_player_losses': 0.0,
             'total_player_wins': 0.0,
             'total_deposits': 0.0,
-            'total_withdrawals': 0.0
+            'total_withwithdrawals': 0.0
         }
 
 async def update_house_balance_on_game(bet_amount: float, win_amount: float) -> bool:
@@ -1113,7 +1113,7 @@ async def get_house_profit_loss() -> dict:
     try:
         house_data = await get_house_balance()
         
-        total_in = house_data.get('total_deposits', 0.0) + house_data.get('total_player_losses', 0.0)
+        total_in = house_data.get('total_deposits', 0.0)
         total_out = house_data.get('total_withdrawals', 0.0) + house_data.get('total_player_wins', 0.0)
         total_received = house_data.get('total_player_losses', 0.0)
         
@@ -1247,687 +1247,15 @@ async def get_house_balance_display() -> str:
         logger.error(f"Error getting house balance display: {e}")
         return "❌ <b>House Balance:</b> Unable to load data"
 
-# --- Enhanced House Balance Management ---
+# --- Weekly Bonus Helpers ---
+WEEKLY_BONUS_AMOUNT = float(os.environ.get("WEEKLY_BONUS_AMOUNT", "5.0"))
+WEEKLY_BONUS_INTERVAL = 7  # days
 
-async def get_house_balance_summary() -> dict:
-    """Get detailed house balance summary with analytics"""
-    try:
-        house_data = await get_house_balance()
-        
-        # Calculate derived metrics
-        total_volume = house_data.get('total_deposits', 0.0) + house_data.get('total_player_losses', 0.0)
-        total_payouts = house_data.get('total_withdrawals', 0.0) + house_data.get('total_player_wins', 0.0)
-        net_profit = total_volume - total_payouts
-        
-        # Calculate house edge percentage
-        total_wagered = house_data.get('total_player_losses', 0.0) + house_data.get('total_player_wins', 0.0)
-        house_edge = (house_data.get('total_player_losses', 0.0) / total_wagered * 100) if total_wagered > 0 else 0
-        
-        # Calculate profit margin
-        profit_margin = (net_profit / total_volume * 100) if total_volume > 0 else 0
-        
-        return {
-            'current_balance': house_data.get('balance', 0.0),
-            'total_volume': total_volume,
-            'total_payouts': total_payouts,
-            'net_profit': net_profit,
-            'house_edge_percent': house_edge,
-            'profit_margin_percent': profit_margin,
-            'total_deposits': house_data.get('total_deposits', 0.0),
-            'total_withdrawals': house_data.get('total_withdrawals', 0.0),
-            'total_player_wins': house_data.get('total_player_wins', 0.0),
-            'total_player_losses': house_data.get('total_player_losses', 0.0),
-            'last_updated': house_data.get('last_updated', datetime.now().isoformat())
-        }
-        
-    except Exception as e:
-        logger.error(f"Error getting house balance summary: {e}")
-        return {}
-
-async def reset_daily_house_stats() -> bool:
-    """Reset daily house statistics (called by scheduler)"""
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("""
-                UPDATE house_balance 
-                SET games_played_today = 0,
-                    revenue_today = 0.0,
-                    profit_today = 0.0,
-                    last_daily_reset = ?
-                WHERE id = 1
-            """, (datetime.now().isoformat(),))
-            await db.commit()
-            logger.info("✅ Daily house statistics reset")
-            return True
-            
-    except Exception as e:
-        logger.error(f"Error resetting daily house stats: {e}")
-        return False
-
-async def update_daily_house_stats(bet_amount: float, win_amount: float) -> bool:
-    """Update daily house statistics"""
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            house_profit = bet_amount - win_amount
-            
-            await db.execute("""
-                UPDATE house_balance 
-                SET games_played_today = games_played_today + 1,
-                    revenue_today = revenue_today + ?,
-                    profit_today = profit_today + ?
-                WHERE id = 1
-            """, (bet_amount, house_profit))
-            await db.commit()
-            return True
-            
-    except Exception as e:
-        logger.error(f"Error updating daily house stats: {e}")
-        return False
-
-async def get_house_risk_metrics() -> dict:
-    """Calculate house risk metrics and alerts"""
-    try:
-        house_data = await get_house_balance()
-        current_balance = house_data.get('balance', 0.0)
-        
-        # Risk thresholds
-        LOW_BALANCE_THRESHOLD = 1000.0  # Alert when house balance is low
-        CRITICAL_BALANCE_THRESHOLD = 500.0  # Critical alert
-        
-        # Calculate risk level
-        if current_balance <= CRITICAL_BALANCE_THRESHOLD:
-            risk_level = "CRITICAL"
-            risk_color = "🔴"
-        elif current_balance <= LOW_BALANCE_THRESHOLD:
-            risk_level = "HIGH"
-            risk_color = "🟡"
-        else:
-            risk_level = "LOW"
-            risk_color = "🟢"
-        
-        # Calculate recommended actions
-        recommendations = []
-        if current_balance <= CRITICAL_BALANCE_THRESHOLD:
-            recommendations.append("🚨 URGENT: Replenish house balance immediately")
-            recommendations.append("⏸️ Consider temporarily suspending high-limit games")
-        elif current_balance <= LOW_BALANCE_THRESHOLD:
-            recommendations.append("⚠️ Monitor withdrawals closely")
-            recommendations.append("💰 Consider adding funds to house balance")
-        
-        return {
-            'risk_level': risk_level,
-            'risk_color': risk_color,
-            'current_balance': current_balance,
-            'low_threshold': LOW_BALANCE_THRESHOLD,
-            'critical_threshold': CRITICAL_BALANCE_THRESHOLD,
-            'recommendations': recommendations,
-            'is_healthy': current_balance > LOW_BALANCE_THRESHOLD
-        }
-        
-    except Exception as e:
-        logger.error(f"Error calculating house risk metrics: {e}")
-        return {'risk_level': 'UNKNOWN', 'risk_color': '❓', 'is_healthy': False, 'recommendations': []}
-
-async def adjust_house_balance(admin_user_id: int, amount: float, reason: str) -> bool:
-    """Manually adjust house balance (admin only)"""
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            # Get current balance
-            cursor = await db.execute("SELECT balance FROM house_balance WHERE id = 1")
-            current_balance = (await cursor.fetchone())[0]
-            
-            # Update balance
-            new_balance = current_balance + amount
-            await db.execute("""
-                UPDATE house_balance 
-                SET balance = ?,
-                    last_updated = ?
-                WHERE id = 1
-            """, (new_balance, datetime.now().isoformat()))
-            
-            # Log the adjustment
-            await db.execute("""
-                INSERT INTO admin_actions 
-                (admin_user_id, action_type, amount, old_value, new_value, reason, created_at)
-                VALUES (?, 'house_balance_adjustment', ?, ?, ?, ?, ?)
-            """, (admin_user_id, amount, str(current_balance), str(new_balance), reason, datetime.now().isoformat()))
-            
-            await db.commit()
-            
-            logger.info(f"House balance adjusted by admin {admin_user_id}: {amount:+.2f} (reason: {reason})")
-            return True
-            
-    except Exception as e:
-        logger.error(f"Error adjusting house balance: {e}")
-        return False
-
-async def get_house_performance_report(days: int = 7) -> dict:
-    """Get house performance report for the last N days"""
-    try:
-        start_date = (datetime.now() - timedelta(days=days)).date()
-        
-        async with aiosqlite.connect(DB_PATH) as db:
-            # Get game statistics for the period
-            cursor = await db.execute("""
-                SELECT 
-                    SUM(bet_amount) as total_wagered,
-                    SUM(win_amount) as total_paid,
-                    COUNT(*) as total_games,
-                    COUNT(DISTINCT user_id) as unique_players,
-                    AVG(bet_amount) as avg_bet,
-                    MAX(win_amount) as biggest_win
-                FROM game_sessions 
-                WHERE DATE(created_at) >= ?
-            """, (start_date,))
-            
-            game_stats = await cursor.fetchone()
-            
-            # Get deposit/withdrawal stats
-            cursor = await db.execute("""
-                SELECT 
-                    COALESCE(SUM(CASE WHEN type = 'deposit' THEN amount ELSE 0 END), 0) as deposits,
-                    COALESCE(SUM(CASE WHEN type = 'withdrawal' THEN amount ELSE 0 END), 0) as withdrawals
-                FROM transactions 
-                WHERE DATE(created_at) >= ?
-            """, (start_date,))
-            
-            financial_stats = await cursor.fetchone()
-            
-            # Calculate metrics
-            total_wagered = game_stats[0] or 0.0
-            total_paid = game_stats[1] or 0.0
-            total_games = game_stats[2] or 0
-            unique_players = game_stats[3] or 0
-            avg_bet = game_stats[4] or 0.0
-            biggest_win = game_stats[5] or 0.0
-            
-            deposits = financial_stats[0] or 0.0
-            withdrawals = financial_stats[1] or 0.0
-            
-            house_profit = total_wagered - total_paid
-            house_edge = (house_profit / total_wagered * 100) if total_wagered > 0 else 0
-            net_cash_flow = deposits - withdrawals
-            
-            return {
-                'period_days': days,
-                'start_date': start_date.isoformat(),
-                'total_wagered': total_wagered,
-                'total_paid': total_paid,
-                'house_profit': house_profit,
-                'house_edge_percent': house_edge,
-                'total_games': total_games,
-                'unique_players': unique_players,
-                'avg_bet': avg_bet,
-                'biggest_win': biggest_win,
-                'deposits': deposits,
-                'withdrawals': withdrawals,
-                'net_cash_flow': net_cash_flow,
-                'profit_margin': (house_profit / (total_wagered + deposits) * 100) if (total_wagered + deposits) > 0 else 0
-            }
-            
-    except Exception as e:
-        logger.error(f"Error generating house performance report: {e}")
-        return {}
-
-async def get_enhanced_house_balance_display() -> str:
-    """Get enhanced house balance display with risk metrics and performance"""
-    try:
-        summary = await get_house_balance_summary()
-        risk_metrics = await get_house_risk_metrics()
-        performance = await get_house_performance_report(7)  # Last 7 days
-        
-        # Format values
-        balance_str = await format_usd(summary.get('current_balance', 0.0))
-        profit_str = await format_usd(summary.get('net_profit', 0.0))
-        volume_str = await format_usd(summary.get('total_volume', 0.0))
-        
-        # Performance metrics
-        weekly_profit_str = await format_usd(performance.get('house_profit', 0.0))
-        monthly_profit_str = await format_usd(performance.get('house_profit', 0.0))
-        
-        # Risk status
-        risk_status = f"{risk_metrics.get('risk_color', '❓')} {risk_metrics.get('risk_level', 'UNKNOWN')}"
-        
-        text = f"""
-🏦 <b>ENHANCED HOUSE BALANCE</b> 🏦
-
-💰 <b>Current Balance:</b> {balance_str}
-📊 <b>Risk Status:</b> {risk_status}
-📈 <b>All-Time Profit:</b> {profit_str}
-🎯 <b>House Edge:</b> {summary.get('house_edge_percent', 0):.2f}%
-🔄 <b>Total Volume:</b> {volume_str}
-
-⏱️ <b>Performance Summary:</b>
-📅 <b>Last 7 Days:</b> {weekly_profit_str}
-📅 <b>Last 30 Days:</b> {monthly_profit_str}
-🎮 <b>Games (7d):</b> {performance.get('total_games', 0):,}
-
-🚨 <b>Risk Metrics:</b>
-🔥 <b>Risk Score:</b> {risk_metrics.get('risk_score', 0):.1f}/10
-⚖️ <b>Balance Ratio:</b> {risk_metrics.get('balance_ratio', 0):.2f}
-💹 <b>Volatility:</b> {risk_metrics.get('volatility', 'N/A')}
-
-💳 <b>Cash Flow:</b>
-📥 <b>Deposits:</b> {await format_usd(summary.get('total_deposits', 0.0))}
-📤 <b>Withdrawals:</b> {await format_usd(summary.get('total_withdrawals', 0.0))}
-🏆 <b>Player Wins:</b> {await format_usd(summary.get('total_player_wins', 0.0))}
-💸 <b>Player Losses:</b> {await format_usd(summary.get('total_player_losses', 0.0))}
-
-<i>Real-time casino financial analytics</i>
-"""
-        
-        # Add risk recommendations if any
-        recommendations = risk_metrics.get('recommendations', [])
-        if recommendations:
-            text += "\n\n🚨 <b>Recommendations:</b>\n"
-            for rec in recommendations[:3]:  # Limit to 3 recommendations
-                text += f"• {rec}\n"
-        
-        return text
-        
-    except Exception as e:
-        logger.error(f"Error getting enhanced house balance display: {e}")
-        return "❌ <b>Enhanced House Balance:</b> Unable to load data"
-
-# --- Admin Commands for House Balance Management ---
-
-async def admin_house_balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Admin command to view detailed house balance"""
-    user_id = update.effective_user.id
-    
-    if not is_admin(user_id) and not is_owner(user_id):
-        await update.message.reply_text("❌ Access denied. Admin privileges required.")
-        return
-    
-    log_admin_action(user_id, "Viewed house balance")
-    
-    display_text = await get_enhanced_house_balance_display()
-    
-    keyboard = [
-        [
-            InlineKeyboardButton("📊 Risk Analysis", callback_data="admin_house_risk"),
-            InlineKeyboardButton("📈 Performance", callback_data="admin_house_performance")
-        ],
-        [
-            InlineKeyboardButton("💰 Adjust Balance", callback_data="admin_adjust_house_balance"),
-            InlineKeyboardButton("📋 Daily Report", callback_data="admin_house_daily")
-        ],
-        [InlineKeyboardButton("🔧 Admin Panel", callback_data="admin_panel")]
-    ]
-    
-    await update.message.reply_text(
-        display_text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode=ParseMode.HTML
-    )
-
-async def owner_house_balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Owner command to view comprehensive house balance with all analytics"""
-    user_id = update.effective_user.id
-    
-    if not is_owner(user_id):
-        await update.message.reply_text("❌ Access denied. Owner privileges required.")
-        return
-    
-    log_admin_action(user_id, "Viewed owner house balance dashboard")
-    
-    # Get comprehensive data
-    summary = await get_house_balance_summary()
-    risk_metrics = await get_house_risk_metrics()
-    performance_7d = await get_house_performance_report(7)
-    performance_30d = await get_house_performance_report(30)
-    
-    # Format display
-    balance_str = await format_usd(summary.get('current_balance', 0.0))
-    profit_str = await format_usd(summary.get('net_profit', 0.0))
-    volume_str = await format_usd(summary.get('total_volume', 0.0))
-    
-    risk_color = risk_metrics.get('risk_color', '❓')
-    risk_level = risk_metrics.get('risk_level', 'UNKNOWN')
-    
-    weekly_profit_str = await format_usd(performance_7d.get('house_profit', 0.0))
-    monthly_profit_str = await format_usd(performance_30d.get('house_profit', 0.0))
-    
-    text = f"""
-🏦 <b>OWNER HOUSE BALANCE DASHBOARD</b> 🏦
-
-💰 <b>Current Balance:</b> {balance_str}
-📊 <b>Risk Status:</b> {risk_color} {risk_level}
-📈 <b>All-Time Profit:</b> {profit_str}
-🎯 <b>House Edge:</b> {summary.get('house_edge_percent', 0):.2f}%
-🔄 <b>Total Volume:</b> {volume_str}
-
-⏱️ <b>Performance Summary:</b>
-📅 <b>Last 7 Days:</b> {weekly_profit_str}
-📅 <b>Last 30 Days:</b> {monthly_profit_str}
-🎮 <b>Games (7d):</b> {performance_7d.get('total_games', 0):,}
-
-🚨 <b>Risk Metrics:</b>
-🔥 <b>Risk Score:</b> {risk_metrics.get('risk_score', 0):.1f}/10
-⚖️ <b>Balance Ratio:</b> {risk_metrics.get('balance_ratio', 0):.2f}
-💹 <b>Volatility:</b> {risk_metrics.get('volatility', 'N/A')}
-
-💳 <b>Cash Flow:</b>
-📥 <b>Deposits:</b> {await format_usd(summary.get('total_deposits', 0.0))}
-📤 <b>Withdrawals:</b> {await format_usd(summary.get('total_withdrawals', 0.0))}
-🏆 <b>Player Wins:</b> {await format_usd(summary.get('total_player_wins', 0.0))}
-💸 <b>Player Losses:</b> {await format_usd(summary.get('total_player_losses', 0.0))}
-
-<i>Real-time casino financial monitoring</i>
-"""
-    
-    keyboard = [
-        [
-            InlineKeyboardButton("📊 Full Analytics", callback_data="owner_house_analytics"),
-            InlineKeyboardButton("💰 Manual Adjustment", callback_data="owner_adjust_balance")
-        ],
-        [
-            InlineKeyboardButton("📈 Detailed Reports", callback_data="owner_house_reports"),
-            InlineKeyboardButton("⚙️ Risk Settings", callback_data="owner_risk_settings")
-        ],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
-    ]
-    
-    await update.message.reply_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode=ParseMode.HTML
-    )
-
-async def admin_house_balance_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle admin house balance callback queries"""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    
-    if not is_admin(user_id) and not is_owner(user_id):
-        await query.edit_message_text("❌ Access denied. Admin privileges required.")
-        return
-    
-    if query.data == "admin_house_risk":
-        # Show detailed risk analysis
-        risk_metrics = await get_house_risk_metrics()
-        
-        text = f"""
-🚨 <b>HOUSE BALANCE RISK ANALYSIS</b> 🚨
-
-📊 <b>Current Risk Level:</b> {risk_metrics.get('risk_color', '❓')} {risk_metrics.get('risk_level', 'UNKNOWN')}
-💰 <b>Current Balance:</b> {await format_usd(risk_metrics.get('current_balance', 0.0))}
-
-⚠️ <b>Risk Thresholds:</b>
-🟡 <b>Low Risk:</b> > {await format_usd(risk_metrics.get('low_threshold', 1000.0))}
-🔴 <b>Critical:</b> < {await format_usd(risk_metrics.get('critical_threshold', 500.0))}
-
-🎯 <b>Health Status:</b> {'✅ Healthy' if risk_metrics.get('is_healthy', False) else '⚠️ Requires Attention'}
-
-📋 <b>Recommendations:</b>
-"""
-        
-        recommendations = risk_metrics.get('recommendations', [])
-        if recommendations:
-            for rec in recommendations:
-                text += f"\n{rec}"
-        else:
-            text += "\n✅ No immediate actions required"
-        
-        keyboard = [
-            [InlineKeyboardButton("💰 Adjust Balance", callback_data="admin_adjust_house_balance")],
-            [InlineKeyboardButton("🔙 Back", callback_data="admin_house_balance")]
-        ]
-        
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-    
-    elif query.data == "admin_house_performance":
-        # Show performance metrics
-        performance_7d = await get_house_performance_report(7)
-        performance_30d = await get_house_performance_report(30)
-        
-        text = f"""
-📈 <b>HOUSE PERFORMANCE REPORT</b> 📈
-
-🗓️ <b>Last 7 Days:</b>
-💰 <b>Profit:</b> {await format_usd(performance_7d.get('house_profit', 0.0))}
-🎮 <b>Games:</b> {performance_7d.get('total_games', 0):,}
-👥 <b>Players:</b> {performance_7d.get('unique_players', 0):,}
-💵 <b>Avg Bet:</b> {await format_usd(performance_7d.get('avg_bet', 0.0))}
-🎯 <b>House Edge:</b> {performance_7d.get('house_edge_percent', 0):.2f}%
-
-🗓️ <b>Last 30 Days:</b>
-💰 <b>Profit:</b> {await format_usd(performance_30d.get('house_profit', 0.0))}
-🎮 <b>Games:</b> {performance_30d.get('total_games', 0):,}
-👥 <b>Players:</b> {performance_30d.get('unique_players', 0):,}
-💵 <b>Avg Bet:</b> {await format_usd(performance_30d.get('avg_bet', 0.0))}
-🎯 <b>House Edge:</b> {performance_30d.get('house_edge_percent', 0):.2f}%
-
-💸 <b>Cash Flow (30d):</b>
-📥 <b>Deposits:</b> {await format_usd(performance_30d.get('deposits', 0.0))}
-📤 <b>Withdrawals:</b> {await format_usd(performance_30d.get('withdrawals', 0.0))}
-📊 <b>Net Flow:</b> {await format_usd(performance_30d.get('net_cash_flow', 0.0))}
-"""
-        
-        keyboard = [
-            [InlineKeyboardButton("📊 Risk Analysis", callback_data="admin_house_risk")],
-            [InlineKeyboardButton("🔙 Back", callback_data="admin_house_balance")]
-        ]
-        
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-    
-    elif query.data == "admin_adjust_house_balance":
-        # Prompt for balance adjustment
-        text = """
-💰 <b>ADJUST HOUSE BALANCE</b> 💰
-
-Please enter the adjustment amount in USD.
-Use positive numbers to add funds, negative to deduct.
-
-Examples:
-• <code>+1000</code> - Add $1000
-• <code>-500</code> - Deduct $500
-• <code>2500</code> - Add $2500
-
-⚠️ <b>Warning:</b> This will directly modify the house balance.
-"""
-        
-        keyboard = [[InlineKeyboardButton("🔙 Cancel", callback_data="admin_house_balance")]]
-        
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-        
-        # Set state for amount input
-        context.user_data['awaiting_house_adjustment'] = True
-    
-    elif query.data == "admin_house_daily":
-        # Show today's statistics
-        house_data = await get_house_balance()
-        
-        text = f"""
-📅 <b>TODAY'S HOUSE STATISTICS</b> 📅
-
-🎮 <b>Games Played:</b> {house_data.get('games_played_today', 0):,}
-💰 <b>Revenue Today:</b> {await format_usd(house_data.get('revenue_today', 0.0))}
-📈 <b>Profit Today:</b> {await format_usd(house_data.get('profit_today', 0.0))}
-
-🕐 <b>Last Reset:</b> {house_data.get('last_daily_reset', 'Never')[:10]}
-🕐 <b>Last Updated:</b> {house_data.get('last_updated', 'Never')[:16]}
-
-🔄 <b>Operations:</b>
-"""
-        
-        keyboard = [
-            [InlineKeyboardButton("🔄 Reset Daily Stats", callback_data="admin_reset_daily_stats")],
-            [InlineKeyboardButton("🔙 Back", callback_data="admin_house_balance")]
-        ]
-        
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-    
-    elif query.data == "admin_reset_daily_stats":
-        # Reset daily statistics
-        success = await reset_daily_house_stats()
-        
-        if success:
-            await query.edit_message_text(
-                "✅ <b>Daily statistics reset successfully!</b>\n\n"
-                "All daily counters have been reset to zero.",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Back to Daily Stats", callback_data="admin_house_daily")]
-                ]),
-                parse_mode=ParseMode.HTML            )
-            log_admin_action(user_id, "Reset daily house statistics")
-        else:
-            await query.edit_message_text(
-                "❌ <b>Error resetting daily statistics</b>\n\n"
-                "Please try again or contact support.",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Back", callback_data="admin_house_daily")]
-                ]),
-                parse_mode=ParseMode.HTML
-            )
-
-async def handle_house_balance_adjustment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle house balance adjustment amount input"""
-    if 'awaiting_house_adjustment' not in context.user_data:
-        return
-    
-    user_id = update.effective_user.id
-    if not is_admin(user_id) and not is_owner(user_id):
-        await update.message.reply_text("❌ Access denied.")
-        return
-    
-    try:
-        amount_str = update.message.text.strip()
-        # Remove any + prefix
-        if amount_str.startswith('+'):
-            amount_str = amount_str[1:]
-        
-        amount = float(amount_str)
-        
-        if abs(amount) > 100000:  # Prevent huge adjustments
-            await update.message.reply_text("❌ Amount too large. Maximum adjustment is ±$100,000.")
-            return
-        
-        # Clear state
-        del context.user_data['awaiting_house_adjustment']
-        
-        # Prompt for reason
-        context.user_data['house_adjustment_amount'] = amount
-        
-        keyboard = [[InlineKeyboardButton("🔙 Cancel", callback_data="admin_house_balance")]]
-        
-        await update.message.reply_text(
-            f"💰 <b>Confirm House Balance Adjustment</b>\n\n"
-            f"Amount: <b>{amount:+.2f} USD</b>\n\n"
-            f"Please provide a reason for this adjustment:",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode=ParseMode.HTML
-        )
-        
-        # Set state for reason input
-        context.user_data['awaiting_adjustment_reason'] = True
-        
-    except ValueError:
-        await update.message.reply_text("❌ Invalid amount. Please enter a valid number (e.g., 1000 or -500)")
-
-async def handle_house_adjustment_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle house balance adjustment reason input"""
-    if 'awaiting_adjustment_reason' not in context.user_data:
-        return
-    
-    user_id = update.effective_user.id
-    if not is_admin(user_id) and not is_owner(user_id):
-        await update.message.reply_text("❌ Access denied.")
-        return
-    
-    amount = context.user_data.get('house_adjustment_amount', 0.0)
-    reason = update.message.text.strip()
-    
-    if len(reason) < 5:
-        await update.message.reply_text("❌ Please provide a more detailed reason (minimum 5 characters).")
-        return
-    
-    # Clear states
-    del context.user_data['awaiting_adjustment_reason']
-    del context.user_data['house_adjustment_amount']
-    
-    # Apply adjustment
-    success = await adjust_house_balance(user_id, amount, reason)
-    
-    if success:
-        keyboard = [[InlineKeyboardButton("🏦 View House Balance", callback_data="admin_house_balance")]]
-        
-        await update.message.reply_text(
-            f"✅ <b>House Balance Adjusted Successfully</b>\n\n"
-            f"Amount: <b>{amount:+.2f} USD</b>\n"
-            f"Reason: <i>{reason}</i>\n\n"
-            f"The adjustment has been logged for audit purposes.",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode=ParseMode.HTML
-        )
-        
-        log_admin_action(user_id, f"Adjusted house balance by {amount:+.2f} USD: {reason}")
-    else:
-        await update.message.reply_text(
-            "❌ <b>Error adjusting house balance</b>\n\n"
-            "Please try again or contact support."
-        )
-
-# --- Enhanced Text Input Handler ---
-
-async def handle_text_input_main(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle all text input for various states"""
-    user_id = update.effective_user.id
-    
-    # House balance adjustment flows (admin only)
-    if is_admin(user_id) or is_owner(user_id):
-        if 'awaiting_house_adjustment' in context.user_data:
-            await handle_house_balance_adjustment(update, context)
-            return
-        elif 'awaiting_adjustment_reason' in context.user_data:
-            await handle_house_adjustment_reason(update, context)
-            return
-    
-    # Deposit/withdrawal flows
-    if 'awaiting_deposit_amount' in context.user_data:
-        await handle_deposit_amount_input(update, context)
-        return
-    elif 'awaiting_withdraw_amount' in context.user_data:
-        await handle_withdraw_amount_input(update, context)
-        return
-    elif 'awaiting_withdraw_address' in context.user_data:
-        await handle_withdraw_address_input(update, context)
-        return
-    
-    # Default: ignore unrecognized text to prevent interference with games
-    logger.debug(f"Ignored text input from user {user_id}: {update.message.text}")
-
-# --- Missing Deposit/Withdrawal Handlers (Stubs) ---
-# These should be implemented based on your crypto payment system
-
-async def handle_deposit_amount_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle deposit amount input - implement based on your crypto system"""
-    await update.message.reply_text("🚧 Deposit system integration needed")
-
-async def handle_withdraw_amount_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle withdrawal amount input - implement based on your crypto system"""
-    await update.message.reply_text("🚧 Withdrawal system integration needed")
-
-async def handle_withdraw_address_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle withdrawal address input - implement based on your crypto system"""
-    await update.message.reply_text("🚧 Withdrawal system integration needed")
-
-# --- Import Required Modules ---
-import os
-import re
-import time
-import uuid
-import random
-import hashlib
-import asyncio
-import logging
-import aiohttp
-import aiosqlite
-import nest_asyncio
-from typing import Dict, List, Optional, Tuple
-
-# --- Missing Database Helper Functions ---
+# --- Referral System Configuration ---
+REFERRAL_BONUS_REFERRER = float(os.environ.get("REFERRAL_BONUS_REFERRER", "10.0"))  # Bonus for person who refers
+REFERRAL_BONUS_REFEREE = float(os.environ.get("REFERRAL_BONUS_REFERRER", "5.0"))    # Bonus for new user
+REFERRAL_MIN_DEPOSIT = float(os.environ.get("REFERRAL_MIN_DEPOSIT", "10.0"))       # Min deposit to activate referral
+MAX_REFERRALS_PER_USER = int(os.environ.get("MAX_REFERRALS_PER_USER", "50"))       # Max referrals per user
 
 async def ensure_weekly_bonus_column():
     """Ensure weekly bonus column exists in users table"""
@@ -1967,48 +1295,1047 @@ async def ensure_referral_columns():
     except Exception as e:
         logger.error(f"Error ensuring referral columns: {e}")
 
-# --- Application Setup ---
+async def can_claim_weekly_bonus(user_id: int) -> Tuple[bool, Optional[int]]:
+    """Check if user can claim weekly bonus. Returns (can_claim, seconds_remaining)."""
+    user = await get_user(user_id)
+    if not user:
+        return False, None
+    
+    last_claim = user.get('last_weekly_bonus')
+    if not last_claim:
+        return True, None
+    
+    last_dt = datetime.fromisoformat(last_claim)
+    now = datetime.now()
+    delta = now - last_dt
+    if delta.days >= WEEKLY_BONUS_INTERVAL:
+        return True, None
+    
+    seconds_remaining = (WEEKLY_BONUS_INTERVAL * 86400) - int(delta.total_seconds())
+    return False, seconds_remaining
 
-async def main():
-    """Main function to run the bot"""
+async def claim_weekly_bonus(user_id: int) -> bool:
+    """Grant the weekly bonus and update last_weekly_bonus."""
     try:
-        # Initialize database
-        await init_db()
+        success = await update_balance(user_id, WEEKLY_BONUS_AMOUNT)
+        if success:
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute("""
+                    UPDATE users SET last_weekly_bonus = ? WHERE user_id = ?
+                """, (datetime.now().isoformat(), user_id))
+                await db.commit()
+        return success
+    except Exception as e:
+        logger.error(f"Error claiming weekly bonus: {e}")
+        return False
+
+# --- Referral System Helpers ---
+
+def generate_referral_code(user_id: int) -> str:
+    """Generate a unique referral code for a user."""
+    import time
+    import random
+    import hashlib
+    
+    # Create a base from user_id and current timestamp
+    base = f"{user_id}_{int(time.time())}_{random.randint(1000, 9999)}"
+    hash_obj = hashlib.md5(base.encode())
+    
+    # Take first 8 characters and make it alphanumeric
+    code = hash_obj.hexdigest()[:6].upper()
+    return f"REF{code}"
+
+async def get_or_create_referral_code(user_id: int) -> str:
+    """Get existing referral code or create a new one."""
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cursor = await db.execute("SELECT referral_code FROM users WHERE user_id = ?", (user_id,))
+            row = await cursor.fetchone()
+            if row and row[0]:
+                return row[0]
+            
+            # Create new code
+            code = generate_referral_code(user_id)
+            await db.execute("UPDATE users SET referral_code = ? WHERE user_id = ?", (code, user_id))
+            await db.commit()
+            return code
+    except Exception as e:
+        logger.error(f"Error getting/creating referral code: {e}")
+        return generate_referral_code(user_id)
+
+async def get_referral_stats(user_id: int) -> dict:
+    """Get referral statistics for a user."""
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            # Get user's referral data
+            cursor = await db.execute("""
+                SELECT referral_earnings, referral_count FROM users WHERE user_id = ?
+            """, (user_id,))
+            row = await cursor.fetchone()
+            earnings = row[0] if row else 0.0
+            count = row[1] if row else 0
+            
+            # Get recent referrals
+            cursor = await db.execute("""
+                SELECT r.referee_id, u.username, r.created_at, r.bonus_paid
+                FROM referrals r
+                JOIN users u ON r.referee_id = u.user_id
+                WHERE r.referrer_id = ?
+                ORDER BY r.created_at DESC
+                LIMIT 10
+            """, (user_id,))
+            recent_refs = await cursor.fetchall()
+            
+            return {
+                'earnings': earnings,
+                'count': count,
+                'recent': [{'user_id': r[0], 'username': r[1], 'date': r[2], 'bonus': r[3]} for r in recent_refs]
+            }
+    except Exception as e:
+        logger.error(f"Error getting referral stats: {e}")
+        return {'earnings': 0.0, 'count': 0, 'recent': []}
+
+async def process_referral(referee_id: int, referral_code: str) -> bool:
+    """Process a new referral when user registers with a code."""
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            # Find referrer by code
+            cursor = await db.execute("SELECT user_id FROM users WHERE referral_code = ?", (referral_code,))
+            row = await cursor.fetchone()
+            if not row:
+                return False
+            
+            referrer_id = row[0]
+            if referrer_id == referee_id:
+                return False  # Can't refer yourself
+            
+            # Check if referee was already referred
+            cursor = await db.execute("SELECT referred_by FROM users WHERE user_id = ?", (referee_id,))
+            row = await cursor.fetchone()
+            if row and row[0]:
+                return False  # Already referred
+            
+            # Update referee with referrer info
+            await db.execute("UPDATE users SET referred_by = ? WHERE user_id = ?", (referral_code, referee_id))
+            
+            # Create referral record
+            await db.execute("""
+                INSERT INTO referrals (referrer_id, referee_id, referral_code, status)
+                VALUES (?, ?, ?, 'active')
+            """, (referrer_id, referee_id, referral_code))
+            
+            # Give bonuses
+            await update_balance(referee_id, REFERRAL_BONUS_REFERRER)
+            await update_balance(referrer_id, REFERRAL_BONUS_REFERRER)
+            
+            # Update referrer stats
+            await db.execute("""
+                UPDATE users 
+                SET referral_count = referral_count + 1,
+                    referral_earnings = referral_earnings + ?
+                WHERE user_id = ?
+            """, (REFERRAL_BONUS_REFERRER, referrer_id))
+            
+            await db.commit()
+            return True
+    except Exception as e:
+        logger.error(f"Error processing referral: {e}")
+        return False
+
+# --- Main Bot Handlers ---
+
+# Global utility functions for conversation handlers
+async def global_fallback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle any unexpected messages during conversation"""
+    # Clear any stale conversation state
+    context.user_data.clear()
+    
+    # If it's a callback query, answer it
+    if update.callback_query:
+        await update.callback_query.answer()
         
-        # Ensure required columns exist
-        await ensure_weekly_bonus_column()
-        await ensure_referral_columns()
+    # Return to main menu
+    if update.callback_query:
+        keyboard = [[InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]]
+        await update.callback_query.edit_message_text(
+            "🔄 Returning to main menu...",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    elif update.message:
+        keyboard = [[InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]]
+        await update.message.reply_text(
+            "🔄 Returning to main menu...",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    return ConversationHandler.END
+
+async def cancel_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancel current game and return to games menu"""
+    context.user_data.clear()  # Clear all states
+    if update.callback_query:
+        await update.callback_query.answer()
+        keyboard = [[InlineKeyboardButton("🎮 Games", callback_data="mini_app_centre")]]
+        await update.callback_query.edit_message_text(
+            "🎮 Game cancelled. Choose another game:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    return ConversationHandler.END
+
+async def handle_text_input_main(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle text input for deposit/withdrawal states only - ignore game states to prevent interference."""
+    # Only handle specific deposit/withdrawal states, not game states
+    if 'awaiting_deposit_amount' in context.user_data:
+        await handle_deposit_amount_input(update, context)
+    elif 'awaiting_withdraw_amount' in context.user_data:
+        await handle_withdraw_amount_input(update, context)
+    elif 'awaiting_withdraw_address' in context.user_data:
+        await handle_withdraw_address_input(update, context)
+    else:
+        # Ignore text messages that don't match any expected state
+        # This prevents interference with conversation handlers for games
+        # Log ignored input for debugging
+        logger.debug(f"Ignored text input from user {update.effective_user.id}: {update.message.text}")
+
+# --- Deposit/Withdrawal Handlers ---
+
+async def deposit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle deposit button - show deposit options."""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    # Clear any previous states to prevent interference
+    context.user_data.clear()
+    
+    user = await get_user(user_id)
+    if not user:
+        await query.edit_message_text(
+            "❌ User not found. Please use /start to register first.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Start", callback_data="main_panel")]])
+        )
+        return
+    
+    balance_str = await format_usd(user['balance'])
+    
+    text = f"""
+💳 <b>DEPOSIT FUNDS</b> 💳
+
+💰 <b>Current Balance:</b> {balance_str}
+
+🔒 <b>Secure Payment Methods:</b>
+We accept Litecoin (LTC) deposits for fast and secure transactions.
+
+• <b>Cryptocurrency:</b> Instant deposits with low fees
+• <b>Minimum:</b> $1.00 USD equivalent
+• <b>Processing:</b> Usually within minutes
+
+💡 <b>Why choose Litecoin?</b>
+✅ Fast processing times
+✅ Lower transaction fees
+✅ Enhanced privacy
+✅ 24/7 availability
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🪙 Deposit Litecoin (LTC)", callback_data="deposit_LTC")],
+        [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def deposit_crypto_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle specific crypto deposit selection."""
+    query = update.callback_query
+    await query.answer()
+    
+    # Extract crypto type from callback data
+    crypto_type = query.data.split("_")[1]  # deposit_LTC -> LTC
+    user_id = query.from_user.id
+    
+    # Clear previous states and set the crypto type in context for the conversation
+    context.user_data.clear()
+    context.user_data['deposit_crypto'] = crypto_type
+    
+    # Get current rate
+    rate = await get_crypto_usd_rate(crypto_type)
+    rate_text = f"${rate:.4f}" if rate > 0 else "Rate unavailable"
+    
+    text = f"""
+💰 <b>DEPOSIT {crypto_type}</b> 💰
+
+📊 <b>Current Rate:</b> 1 {crypto_type} = {rate_text} USD
+
+💵 <b>Enter Deposit Amount</b>
+Please type the amount you want to deposit in USD.
+
+<b>Deposit Limits:</b>
+• Minimum: $1.00 USD
+• Maximum: $10,000.00 USD per transaction
+
+💡 <i>Simply type your amount in USD (e.g., type "50" for $50.00)</i>
+
+⌨️ <b>Waiting for your input...</b>
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    # Set state for text input
+    context.user_data['awaiting_deposit_amount'] = crypto_type
+
+async def handle_deposit_amount_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle text input for deposit amount."""
+    if 'awaiting_deposit_amount' not in context.user_data:
+        return
+    crypto_type = context.user_data['awaiting_deposit_amount']
+    try:
+        amount_usd = float(update.message.text.replace('$', '').replace(',', ''))
+        if amount_usd < 1.0:
+            await update.message.reply_text("❌ Minimum deposit is $1.00 USD.")
+            return
+        if amount_usd > 10000.0:
+            await update.message.reply_text("❌ Maximum deposit is $10,000.00 USD per transaction.")
+            return
+        del context.user_data['awaiting_deposit_amount']
+        await process_deposit_payment(update, context, crypto_type, amount_usd)
+    except ValueError:
+        await update.message.reply_text("❌ Invalid amount. Please enter a valid number (e.g., 10 or 25.50)")
+
+async def process_deposit_payment(update: Update, context: ContextTypes.DEFAULT_TYPE, crypto_type: str, amount_usd: float) -> None:
+    """Process deposit payment and create CryptoBot invoice"""
+    user_id = update.effective_user.id
+    
+    try:
+        # In demo mode, just add the balance
+        if DEMO_MODE:
+            success = await update_balance(user_id, amount_usd)
+            if success:
+                keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]]
+                await update.message.reply_text(
+                    f"✅ Demo deposit successful! Added ${amount_usd:.2f} to your balance.",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+            else:
+                await update.message.reply_text("❌ Error processing deposit. Please try again.")
+            return
         
-        # Build application
-        application = ApplicationBuilder().token(BOT_TOKEN).build()
+        # Get crypto rate and calculate amount
+        rate = await get_crypto_usd_rate(crypto_type)
+        if rate <= 0:
+            await update.message.reply_text("❌ Unable to fetch crypto rate. Please try again later.")
+            return
+            
+        crypto_amount = amount_usd / rate
         
-        # Add command handlers
-        application.add_handler(CommandHandler("housebalance", admin_house_balance_command))
-        application.add_handler(CommandHandler("owner_house", owner_house_balance_command))
+        # Create CryptoBot invoice
+        invoice_data = await create_crypto_invoice(crypto_type, crypto_amount, user_id)
         
-        # Add callback query handlers
-        application.add_handler(CallbackQueryHandler(admin_house_balance_callbacks, pattern="^admin_house_"))
-        application.add_handler(CallbackQueryHandler(admin_house_balance_callbacks, pattern="^admin_reset_daily_stats$"))
-        application.add_handler(CallbackQueryHandler(admin_house_balance_callbacks, pattern="^admin_adjust_house_balance$"))
+        if not invoice_data.get('ok'):
+            await update.message.reply_text(f"❌ Error creating invoice: {invoice_data.get('error', 'Unknown error')}")
+            return
+            
+        invoice = invoice_data['result']
+        payment_url = invoice.get('mini_app_invoice_url') or invoice.get('web_app_invoice_url') or invoice.get('bot_invoice_url')
         
-        # Add text message handler
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input_main))
+        text = f"""
+💰 <b>CRYPTO PAY INVOICE READY</b> 💰
+
+📊 <b>Payment Details:</b>
+• Amount: <b>${amount_usd:.2f} USD</b>
+• Crypto: <b>{crypto_amount:.8f} {crypto_type}</b>
+• Rate: <b>${rate:.4f}</b> per {crypto_type}
+• Invoice ID: <code>{invoice['invoice_id']}</code>
+
+💳 <b>Pay with CryptoBot:</b>
+Click the button below to open the secure payment interface.
+
+⏰ <b>Expires in 1 hour</b>
+🔔 <i>You'll be notified instantly when payment is confirmed!</i>
+"""
         
-        # Add other handlers here (start, games, etc.)
-        # application.add_handler(CommandHandler("start", start_command))
-        # application.add_handler(CallbackQueryHandler(callback_handler))
+        keyboard = [
+            [InlineKeyboardButton("💳 Pay with CryptoBot", url=payment_url)],
+            [InlineKeyboardButton("🔄 Check Payment Status", callback_data=f"check_payment_{invoice['invoice_id']}")],
+            [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
+        ]
         
-        logger.info("🚀 Casino Bot started successfully!")
-        logger.info(f"🏦 House Balance System: ✅ Active")
-        logger.info(f"🔧 Admin Commands: ✅ Ready")
-        logger.info(f"📊 Analytics: ✅ Enhanced")
-        
-        # Start polling
-        await application.run_polling()
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
         
     except Exception as e:
-        logger.error(f"Error starting bot: {e}")
-        raise
+        logger.error(f"Error processing deposit payment: {e}")
+        await update.message.reply_text("❌ Error processing deposit. Please try again later.")
+        text = f"""
+💰 <b>CRYPTO PAY INVOICE READY</b> 💰
+
+📊 <b>Payment Details:</b>
+• Amount: <b>${amount_usd:.2f} USD</b>
+• Crypto: <b>{crypto_amount:.8f} {crypto_type}</b>
+• Rate: <b>${rate:.4f}</b> per {crypto_type}
+• Invoice ID: <code>{invoice['invoice_id']}</code>
+
+💳 <b>Pay with CryptoBot Mini App:</b>
+Click the button below to open the secure payment interface directly within this bot.
+
+⏰ <b>Expires in 1 hour</b>
+🔔 <i>You'll be notified instantly when payment is confirmed!</i>
+"""
+        keyboard = [
+            [InlineKeyboardButton("💳 Pay with CryptoBot", url=payment_url)],
+            [InlineKeyboardButton("🔄 Check Payment Status", callback_data=f"check_payment_{invoice['invoice_id']}")],
+            [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
+        ]
+        
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        
+    except Exception as e:
+        logger.error(f"Error processing deposit payment: {e}")
+        await update.message.reply_text("❌ Error processing deposit. Please try again later.")
+
+async def withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Start the withdrawal process."""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    context.user_data.clear()
+    user = await get_user(user_id)
+    if not user:
+        await query.edit_message_text(
+            "❌ User not found. Please use /start to register first.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Start", callback_data="main_panel")]])
+        )
+        return
+    balance = user['balance']
+    if balance < MIN_WITHDRAWAL_USD:
+        await query.edit_message_text(
+            f"❌ Minimum withdrawal is {await format_usd(MIN_WITHDRAWAL_USD)}.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]])
+        )
+        return
+    fee_amount = calculate_withdrawal_fee(balance)
+    max_withdrawal = min(balance - fee_amount, MAX_WITHDRAWAL_USD)
+    text = f"""
+🏦 <b>WITHDRAW FUNDS</b> 🏦
+
+💰 <b>Current Balance:</b> {await format_usd(balance)}
+💸 <b>Available to Withdraw:</b> {await format_usd(max_withdrawal)}
+
+📋 <b>Withdrawal Limits:</b>
+• Minimum: {await format_usd(MIN_WITHDRAWAL_USD)}
+• Maximum: {await format_usd(MAX_WITHDRAWAL_USD)} per transaction
+• Daily Limit: {await format_usd(MAX_WITHDRAWAL_USD_DAILY)}
+• Fee: {WITHDRAWAL_FEE_PERCENT * 100:.1f}% (min ${MIN_WITHDRAWAL_FEE:.2f})
+
+🔒 <b>Supported Cryptocurrency:</b>
+We support Litecoin (LTC) withdrawals for fast and secure transactions.
+
+⏰ <b>Processing Time:</b> Usually within 24 hours
+"""
+    keyboard = [
+        [InlineKeyboardButton("🪙 Withdraw Litecoin (LTC)", callback_data="withdraw_LTC")],
+        [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
+    ]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def withdraw_crypto_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    user = await get_user(user_id)
+    if not user:
+        await query.edit_message_text("❌ User not found.")
+        return
+    balance = user['balance']
+    fee_amount = calculate_withdrawal_fee(balance)
+    max_withdrawal = min(balance - fee_amount, MAX_WITHDRAWAL_USD)
+    text = f"""
+🪙 <b>WITHDRAW LITECOIN (LTC)</b> 🪙
+
+💸 <b>Available to Withdraw:</b> {await format_usd(max_withdrawal)}
+
+Please enter the amount you wish to withdraw in USD (e.g., "50" for $50.00).
+"""
+    keyboard = [[InlineKeyboardButton("🔙 Back to Withdraw", callback_data="withdraw")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    context.user_data['awaiting_withdraw_amount'] = 'LTC'
+
+async def handle_withdraw_amount_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle withdrawal amount input"""
+    if 'awaiting_withdraw_amount' not in context.user_data:
+        return
+    crypto_type = context.user_data['awaiting_withdraw_amount']
+    user_id = update.message.from_user.id
+    user = await get_user(user_id)
+    if not user:
+        await update.message.reply_text("❌ User not found.")
+        return
+    
+    try:
+        amount_usd = float(update.message.text.replace('$', '').replace(',', ''))
+        
+        # Check minimum
+        if amount_usd < MIN_WITHDRAWAL_USD:
+            await update.message.reply_text(f"❌ Minimum withdrawal is ${MIN_WITHDRAWAL_USD:.2f} USD.")
+            return
+            
+        # Check balance
+        user_balance = user.get('balance', 0.0)
+        if amount_usd > user_balance:
+            balance_str = await format_usd(user_balance)
+            await update.message.reply_text(f"❌ Insufficient balance. Your balance: {balance_str}")
+            return
+            
+        # Check limits
+        limits_check = await check_withdrawal_limits(user_id, amount_usd)
+        if not limits_check['allowed']:
+            await update.message.reply_text(f"❌ {limits_check['reason']}")
+            return
+            
+        # Calculate fee
+        fee = calculate_withdrawal_fee(amount_usd)
+        net_amount = amount_usd - fee
+        
+        # Store withdrawal details and ask for address
+        context.user_data['withdraw_details'] = {
+            'crypto_type': crypto_type,
+            'amount_usd': amount_usd,
+            'fee': fee,
+            'net_amount': net_amount
+        }
+        del context.user_data['awaiting_withdraw_amount']
+        context.user_data['awaiting_withdraw_address'] = crypto_type
+        
+        fee_str = await format_usd(fee)
+        net_str = await format_usd(net_amount)
+        
+        await update.message.reply_text(
+            f"💰 **Withdrawal Details**\n\n"
+            f"Amount: ${amount_usd:.2f} USD\n"
+            f"Fee: {fee_str}\n"
+            f"You'll receive: {net_str}\n\n"
+            f"📧 Please enter your {crypto_type} address:",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        
+    except ValueError:
+        await update.message.reply_text("❌ Invalid amount. Please enter a valid number (e.g., 10 or 25.50)")
+
+async def handle_withdraw_address_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle withdrawal address input"""
+    if 'awaiting_withdraw_address' not in context.user_data:
+        return
+        
+    address = update.message.text.strip()
+    withdraw_details = context.user_data.get('withdraw_details', {})
+    crypto_type = withdraw_details.get('crypto_type', 'LTC')
+    
+    # Validate address format
+    if not validate_crypto_address(address, crypto_type):
+        await update.message.reply_text(f"❌ Invalid {crypto_type} address format. Please check and try again.")
+        return
+    
+    # Clear states
+    del context.user_data['awaiting_withdraw_address']
+    del context.user_data['withdraw_details']
+    
+    # Process withdrawal
+    user_id = update.message.from_user.id
+    amount_usd = withdraw_details['amount_usd']
+    fee = withdraw_details['fee']
+    net_amount = withdraw_details['net_amount']
+    
+    if DEMO_MODE:
+        # Demo mode - simulate withdrawal
+        success = await deduct_balance(user_id, amount_usd)
+        if success:
+            keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]]
+            await update.message.reply_text(
+                f"✅ Demo withdrawal successful!\n\n"
+                f"Withdrawn: ${amount_usd:.2f} USD\n"
+                f"Fee: ${fee:.2f} USD\n"
+                f"Address: {address[:10]}...{address[-10:]}\n\n"
+                f"<i>In real mode, this would process to your wallet</i>",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode=ParseMode.HTML
+            )
+        else:
+            await update.message.reply_text("❌ Error processing withdrawal.")
+    else:
+        # Real mode - process actual withdrawal
+        rate = await get_crypto_usd_rate(crypto_type)
+        if rate <= 0:
+            await update.message.reply_text("❌ Unable to fetch crypto rate. Please try again later.")
+            return
+            
+        crypto_amount = amount_usd / rate
+        net_crypto_amount = crypto_amount - (fee / rate)
+        
+        # Log withdrawal
+        withdrawal_id = await log_withdrawal(user_id, crypto_type, crypto_amount, address, fee / rate, net_crypto_amount)
+        
+        if withdrawal_id:
+            # Deduct balance
+            success = await deduct_balance(user_id, amount_usd)
+            if success:
+                await update.message.reply_text(
+                    f"✅ Withdrawal request submitted!\n\n"
+                    f"Amount: ${amount_usd:.2f} USD\n"
+                    f"Crypto: {crypto_amount:.8f} {crypto_type}\n"
+                    f"Fee: {fee / rate:.8f} {crypto_type}\n"
+                    f"Net: {net_crypto_amount:.8f} {crypto_type}\n"
+                    f"Address: {address}\n\n"
+                    f"Your withdrawal will be processed within 24 hours."
+                )
+                # Update house balance
+                await update_house_balance_on_withdrawal(amount_usd)
+            else:
+                await update.message.reply_text("❌ Insufficient balance for withdrawal.")
+                await update_withdrawal_status(withdrawal_id, "failed", "", "Insufficient balance")
+        else:
+            await update.message.reply_text("❌ Error submitting withdrawal request. Please try again later.")
+
+
+
+# Register handlers in main bot setup (ensure these are present in Application setup)
+def register_casino_handlers(application: Application) -> None:
+    application.add_handler(CommandHandler("deposit", deposit_callback))
+    application.add_handler(CommandHandler("withdraw", withdraw_start))
+    application.add_handler(CallbackQueryHandler(deposit_callback, pattern=r"^deposit$"))
+    application.add_handler(CallbackQueryHandler(deposit_crypto_callback, pattern=r"^deposit_LTC$"))
+    application.add_handler(CallbackQueryHandler(withdraw_start, pattern=r"^withdraw$"))
+    application.add_handler(CallbackQueryHandler(withdraw_crypto_callback, pattern=r"^withdraw_LTC$"))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input_main))
+    # ...existing code...
+
+# --- Keep-Alive Endpoint and Port Binding for Deployment ---
+
+import os
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route('/keepalive')
+def keep_alive():
+    return "OK", 200
+
+# --- Flask and Telegram Bot Runner ---
+
+import threading
+import asyncio
+
+def run_flask():
+    port = int(os.environ.get("PORT", 8001))
+    app.run(host="0.0.0.0", port=port)
+
+async def run_telegram_bot_async():
+    await init_db()  # Ensure DB is ready
+
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # Enhanced start handler with user panel
+    async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Display user panel with balance, stats, and navigation"""
+        await init_db()  # Ensure database is initialized
+        
+        user_id = update.effective_user.id
+        username = update.effective_user.username or update.effective_user.first_name
+        
+        # Get or create user
+        user = await get_user(user_id)
+        if not user:
+            user = await create_user(user_id, username)
+            if not user:
+                await update.message.reply_text("❌ Error creating user account. Please try again.")
+                return
+        
+        # Get user stats
+        balance = user.get('balance', 0.0)
+        games_played = user.get('games_played', 0)
+        total_wagered = user.get('total_wagered', 0.0)
+        total_won = user.get('total_won', 0.0)
+        win_streak = user.get('win_streak', 0)
+        referral_count = user.get('referral_count', 0)
+        
+        # Get or create referral code
+        referral_code = await get_or_create_referral_code(user_id)
+        
+        # Format amounts
+        balance_str = await format_usd(balance)
+        wagered_str = await format_usd(total_wagered)
+        won_str = await format_usd(total_won)
+        
+        # Calculate profit/loss
+        net_result = total_won - total_wagered
+        net_emoji = "📈" if net_result >= 0 else "📉"
+        net_str = await format_usd(abs(net_result))
+        
+        # Build user panel message
+        welcome_text = f"""
+🎰 <b>AXIS CASINO</b> 🎰\n<i>Welcome, {username}!</i>\n\n💰 <b>Balance:</b> {balance_str}\n🔗 <b>Referral Code:</b> <code>{referral_code}</code>\n\n<b>Choose an action:</b>\n"""
+        
+        # Create navigation keyboard
+        keyboard = [
+            [
+                InlineKeyboardButton("💳 Deposit", callback_data="deposit"),
+                InlineKeyboardButton("🏦 Withdraw", callback_data="withdraw")
+            ],
+            [
+                InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"),
+                InlineKeyboardButton("👥 Referrals", callback_data="referral_menu"),
+                InlineKeyboardButton("🎁 Bonuses", callback_data="bonus_menu")
+            ],
+            [
+                InlineKeyboardButton("📊 Statistics", callback_data="user_stats"),
+                InlineKeyboardButton("❓ Help", callback_data="help_menu")
+            ]
+        ]
+        
+        # Add admin panel for admins
+        if is_admin(user_id) or is_owner(user_id):
+            keyboard.append([InlineKeyboardButton("🔧 Admin Panel", callback_data="admin_panel")])
+        
+        await update.message.reply_text(
+            welcome_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=ParseMode.HTML
+        )
+
+    application.add_handler(CommandHandler("start", start_handler))
+    
+    # Basic callback handlers for user panel navigation
+    async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle callback queries from inline keyboards"""
+        query = update.callback_query
+        await query.answer()
+        
+        data = query.data
+        user_id = query.from_user.id
+        
+        if data == "main_panel":
+            # Return to main panel (simulate /start)
+            await start_panel_callback(update, context)
+        elif data == "deposit":
+            await deposit_callback(update, context)
+        elif data == "withdraw":
+            await withdraw_start(update, context)
+        elif data == "mini_app_centre":
+            await games_menu_callback(update, context)
+        elif data == "referral_menu":
+            await referral_menu_callback(update, context)
+        elif data == "user_stats":
+            await user_stats_callback(update, context)
+        elif data == "help_menu":
+            await help_menu_callback(update, context)
+        elif data == "admin_panel" and (is_admin(user_id) or is_owner(user_id)):
+            await admin_panel_callback(update, context)
+        elif data == "bonus_menu":
+            await bonus_menu_callback(update, context)
+        else:
+            await query.edit_message_text("❌ Unknown action. Returning to main menu.")
+            await start_panel_callback(update, context)
+    
+    # Helper callback functions
+    async def start_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show the main user panel (same as /start but for callbacks)"""
+        # Get user data
+        user_id = update.callback_query.from_user.id
+        username = update.callback_query.from_user.username or update.callback_query.from_user.first_name
+        
+        user = await get_user(user_id)
+        if not user:
+            user = await create_user(user_id, username)
+        
+        # Get user stats
+        balance = user.get('balance', 0.0)
+        games_played = user.get('games_played', 0)
+        total_wagered = user.get('total_wagered', 0.0)
+        total_won = user.get('total_won', 0.0)
+        win_streak = user.get('win_streak', 0)
+        referral_count = user.get('referral_count', 0)
+        
+        referral_code = await get_or_create_referral_code(user_id)
+        
+        balance_str = await format_usd(balance)
+        wagered_str = await format_usd(total_wagered)
+        won_str = await format_usd(total_won)
+        
+        net_result = total_won - total_wagered
+        net_emoji = "📈" if net_result >= 0 else "📉"
+        net_str = await format_usd(abs(net_result))
+        
+        welcome_text = f"""
+🎰 <b>AXIS CASINO</b> 🎰\n<i>Welcome, {username}!</i>\n\n💰 <b>Balance:</b> {balance_str}\n🔗 <b>Referral Code:</b> <code>{referral_code}</code>\n\n<b>Choose an action:</b>\n"""
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("💳 Deposit", callback_data="deposit"),
+                InlineKeyboardButton("🏦 Withdraw", callback_data="withdraw")
+            ],
+            [
+                InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"),
+                InlineKeyboardButton("👥 Referrals", callback_data="referral_menu"),
+                InlineKeyboardButton("🎁 Bonuses", callback_data="bonus_menu")
+            ],
+            [
+                InlineKeyboardButton("📊 Statistics", callback_data="user_stats"),
+                InlineKeyboardButton("❓ Help", callback_data="help_menu")
+            ]
+        ]
+        
+        if is_admin(user_id) or is_owner(user_id):
+            keyboard.append([InlineKeyboardButton("🔧 Admin Panel", callback_data="admin_panel")])
+        
+        await update.callback_query.edit_message_text(
+            welcome_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=ParseMode.HTML
+        )
+    
+    async def games_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show games menu"""
+        text = """
+🎮 <b>CASINO GAMES</b> 🎮
+
+Choose your game:
+
+🎰 <b>Slots</b> - Classic slot machine
+🃏 <b>Blackjack</b> - Beat the dealer
+🎲 <b>Dice</b> - Roll to win
+🎯 <b>Roulette</b> - European roulette
+🂠 <b>Poker</b> - Texas Hold'em
+
+<i>More games coming soon!</i>
+"""
+        keyboard = [
+            [
+                InlineKeyboardButton("🎰 Slots", callback_data="game_slots"),
+                InlineKeyboardButton("🃏 Blackjack", callback_data="game_blackjack")
+            ],
+            [
+                InlineKeyboardButton("🎲 Dice", callback_data="game_dice"),
+                InlineKeyboardButton("🎯 Roulette", callback_data="game_roulette")
+            ],
+            [
+                InlineKeyboardButton("🂠 Poker", callback_data="game_poker")
+            ],
+            [
+                InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")
+            ]
+        ]
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show withdraw menu"""
+        text = """
+🏦 <b>WITHDRAW FUNDS</b> 🏦
+
+Withdraw your winnings securely:
+
+• <b>Cryptocurrency:</b> Fast and secure
+• <b>Minimum:</b> $1.00 USD equivalent
+• <b>Fee:</b> 2% (minimum $1.00)
+• <b>Processing:</b> Usually within 1 hour
+
+<i>Currently supporting Litecoin (LTC) withdrawals</i>
+"""
+        keyboard = [
+            [InlineKeyboardButton("🪙 Withdraw Litecoin (LTC)", callback_data="withdraw_LTC")],
+            [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
+        ]
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    async def referral_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show referral menu"""
+        user_id = update.callback_query.from_user.id
+        referral_code = await get_or_create_referral_code(user_id)
+        stats = await get_referral_stats(user_id)
+        
+        earnings_str = await format_usd(stats['earnings'])
+        
+        text = f"""
+👥 <b>REFERRAL SYSTEM</b> 👥
+
+🔗 <b>Your Referral Code:</b> <code>{referral_code}</code>
+
+📊 <b>Your Stats:</b>
+💰 <b>Earnings:</b> {earnings_str}
+👥 <b>Referrals:</b> {stats['count']}
+
+💡 <b>How it works:</b>
+• Share your code with friends
+• They get a bonus when they join
+• You earn when they play
+
+<i>Start sharing and earning today!</i>
+"""
+        keyboard = [
+            [InlineKeyboardButton("📋 Copy Referral Link", callback_data=f"copy_ref_{referral_code}")],
+            [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
+        ]
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    async def user_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show detailed user statistics"""
+        user_id = update.callback_query.from_user.id
+        user = await get_user(user_id)
+        
+        if not user:
+            await update.callback_query.edit_message_text("❌ User not found.")
+            return
+        
+        # Format all stats
+        balance_str = await format_usd(user.get('balance', 0.0))
+        wagered_str = await format_usd(user.get('total_wagered', 0.0))
+        won_str = await format_usd(user.get('total_won', 0.0))
+        deposited_str = await format_usd(user.get('total_deposited', 0.0))
+        withdrawn_str = await format_usd(user.get('total_withdrawn', 0.0))
+        biggest_win_str = await format_usd(user.get('biggest_win', 0.0))
+        
+        text = f"""
+📊 <b>YOUR STATISTICS</b> 📊
+
+💰 <b>Current Balance:</b> {balance_str}
+🎮 <b>Games Played:</b> {user.get('games_played', 0):,}
+💸 <b>Total Wagered:</b> {wagered_str}
+🏆 <b>Total Won:</b> {won_str}
+💳 <b>Total Deposited:</b> {deposited_str}
+🏦 <b>Total Withdrawn:</b> {withdrawn_str}
+
+🎯 <b>Performance:</b>
+🔥 <b>Current Win Streak:</b> {user.get('win_streak', 0)}
+⭐ <b>Max Win Streak:</b> {user.get('max_win_streak', 0)}
+💎 <b>Biggest Win:</b> {biggest_win_str}
+🏅 <b>VIP Level:</b> {user.get('vip_level', 0)}
+
+📅 <b>Member Since:</b> {user.get('created_at', '')[:10] if user.get('created_at') else 'Unknown'}
+"""
+        keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]]
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    async def help_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show help menu"""
+        text = """
+❓ <b>HELP & SUPPORT</b> ❓
+
+🎮 <b>How to Play:</b>
+• Use /start to access your panel
+• Deposit funds to start playing
+• Choose games and place bets
+• Withdraw your winnings
+
+💳 <b>Deposits & Withdrawals:</b>
+• Supported: Litecoin (LTC)
+• Fast processing times
+• Secure transactions
+
+🎯 <b>Features:</b>
+• Multiple casino games
+• Referral system
+• VIP rewards
+• 24/7 support
+
+📞 <b>Need Help?</b>
+Contact our support team for assistance.
+"""
+        keyboard = [
+            [InlineKeyboardButton("📖 Game Rules", callback_data="game_rules")],
+            [InlineKeyboardButton("💬 Support", url="https://t.me/casino_support")],
+            [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
+        ]
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    async def admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show admin panel (admin only)"""
+        user_id = update.callback_query.from_user.id
+        if not (is_admin(user_id) or is_owner(user_id)):
+            await update.callback_query.edit_message_text("❌ Access denied.")
+            return
+        
+        house_balance_info = await get_house_balance_display()
+        
+        text = f"""
+🔧 <b>ADMIN PANEL</b> 🔧
+
+{house_balance_info}
+
+<b>Quick Actions:</b>
+"""
+        keyboard = [
+            [
+                InlineKeyboardButton("👥 User Management", callback_data="admin_users"),
+                InlineKeyboardButton("💰 Transactions", callback_data="admin_transactions")
+            ],
+            [
+                InlineKeyboardButton("📊 Analytics", callback_data="admin_analytics"),
+                InlineKeyboardButton("⚙️ Settings", callback_data="admin_settings")
+            ],
+            [
+                InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")
+            ]
+        ]
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    async def bonus_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show bonuses menu"""
+        text = """
+🎁 <b>BONUSES & REWARDS</b> 🎁\n\nClaim your available bonuses and see current promotions!\n\n• <b>Weekly Bonus</b>: Claim every 7 days\n• <b>Referral Bonus</b>: Earn for inviting friends\n• <b>Special Events</b>: Watch for announcements\n\n<i>More bonus types coming soon!</i>\n"""
+        keyboard = [
+            [InlineKeyboardButton("🎉 Claim Weekly Bonus", callback_data="claim_weekly_bonus")],
+            [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
+        ]
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    application.add_handler(CallbackQueryHandler(callback_handler))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input_main))
+    # Add your other handlers here, e.g.:
+    # application.add_handler(CallbackQueryHandler(callback_handler))
+    # application.add_handler(MessageHandler(filters.TEXT, handle_text_input_main))
+
+    await application.run_polling()
+
+def run_telegram_bot():
+    """Run the telegram bot with proper event loop management for deployment"""
+    try:
+        # Simple direct approach for deployment
+        asyncio.run(run_telegram_bot_async())
+    except RuntimeError as e:
+        if "cannot be called from a running event loop" in str(e):
+            # We're in an environment with an existing event loop
+            # Create and run in a new thread
+            import threading
+            def run_in_thread():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(run_telegram_bot_async())
+                loop.close()
+            
+            thread = threading.Thread(target=run_in_thread)
+            thread.daemon = True
+            thread.start()
+            thread.join()  # Wait for completion in deployment
+        else:
+            raise
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Environment detection for proper startup
+    is_deployment = bool(os.environ.get("RENDER") or os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("HEROKU"))
+    
+    if is_deployment:
+        # In deployment, run bot directly and Flask on different port
+        print("🚀 Starting in deployment mode...")
+        # Start Flask in background for health checks
+        flask_thread = threading.Thread(target=run_flask)
+        flask_thread.daemon = True
+        flask_thread.start()
+        
+        # Run telegram bot in main thread
+        run_telegram_bot()
+    else:
+        # Local development
+        print("🏠 Starting in development mode...")
+        flask_thread = threading.Thread(target=run_flask)
+        flask_thread.daemon = True
+        flask_thread.start()
+        run_telegram_bot()
