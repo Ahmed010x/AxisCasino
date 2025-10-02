@@ -17,9 +17,9 @@ MIN_BET = 1.0
 MAX_BET = 1000.0
 WIN_MULTIPLIER = 1.95  # 95% payout (5% house edge)
 
-# Sticker IDs for Bitcoin and Ethereum (you'll provide these)
-BITCOIN_STICKER_ID = "CAACAgQAAxkBAAEBm7Rmh3K5_YOUR_BITCOIN_STICKER_ID"  # Replace with actual sticker ID
-ETHEREUM_STICKER_ID = "CAACAgQAAxkBAAEBm7Zmh3K5_YOUR_ETHEREUM_STICKER_ID"  # Replace with actual sticker ID
+# Sticker IDs for Bitcoin and Ethereum
+BITCOIN_STICKER_ID = "CAACAgEAAxkBAAEPfLto3fLKQk9KP9FaLSYjwZih82J-sQACIAYAAhUgyUYe7AYU47cPsDYE"
+ETHEREUM_STICKER_ID = "CAACAgEAAxkBAAEPfL1o3fOba1jsv5rN1Ojdu5f0DCp_6wACHwYAAhUgyUbBT2yx1FdJ7DYE"
 
 async def handle_coinflip_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Main handler for coin flip game"""
