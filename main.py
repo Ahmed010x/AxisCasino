@@ -1623,9 +1623,9 @@ async def deposit_crypto_callback(update: Update, context: ContextTypes.DEFAULT_
     crypto_type = query.data.split("_")[1]  # deposit_LTC -> LTC
     user_id = query.from_user.id
     
-    # Clear previous states and set the crypto type in context for the conversation
+    # Clear previous states and set waiting for deposit amount
     context.user_data.clear()
-    context.user_data['deposit_crypto'] = crypto_type
+    context.user_data['awaiting_deposit_amount'] = crypto_type
     
     # Get current rate
     rate = await get_crypto_usd_rate(crypto_type)
@@ -1647,6 +1647,9 @@ Please type the amount you want to deposit in USD.
 
 ⌨️ <b>Waiting for your input...</b>
 """
+    
+    keyboard = [[InlineKeyboardButton("🚫 Cancel", callback_data="main_panel")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     
     keyboard = [
         [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
@@ -1737,7 +1740,11 @@ Click the button below to open the secure payment interface.
         
     except Exception as e:
         logger.error(f"Error processing deposit payment: {e}")
-        await update.message.reply_text("❌ Error processing deposit. Please try again later.")
+        keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]]
+        await update.message.reply_text(
+            "❌ Error processing deposit. Please try again later.",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
 async def withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Start the withdrawal process."""
@@ -2140,17 +2147,6 @@ Please create a new deposit request.
         )
 
 # Register handlers in main bot setup (ensure these are present in Application setup)
-def register_casino_handlers(application: Application) -> None:
-    application.add_handler(CommandHandler("deposit", deposit_callback))
-    application.add_handler(CommandHandler("withdraw", withdraw_start))
-    application.add_handler(CallbackQueryHandler(deposit_callback, pattern=r"^deposit$"))
-    application.add_handler(CallbackQueryHandler(deposit_crypto_callback, pattern=r"^deposit_LTC$"))
-    application.add_handler(CallbackQueryHandler(check_payment_callback, pattern=r"^check_payment_"))
-    application.add_handler(CallbackQueryHandler(withdraw_start, pattern=r"^withdraw$"))
-    application.add_handler(CallbackQueryHandler(withdraw_crypto_callback, pattern=r"^withdraw_LTC$"))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input_main))
-    # ...existing code...
-
 # --- Keep-Alive Endpoint and Port Binding for Deployment ---
 
 import os
@@ -2200,6 +2196,15 @@ async def run_telegram_bot_async():
     await init_db()  # Ensure DB is ready
 
     application = ApplicationBuilder().token(BOT_TOKEN).build()
+    
+    # Register specific deposit/withdrawal handlers first (higher priority)
+    application.add_handler(CommandHandler("deposit", deposit_callback))
+    application.add_handler(CommandHandler("withdraw", withdraw_start))
+    application.add_handler(CallbackQueryHandler(deposit_callback, pattern=r"^deposit$"))
+    application.add_handler(CallbackQueryHandler(deposit_crypto_callback, pattern=r"^deposit_LTC$"))
+    application.add_handler(CallbackQueryHandler(check_payment_callback, pattern=r"^check_payment_"))
+    application.add_handler(CallbackQueryHandler(withdraw_start, pattern=r"^withdraw$"))
+    application.add_handler(CallbackQueryHandler(withdraw_crypto_callback, pattern=r"^withdraw_LTC$"))
 
     # Enhanced start handler with user panel
     async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2273,12 +2278,16 @@ async def run_telegram_bot_async():
     
     # Basic callback handlers for user panel navigation
     async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle callback queries from inline keyboards"""
+        """Handle callback queries from inline keyboards (general fallback)"""
         query = update.callback_query
         await query.answer()
         
         data = query.data
         user_id = query.from_user.id
+        
+        # Skip specific deposit/withdrawal callbacks - they have their own handlers
+        if data.startswith('deposit_') or data.startswith('withdraw_') or data.startswith('check_payment_'):
+            return
         
         if data == "main_panel":
             # Return to main panel (simulate /start)
