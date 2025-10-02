@@ -250,8 +250,6 @@ async def create_crypto_invoice(asset: str, amount: float, user_id: int, payload
     except Exception as e:
         logger.error(f"Error creating crypto invoice: {e}")
         return {"ok": False, "error": str(e)}
-        logger.error(f"Error creating crypto invoice: {e}")
-        return {"ok": False, "error": str(e)}
 
 async def get_bot_username() -> str:
     """Get bot username, cached for performance."""
@@ -881,10 +879,83 @@ async def init_db():
                 """, config)
             
             await db.commit()
+            
+            # Migration will be called separately after initial deployment
+            # await migrate_database()
+            
             logger.info("✅ Enhanced database initialized successfully with comprehensive schema")
             
     except Exception as e:
         logger.error(f"Error initializing database: {e}")
+        raise
+
+async def migrate_database():
+    """Migrate database schema to latest version"""
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            # Check if withdrawals table exists and needs updating
+            cursor = await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='withdrawals'")
+            table_exists = await cursor.fetchone()
+            
+            if table_exists:
+                # Check each column individually to avoid duplicates
+                columns_to_add = [
+                    ('amount_usd', 'REAL DEFAULT 0.0'),
+                    ('fee_usd', 'REAL DEFAULT 0.0'),
+                    ('net_amount_usd', 'REAL DEFAULT 0.0'),
+                    ('rate_usd', 'REAL DEFAULT 0.0'),
+                    ('processed_at', 'TEXT DEFAULT NULL'),
+                    ('confirmed_at', 'TEXT DEFAULT NULL'),
+                    ('admin_notes', "TEXT DEFAULT ''"),
+                    ('processed_by', 'INTEGER DEFAULT NULL'),
+                    ('priority', 'INTEGER DEFAULT 0'),
+                    ('confirmation_blocks', 'INTEGER DEFAULT 0'),
+                    ('required_confirmations', 'INTEGER DEFAULT 6')
+                ]
+                
+                for col_name, col_def in columns_to_add:
+                    try:
+                        await db.execute(f"SELECT {col_name} FROM withdrawals LIMIT 1")
+                    except sqlite3.OperationalError:
+                        logger.info(f"Adding column {col_name} to withdrawals table...")
+                        await db.execute(f"ALTER TABLE withdrawals ADD COLUMN {col_name} {col_def}")
+
+            # Check if transactions table exists and needs updating
+            cursor = await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='transactions'")
+            table_exists = await cursor.fetchone()
+            
+            if table_exists:
+                # Check each column individually to avoid duplicates
+                columns_to_add = [
+                    ('crypto_asset', 'TEXT DEFAULT NULL'),
+                    ('crypto_amount', 'REAL DEFAULT NULL'),
+                    ('exchange_rate', 'REAL DEFAULT NULL'),
+                    ('fee_amount', 'REAL DEFAULT 0.0'),
+                    ('net_amount', 'REAL DEFAULT NULL'),
+                    ('balance_before', 'REAL DEFAULT 0.0'),
+                    ('balance_after', 'REAL DEFAULT 0.0'),
+                    ('reference_id', 'TEXT DEFAULT NULL'),
+                    ('game_session_id', 'INTEGER DEFAULT NULL'),
+                    ('payment_method', 'TEXT DEFAULT NULL'),
+                    ('payment_address', 'TEXT DEFAULT NULL'),
+                    ('confirmation_blocks', 'INTEGER DEFAULT NULL'),
+                    ('metadata', 'TEXT DEFAULT NULL')
+                ]
+                
+                for col_name, col_def in columns_to_add:
+                    try:
+                        await db.execute(f"SELECT {col_name} FROM transactions LIMIT 1")
+                    except sqlite3.OperationalError:
+                        logger.info(f"Adding column {col_name} to transactions table...")
+                        await db.execute(f"ALTER TABLE transactions ADD COLUMN {col_name} {col_def}")
+                await db.execute("ALTER TABLE transactions ADD COLUMN updated_at TEXT DEFAULT ''")
+                await db.execute("ALTER TABLE transactions ADD COLUMN confirmed_at TEXT DEFAULT NULL")
+
+            await db.commit()
+            logger.info("✅ Database migration completed successfully")
+            
+    except Exception as e:
+        logger.error(f"Error during database migration: {e}")
         raise
 
 async def get_user(user_id: int) -> dict:
@@ -1426,7 +1497,7 @@ async def process_referral(referee_id: int, referral_code: str) -> bool:
             
             # Give bonuses
             await update_balance(referee_id, REFERRAL_BONUS_REFERRER)
-            await update_balance(referrer_id, REFERRAL_BONUS_REFERRER)
+            await update_balance(referrer_id, REFERRAL_BONUS_REFEREE)
             
             # Update referrer stats
             await db.execute("""
@@ -1667,32 +1738,6 @@ Click the button below to open the secure payment interface.
     except Exception as e:
         logger.error(f"Error processing deposit payment: {e}")
         await update.message.reply_text("❌ Error processing deposit. Please try again later.")
-        text = f"""
-💰 <b>CRYPTO PAY INVOICE READY</b> 💰
-
-📊 <b>Payment Details:</b>
-• Amount: <b>${amount_usd:.2f} USD</b>
-• Crypto: <b>{crypto_amount:.8f} {crypto_type}</b>
-• Rate: <b>${rate:.4f}</b> per {crypto_type}
-• Invoice ID: <code>{invoice['invoice_id']}</code>
-
-💳 <b>Pay with CryptoBot Mini App:</b>
-Click the button below to open the secure payment interface directly within this bot.
-
-⏰ <b>Expires in 1 hour</b>
-🔔 <i>You'll be notified instantly when payment is confirmed!</i>
-"""
-        keyboard = [
-            [InlineKeyboardButton("💳 Pay with CryptoBot", url=payment_url)],
-            [InlineKeyboardButton("🔄 Check Payment Status", callback_data=f"check_payment_{invoice['invoice_id']}")],
-            [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
-        ]
-        
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-        
-    except Exception as e:
-        logger.error(f"Error processing deposit payment: {e}")
-        await update.message.reply_text("❌ Error processing deposit. Please try again later.")
 
 async def withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Start the withdrawal process."""
@@ -1852,6 +1897,7 @@ async def handle_withdraw_address_input(update: Update, context: ContextTypes.DE
         if success:
             keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]]
             await update.message.reply_text(
+               
                 f"✅ Demo withdrawal successful!\n\n"
                 f"Withdrawn: ${amount_usd:.2f} USD\n"
                 f"Fee: ${fee:.2f} USD\n"
@@ -1896,7 +1942,202 @@ async def handle_withdraw_address_input(update: Update, context: ContextTypes.DE
         else:
             await update.message.reply_text("❌ Error submitting withdrawal request. Please try again later.")
 
+# --- CryptoBot Webhook and Payment Status ---
 
+async def check_payment_status(invoice_id: str) -> dict:
+    """Check payment status of a CryptoBot invoice"""
+    if not CRYPTOBOT_API_TOKEN:
+        return {"ok": False, "error": "API token not configured"}
+    
+    try:
+        headers = {
+            'Crypto-Pay-API-Token': CRYPTOBOT_API_TOKEN,
+            'Content-Type': 'application/json'
+        }
+        
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
+            async with session.get(f'https://pay.crypt.bot/api/getInvoices?invoice_ids={invoice_id}', 
+                                 headers=headers) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    if result.get('ok') and result.get('result'):
+                        invoices = result['result']['items']
+                        if invoices:
+                            return {"ok": True, "result": invoices[0]}
+                    return {"ok": False, "error": "Invoice not found"}
+                else:
+                    error_text = await response.text()
+                    logger.error(f"CryptoBot API error {response.status}: {error_text}")
+                    return {"ok": False, "error": f"API error {response.status}"}
+                    
+    except Exception as e:
+        logger.error(f"Error checking payment status: {e}")
+        return {"ok": False, "error": str(e)}
+
+async def process_successful_deposit(user_id: int, amount_usd: float, crypto_amount: float, asset: str, invoice_id: str) -> bool:
+    """Process a successful deposit and update user balance"""
+    try:
+        # Update user balance
+        success = await update_balance(user_id, amount_usd)
+        
+        if success:
+            # Log the deposit to transactions table
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute("""
+                    INSERT INTO transactions 
+                    (user_id, type, subtype, amount, currency, crypto_asset, crypto_amount, 
+                     reference_id, status, description, created_at)
+                    VALUES (?, 'deposit', 'crypto_deposit', ?, 'USD', ?, ?, ?, 'completed', 
+                            'CryptoBot deposit', ?)
+                """, (user_id, amount_usd, asset, crypto_amount, invoice_id, datetime.now().isoformat()))
+                
+                # Update total deposited
+                await db.execute("""
+                    UPDATE users SET total_deposited = COALESCE(total_deposited, 0) + ? WHERE user_id = ?
+                """, (amount_usd, user_id))
+                
+                await db.commit()
+            
+            # Update house balance
+            await update_house_balance_on_deposit(amount_usd)
+            
+            logger.info(f"Deposit processed successfully: User {user_id}, Amount ${amount_usd}, Invoice {invoice_id}")
+            return True
+        
+        return False
+        
+    except Exception as e:
+        logger.error(f"Error processing successful deposit: {e}")
+        return False
+
+async def handle_cryptobot_webhook(request_data: dict, signature: str) -> bool:
+    """Handle CryptoBot webhook for payment notifications"""
+    try:
+        if not CRYPTOBOT_WEBHOOK_SECRET:
+            logger.error("Webhook secret not configured")
+            return False
+        
+        # Verify webhook signature
+        computed_signature = hmac.new(
+            CRYPTOBOT_WEBHOOK_SECRET.encode(),
+            str(request_data).encode(),
+            hashlib.sha256
+        ).hexdigest()
+        
+        if not hmac.compare_digest(signature, computed_signature):
+            logger.error("Invalid webhook signature")
+            return False
+        
+        # Process the webhook
+        update_type = request_data.get('update_type')
+        payload = request_data.get('payload', {})
+        
+        if update_type == 'invoice_paid':
+            invoice = payload
+            invoice_id = invoice.get('invoice_id')
+            user_id = int(invoice.get('hidden_message', 0))
+            amount = float(invoice.get('amount', 0))
+            asset = invoice.get('asset')
+            status = invoice.get('status')
+            
+            if status == 'paid' and user_id > 0:
+                # Calculate USD amount
+                rate = await get_crypto_usd_rate(asset)
+                amount_usd = amount * rate if rate > 0 else 0
+                
+                if amount_usd > 0:
+                    success = await process_successful_deposit(user_id, amount_usd, amount, asset, invoice_id)
+                    if success:
+                        # Notify user (you could add bot notification here)
+                        logger.info(f"User {user_id} notified of successful deposit: ${amount_usd:.2f}")
+                    return success
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error handling CryptoBot webhook: {e}")
+        return False
+
+async def check_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle payment status check button"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Extract invoice ID from callback data
+    invoice_id = query.data.split("_")[-1]  # check_payment_INVOICE_ID
+    
+    try:
+        status_data = await check_payment_status(invoice_id)
+        
+        if not status_data.get('ok'):
+            await query.edit_message_text(
+                f"❌ Error checking payment status: {status_data.get('error', 'Unknown error')}",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]])
+            )
+            return
+        
+        invoice = status_data['result']
+        status = invoice.get('status')
+        amount = float(invoice.get('amount', 0))
+        asset = invoice.get('asset')
+        
+        if status == 'paid':
+            # Process the payment
+            user_id = int(invoice.get('hidden_message', 0))
+            rate = await get_crypto_usd_rate(asset)
+            amount_usd = amount * rate if rate > 0 else 0
+            
+            if amount_usd > 0:
+                success = await process_successful_deposit(user_id, amount_usd, amount, asset, invoice_id)
+                if success:
+                    text = f"""
+✅ <b>PAYMENT CONFIRMED!</b> ✅
+
+💰 <b>Deposit Successful:</b> ${amount_usd:.2f} USD
+🪙 <b>Received:</b> {amount:.8f} {asset}
+📄 <b>Invoice:</b> <code>{invoice_id}</code>
+
+Your balance has been updated!
+"""
+                    keyboard = [[InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre")]]
+                else:
+                    text = "❌ Error processing payment. Please contact support."
+                    keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]]
+            else:
+                text = "❌ Error calculating deposit amount. Please contact support."
+                keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]]
+        elif status == 'active':
+            text = f"""
+⏳ <b>PAYMENT PENDING</b> ⏳
+
+🪙 <b>Waiting for:</b> {amount:.8f} {asset}
+📄 <b>Invoice:</b> <code>{invoice_id}</code>
+
+Payment is still pending. Please complete the transaction in your wallet.
+"""
+            keyboard = [
+                [InlineKeyboardButton("🔄 Check Again", callback_data=f"check_payment_{invoice_id}")],
+                [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
+            ]
+        else:
+            text = f"""
+❌ <b>PAYMENT FAILED OR EXPIRED</b> ❌
+
+📄 <b>Invoice:</b> <code>{invoice_id}</code>
+📊 <b>Status:</b> {status}
+
+Please create a new deposit request.
+"""
+            keyboard = [[InlineKeyboardButton("💳 New Deposit", callback_data="deposit")]]
+        
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        
+    except Exception as e:
+        logger.error(f"Error checking payment status: {e}")
+        await query.edit_message_text(
+            "❌ Error checking payment status. Please try again later.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]])
+        )
 
 # Register handlers in main bot setup (ensure these are present in Application setup)
 def register_casino_handlers(application: Application) -> None:
@@ -1904,6 +2145,7 @@ def register_casino_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("withdraw", withdraw_start))
     application.add_handler(CallbackQueryHandler(deposit_callback, pattern=r"^deposit$"))
     application.add_handler(CallbackQueryHandler(deposit_crypto_callback, pattern=r"^deposit_LTC$"))
+    application.add_handler(CallbackQueryHandler(check_payment_callback, pattern=r"^check_payment_"))
     application.add_handler(CallbackQueryHandler(withdraw_start, pattern=r"^withdraw$"))
     application.add_handler(CallbackQueryHandler(withdraw_crypto_callback, pattern=r"^withdraw_LTC$"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input_main))
@@ -1919,6 +2161,31 @@ app = Flask(__name__)
 @app.route('/keepalive')
 def keep_alive():
     return "OK", 200
+
+@app.route('/cryptobot_webhook', methods=['POST'])
+def cryptobot_webhook():
+    """Handle CryptoBot webhook notifications"""
+    try:
+        signature = request.headers.get('Crypto-Pay-API-Signature', '')
+        request_data = request.get_json()
+        
+        if not request_data:
+            return "Invalid request", 400
+        
+        # Handle webhook in async context
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        success = loop.run_until_complete(handle_cryptobot_webhook(request_data, signature))
+        loop.close()
+        
+        if success:
+            return "OK", 200
+        else:
+            return "Error processing webhook", 500
+            
+    except Exception as e:
+        logger.error(f"Error in CryptoBot webhook: {e}")
+        return "Internal error", 500
 
 # --- Flask and Telegram Bot Runner ---
 
@@ -1951,7 +2218,7 @@ async def run_telegram_bot_async():
                 return
         
         # Get user stats
-        balance = user.get('balance', 0.0)
+        balance = user.get('balance', 0)
         games_played = user.get('games_played', 0)
         total_wagered = user.get('total_wagered', 0.0)
         total_won = user.get('total_won', 0.0)
