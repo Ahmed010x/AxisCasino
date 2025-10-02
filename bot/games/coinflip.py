@@ -223,16 +223,49 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Delete the old message first
     try:
         await query.message.delete()
+        logger.info(f"Deleted old message for user {user_id}")
     except Exception as e:
         logger.error(f"Could not delete message: {e}")
     
     # Send sticker animation for visual effect
+    sticker_sent = False
+    sticker_id = BITCOIN_STICKER_ID if result == "bitcoin" else ETHEREUM_STICKER_ID
+    
     try:
-        sticker_id = BITCOIN_STICKER_ID if result == "bitcoin" else ETHEREUM_STICKER_ID
-        await context.bot.send_sticker(chat_id=query.message.chat_id, sticker=sticker_id)
-        logger.info(f"Sent {result} sticker to user {user_id}")
+        logger.info(f"Attempting to send {result} sticker (ID: {sticker_id[:20]}...) to chat {query.message.chat_id}")
+        sticker_message = await context.bot.send_sticker(
+            chat_id=query.message.chat_id, 
+            sticker=sticker_id
+        )
+        sticker_sent = True
+        logger.info(f"✅ Successfully sent {result} sticker to user {user_id}, message_id: {sticker_message.message_id}")
     except Exception as e:
-        logger.error(f"Could not send sticker: {e}")
+        logger.error(f"❌ Failed to send sticker: {type(e).__name__}: {e}")
+        # Try sending as a file_id format alternative
+        try:
+            logger.info(f"Retrying with alternative method...")
+            from telegram import InputFile
+            sticker_message = await context.bot.send_sticker(
+                chat_id=query.message.chat_id,
+                sticker=sticker_id
+            )
+            sticker_sent = True
+            logger.info(f"✅ Sticker sent on retry")
+        except Exception as e2:
+            logger.error(f"❌ Retry also failed: {type(e2).__name__}: {e2}")
+    
+    # If sticker failed, send a fallback animation message
+    if not sticker_sent:
+        fallback_msg = f"{coin_emoji} {result_text} {coin_emoji}"
+        try:
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=fallback_msg,
+                parse_mode=ParseMode.HTML
+            )
+            logger.info(f"Sent fallback emoji message instead of sticker")
+        except Exception as e:
+            logger.error(f"Even fallback message failed: {e}")
     
     # Build result text
     if won:
