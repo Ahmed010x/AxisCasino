@@ -2,7 +2,12 @@
 """
 Dice Predict Game Module
 Players predict the outcome of a dice roll (1-6)
-Correct prediction = 5x payout
+Variable payouts based on number of selections:
+- 1 number: 5.76x multiplier
+- 2 numbers: 2.88x multiplier
+- 3 numbers: 1.92x multiplier
+- 4 numbers: 1.44x multiplier
+- 5 numbers: 1.15x multiplier
 """
 
 import random
@@ -17,8 +22,16 @@ logger = logging.getLogger(__name__)
 # Game configuration
 MIN_BET = 1.0
 MAX_BET = 1000.0
-WIN_MULTIPLIER = 5.0  # 5x payout for correct prediction
-HOUSE_EDGE = 0.17  # ~17% house edge (fair for 1/6 odds, normal would be 6x)
+
+# Multipliers based on number of selections
+MULTIPLIERS = {
+    1: 5.76,  # Select 1 number
+    2: 2.88,  # Select 2 numbers
+    3: 1.92,  # Select 3 numbers
+    4: 1.44,  # Select 4 numbers
+    5: 1.15,  # Select 5 numbers
+    6: 0.96   # Select all 6 numbers (slight loss - discouraged)
+}
 
 async def handle_dice_predict_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Main handler for dice prediction game"""
@@ -28,11 +41,24 @@ async def handle_dice_predict_callback(update: Update, context: ContextTypes.DEF
     data = query.data
     
     if data == "game_dice_predict":
+        # Clear any previous selections
+        context.user_data.pop('dice_predict_selections', None)
+        context.user_data.pop('dice_predict_bet_amount', None)
         await show_dice_predict_menu(update, context)
     elif data == "dice_predict_custom_bet":
         await request_custom_bet(update, context)
     elif data.startswith("dice_predict_bet_"):
         bet_amount = float(data.split("_")[3])
+        # Clear previous selections and start fresh
+        context.user_data['dice_predict_selections'] = []
+        await show_number_selection(update, context, bet_amount)
+    elif data.startswith("dice_predict_toggle_"):
+        # Toggle number selection
+        await toggle_number_selection(update, context)
+    elif data == "dice_predict_clear":
+        # Clear all selections
+        context.user_data['dice_predict_selections'] = []
+        bet_amount = context.user_data.get('dice_predict_bet_amount', 0)
         await show_number_selection(update, context, bet_amount)
     elif data.startswith("dice_predict_play_"):
         await play_dice_predict(update, context)
@@ -62,12 +88,16 @@ async def show_dice_predict_menu(update: Update, context: ContextTypes.DEFAULT_T
 💰 <b>Balance:</b> {balance_str}
 
 🎯 <b>Game Rules:</b>
-• Predict the dice number (1-6)
-• Correct prediction = <b>5x</b> your bet!
-• Wrong prediction = lose your bet
+• Select 1-5 numbers from the dice (1-6)
+• If dice lands on any of your numbers, you win!
+• More numbers = better odds, lower multiplier
 
-📊 <b>Win Chance:</b> 16.67% (1 in 6)
-💵 <b>Payout:</b> 5.00x
+📊 <b>Payouts:</b>
+1️⃣ number: 5.76x (17% chance)
+2️⃣ numbers: 2.88x (33% chance)
+3️⃣ numbers: 1.92x (50% chance)
+4️⃣ numbers: 1.44x (67% chance)
+5️⃣ numbers: 1.15x (83% chance)
 
 <b>Select your bet amount:</b>
 """
@@ -174,7 +204,7 @@ async def handle_custom_bet_input(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text("❌ Please enter a valid number")
 
 async def show_number_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, bet_amount: float):
-    """Show dice number selection interface"""
+    """Show dice number selection interface with multi-select support"""
     query = update.callback_query
     user_id = query.from_user.id
     
@@ -199,36 +229,122 @@ async def show_number_selection(update: Update, context: ContextTypes.DEFAULT_TY
         )
         return
     
-    potential_win = bet_amount * WIN_MULTIPLIER
+    # Store bet amount in context
+    context.user_data['dice_predict_bet_amount'] = bet_amount
+    
+    # Get current selections (empty list if none)
+    selected = context.user_data.get('dice_predict_selections', [])
+    num_selected = len(selected)
+    
+    # Calculate potential win based on selections
+    if num_selected > 0 and num_selected <= 5:
+        multiplier = MULTIPLIERS.get(num_selected, 1.0)
+        potential_win = bet_amount * multiplier
+        win_chance = (num_selected / 6) * 100
+    else:
+        multiplier = 0
+        potential_win = 0
+        win_chance = 0
+    
+    # Build selection display
+    selected_str = ", ".join([f"{n}" for n in sorted(selected)]) if selected else "None"
     
     text = f"""
 🎲 <b>DICE PREDICT</b> 🎲
 
 💰 <b>Bet Amount:</b> ${bet_amount:.2f}
-💵 <b>Potential Win:</b> ${potential_win:.2f}
-📈 <b>Profit:</b> ${potential_win - bet_amount:.2f}
+🎯 <b>Selected:</b> {selected_str}
+� <b>Count:</b> {num_selected}/5
 
-🎯 <b>Select your predicted number (1-6):</b>
 """
     
-    # Create number selection keyboard
-    keyboard = [
-        [
-            InlineKeyboardButton("1️⃣", callback_data=f"dice_predict_play_{bet_amount}_1"),
-            InlineKeyboardButton("2️⃣", callback_data=f"dice_predict_play_{bet_amount}_2"),
-            InlineKeyboardButton("3️⃣", callback_data=f"dice_predict_play_{bet_amount}_3")
-        ],
-        [
-            InlineKeyboardButton("4️⃣", callback_data=f"dice_predict_play_{bet_amount}_4"),
-            InlineKeyboardButton("5️⃣", callback_data=f"dice_predict_play_{bet_amount}_5"),
-            InlineKeyboardButton("6️⃣", callback_data=f"dice_predict_play_{bet_amount}_6")
-        ],
-        [InlineKeyboardButton("🔙 Change Bet", callback_data="game_dice_predict")]
-    ]
+    if num_selected > 0:
+        text += f"""�💵 <b>Multiplier:</b> {multiplier:.2f}x
+📈 <b>Win Chance:</b> {win_chance:.1f}%
+🏆 <b>Potential Win:</b> ${potential_win:.2f}
+� <b>Profit:</b> ${potential_win - bet_amount:.2f}
+
+"""
+    
+    text += "<b>🎯 Select your numbers (1-5 numbers):</b>"
+    
+    # Create number selection keyboard with toggle buttons
+    number_emojis = {
+        1: "1️⃣", 2: "2️⃣", 3: "3️⃣",
+        4: "4️⃣", 5: "5️⃣", 6: "6️⃣"
+    }
+    
+    keyboard = []
+    row = []
+    for num in range(1, 7):
+        # Show checkmark if selected
+        if num in selected:
+            button_text = f"✅ {number_emojis[num]}"
+        else:
+            button_text = number_emojis[num]
+        
+        row.append(InlineKeyboardButton(
+            button_text,
+            callback_data=f"dice_predict_toggle_{num}"
+        ))
+        
+        if len(row) == 3:
+            keyboard.append(row)
+            row = []
+    
+    if row:
+        keyboard.append(row)
+    
+    # Add play button (only if at least 1 number selected)
+    if num_selected > 0 and num_selected <= 5:
+        keyboard.append([
+            InlineKeyboardButton(
+                f"🎲 ROLL DICE ({multiplier:.2f}x)",
+                callback_data=f"dice_predict_play_{bet_amount}"
+            )
+        ])
+    
+    # Add utility buttons
+    utility_row = []
+    if num_selected > 0:
+        utility_row.append(InlineKeyboardButton("🔄 Clear All", callback_data="dice_predict_clear"))
+    utility_row.append(InlineKeyboardButton("🔙 Change Bet", callback_data="game_dice_predict"))
+    keyboard.append(utility_row)
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+async def toggle_number_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Toggle a number in the selection list"""
+    query = update.callback_query
+    
+    # Parse the number from callback data
+    # Format: dice_predict_toggle_{number}
+    parts = query.data.split("_")
+    number = int(parts[3])
+    
+    # Get current selections
+    selected = context.user_data.get('dice_predict_selections', [])
+    bet_amount = context.user_data.get('dice_predict_bet_amount', 0)
+    
+    # Toggle the number
+    if number in selected:
+        selected.remove(number)
+    else:
+        # Only allow up to 5 selections
+        if len(selected) < 5:
+            selected.append(number)
+        else:
+            await query.answer("❌ Maximum 5 numbers allowed!", show_alert=True)
+            return
+    
+    # Update the selections
+    context.user_data['dice_predict_selections'] = selected
+    
+    # Refresh the display
+    await show_number_selection(update, context, bet_amount)
+    await query.answer()
 
 async def show_number_selection_message(update: Update, context: ContextTypes.DEFAULT_TYPE, bet_amount: float):
     """Show number selection as a new message (for custom bet)"""
@@ -245,47 +361,73 @@ async def show_number_selection_message(update: Update, context: ContextTypes.DE
         await update.message.reply_text("❌ User not found. Please use /start")
         return
     
-    potential_win = bet_amount * WIN_MULTIPLIER
+    # Initialize selections
+    context.user_data['dice_predict_selections'] = []
+    context.user_data['dice_predict_bet_amount'] = bet_amount
     
+    # Get current selections (empty list)
+    selected = []
+    
+    # Build selection display
     text = f"""
 🎲 <b>DICE PREDICT</b> 🎲
 
 💰 <b>Bet Amount:</b> ${bet_amount:.2f}
-💵 <b>Potential Win:</b> ${potential_win:.2f}
-📈 <b>Profit:</b> ${potential_win - bet_amount:.2f}
+🎯 <b>Selected:</b> None
+📊 <b>Count:</b> 0/5
 
-🎯 <b>Select your predicted number (1-6):</b>
+<b>🎯 Select your numbers (1-5 numbers):</b>
+
+📊 <b>Payouts:</b>
+• 1 number: 5.76x
+• 2 numbers: 2.88x
+• 3 numbers: 1.92x
+• 4 numbers: 1.44x
+• 5 numbers: 1.15x
 """
     
-    # Create number selection keyboard
-    keyboard = [
-        [
-            InlineKeyboardButton("1️⃣", callback_data=f"dice_predict_play_{bet_amount}_1"),
-            InlineKeyboardButton("2️⃣", callback_data=f"dice_predict_play_{bet_amount}_2"),
-            InlineKeyboardButton("3️⃣", callback_data=f"dice_predict_play_{bet_amount}_3")
-        ],
-        [
-            InlineKeyboardButton("4️⃣", callback_data=f"dice_predict_play_{bet_amount}_4"),
-            InlineKeyboardButton("5️⃣", callback_data=f"dice_predict_play_{bet_amount}_5"),
-            InlineKeyboardButton("6️⃣", callback_data=f"dice_predict_play_{bet_amount}_6")
-        ],
-        [InlineKeyboardButton("🔙 Change Bet", callback_data="game_dice_predict")]
-    ]
+    # Create number selection keyboard with toggle buttons
+    number_emojis = {
+        1: "1️⃣", 2: "2️⃣", 3: "3️⃣",
+        4: "4️⃣", 5: "5️⃣", 6: "6️⃣"
+    }
+    
+    keyboard = []
+    row = []
+    for num in range(1, 7):
+        button_text = number_emojis[num]
+        row.append(InlineKeyboardButton(
+            button_text,
+            callback_data=f"dice_predict_toggle_{num}"
+        ))
+        
+        if len(row) == 3:
+            keyboard.append(row)
+            row = []
+    
+    if row:
+        keyboard.append(row)
+    
+    # Add back button
+    keyboard.append([InlineKeyboardButton("🔙 Change Bet", callback_data="game_dice_predict")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
 async def play_dice_predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Play the dice prediction game"""
+    """Play the dice prediction game with multiple number selection"""
     query = update.callback_query
     user_id = query.from_user.id
     
-    # Parse bet amount and predicted number from callback data
-    # Format: dice_predict_play_{bet_amount}_{predicted_number}
-    parts = query.data.split("_")
-    bet_amount = float(parts[3])
-    predicted_number = int(parts[4])
+    # Get bet amount and selected numbers from context
+    bet_amount = context.user_data.get('dice_predict_bet_amount', 0)
+    selected_numbers = context.user_data.get('dice_predict_selections', [])
+    
+    # Validate selections
+    if not selected_numbers or len(selected_numbers) > 5:
+        await query.answer("❌ Please select 1-5 numbers!", show_alert=True)
+        return
     
     # Import here to avoid circular dependency
     import sys
@@ -337,12 +479,16 @@ async def play_dice_predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
         actual_number = random.randint(1, 6)
         logger.warning(f"Using fallback random number: {actual_number}")
     
-    # Check win condition
-    won = actual_number == predicted_number
+    # Check win condition - did the dice land on any of the selected numbers?
+    won = actual_number in selected_numbers
+    
+    # Get multiplier based on number of selections
+    num_selected = len(selected_numbers)
+    multiplier = MULTIPLIERS.get(num_selected, 1.0)
     
     # Calculate winnings
     if won:
-        win_amount = bet_amount * WIN_MULTIPLIER
+        win_amount = bet_amount * multiplier
         net_profit = win_amount - bet_amount
         await update_balance(user_id, win_amount)
     else:
@@ -352,13 +498,16 @@ async def play_dice_predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Update house balance
     await update_house_balance_on_game(bet_amount, win_amount)
     
+    # Format selected numbers for logging
+    selected_str = ", ".join([str(n) for n in sorted(selected_numbers)])
+    
     # Log game session
     await log_game_session(
         user_id=user_id,
         game_type="dice_predict",
         bet_amount=bet_amount,
         win_amount=win_amount,
-        result=f"{'WIN' if won else 'LOSS'} - Predicted: {predicted_number}, Rolled: {actual_number}"
+        result=f"{'WIN' if won else 'LOSS'} - Selected: [{selected_str}], Rolled: {actual_number}, Multiplier: {multiplier}x"
     )
     
     # Get updated balance
@@ -378,17 +527,21 @@ async def play_dice_predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
         6: "6️⃣"
     }
     
+    # Build selected numbers display
+    selected_display = " ".join([number_emojis[n] for n in sorted(selected_numbers)])
+    
     # Build result message
     if won:
         text = f"""
-🎉 <b>CORRECT PREDICTION!</b> 🎉
+🎉 <b>YOU WIN!</b> 🎉
 
-🎲 <b>Your Prediction:</b> {number_emojis[predicted_number]}
+� <b>Your Numbers:</b> {selected_display}
 🎲 <b>Dice Result:</b> {number_emojis[actual_number]}
 
-✅ <b>MATCH! YOU WIN!</b>
+✅ <b>MATCH! ({num_selected} number{'s' if num_selected > 1 else ''})</b>
 
 💰 <b>Bet:</b> ${bet_amount:.2f}
+📊 <b>Multiplier:</b> {multiplier:.2f}x
 💵 <b>Won:</b> ${win_amount:.2f}
 📈 <b>Profit:</b> ${net_profit:.2f}
 
@@ -396,12 +549,12 @@ async def play_dice_predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
 """
     else:
         text = f"""
-😔 <b>WRONG PREDICTION</b>
+😔 <b>NO MATCH</b>
 
-🎲 <b>Your Prediction:</b> {number_emojis[predicted_number]}
+� <b>Your Numbers:</b> {selected_display}
 🎲 <b>Dice Result:</b> {number_emojis[actual_number]}
 
-❌ <b>NO MATCH</b>
+❌ <b>Not in your selection</b>
 
 💰 <b>Bet:</b> ${bet_amount:.2f}
 💸 <b>Lost:</b> ${bet_amount:.2f}
