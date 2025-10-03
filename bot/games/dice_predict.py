@@ -6,6 +6,7 @@ Correct prediction = 5x payout
 """
 
 import random
+import asyncio
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
@@ -311,8 +312,32 @@ async def play_dice_predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("❌ Failed to place bet!", show_alert=True)
         return
     
-    # Roll the dice
-    actual_number = random.randint(1, 6)
+    # Delete the old message first
+    try:
+        await query.message.delete()
+    except Exception as e:
+        logger.error(f"Could not delete message: {e}")
+    
+    # Send dice animation using Telegram's native dice
+    # The dice value will be our actual result for fairness and sync
+    dice_msg = None
+    actual_number = None
+    
+    try:
+        dice_msg = await context.bot.send_dice(
+            chat_id=query.message.chat_id,
+            emoji="🎲"
+        )
+        # Get the actual dice value from Telegram's animation
+        actual_number = dice_msg.dice.value
+        logger.info(f"Dice animation sent, result: {actual_number}")
+    except Exception as e:
+        logger.error(f"Failed to send dice animation: {e}")
+        # Fallback: generate random number if dice fails
+        actual_number = random.randint(1, 6)
+        logger.warning(f"Using fallback random number: {actual_number}")
+    
+    # Check win condition
     won = actual_number == predicted_number
     
     # Calculate winnings
@@ -340,22 +365,8 @@ async def play_dice_predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
     updated_user = await get_user(user_id)
     new_balance_str = await format_usd(updated_user['balance'])
     
-    # Delete the old message
-    try:
-        await query.message.delete()
-    except Exception as e:
-        logger.error(f"Could not delete message: {e}")
-    
-    # Send dice animation using Telegram's native dice
-    try:
-        dice_msg = await context.bot.send_dice(
-            chat_id=query.message.chat_id,
-            emoji="🎲"
-        )
-        logger.info(f"Sent dice animation, result will be: {dice_msg.dice.value}")
-        # Note: The animation shows a random number, we'll use our own RNG for fairness
-    except Exception as e:
-        logger.error(f"Failed to send dice animation: {e}")
+    # Wait for dice animation to complete (animation takes ~4 seconds)
+    await asyncio.sleep(4)
     
     # Number emojis
     number_emojis = {
