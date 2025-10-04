@@ -1,22 +1,27 @@
 """
 Basketball Game - 1v1 Player vs Bot
 
-Telegram emoji-based basketball game where player competes against the bot!
-Both player and bot take shots using Telegram's basketball dice emoji (🏀).
+Interactive basketball game using Telegram's basketball emoji animation!
+Both player and bot send basketball emojis, and the animation results determine winners.
 First to reach the target score wins!
 """
 
 import asyncio
-import random
 from typing import Tuple
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from telegram.constants import ParseMode
+from telegram.constants import ParseMode, MessageEntityType
+from telegram.error import TelegramError
 import sys
 import os
-import asyncio
 
-# Add parent directory to path for imports
+import sys
+import os
+
+# Add 💰 <b>Bet Amount:</b> {bet_str}
+{result_emoji} {result_text}
+
+💳 <b>New Balance:</b> {balance_str} directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 # Bet limits
@@ -27,7 +32,7 @@ MAX_BET = 1000.0
 TARGET_SCORE = 3  # First to 3 points wins
 WIN_MULTIPLIER = 1.9  # 1.9x payout for winning
 
-# Basketball dice values:
+# Basketball dice values (from Telegram's basketball emoji):
 # 1-2: Miss (0 points)
 # 3: Near miss (0 points, but close!)
 # 4-5: Score! (1 point)
@@ -44,8 +49,6 @@ def get_shot_result(dice_value: int) -> Tuple[int, str, str]:
     else:  # 4 or 5
         return 1, "SCORE", "🏀"
 
-# --- Interactive Basketball Emoji Functions ---
-
 async def send_basketball_emoji(update: Update, context: ContextTypes.DEFAULT_TYPE, is_bot: bool = False) -> int:
     """
     Send a basketball emoji and return the animation result.
@@ -59,11 +62,19 @@ async def send_basketball_emoji(update: Update, context: ContextTypes.DEFAULT_TY
         int: The dice value (1-5) from the basketball animation
     """
     try:
-        # Both bot and player shots use the same emoji sending mechanism
-        message = await context.bot.send_dice(
-            chat_id=update.effective_chat.id,
-            emoji="🏀"
-        )
+        if is_bot:
+            # Bot sends basketball emoji
+            message = await context.bot.send_dice(
+                chat_id=update.effective_chat.id,
+                emoji="🏀"
+            )
+        else:
+            # This would be the player's shot, but we'll simulate it since 
+            # we can't make the user send an emoji programmatically
+            message = await context.bot.send_dice(
+                chat_id=update.effective_chat.id,
+                emoji="🏀"
+            )
         
         # Wait a moment for the animation to complete
         await asyncio.sleep(3)
@@ -71,7 +82,7 @@ async def send_basketball_emoji(update: Update, context: ContextTypes.DEFAULT_TY
         # Get the dice value from the message
         return message.dice.value
         
-    except Exception as e:
+    except TelegramError as e:
         # Fallback to random if emoji fails
         import random
         return random.randint(1, 5)
@@ -228,19 +239,13 @@ async def play_basketball_1v1_interactive(update: Update, context: ContextTypes.
         'total_rounds': len(game_log)
     }
 
-
+# Keep the old function for backwards compatibility (used in tests)
 async def play_basketball_1v1(user_id: int, bet_amount: float) -> dict:
     """
-    Play a 1v1 basketball game against the bot.
-    First to TARGET_SCORE points wins.
-    
-    Args:
-        user_id: User's Telegram ID
-        bet_amount: Amount to bet in USD
-    
-    Returns:
-        dict with complete game results
+    Non-interactive version for testing and backwards compatibility.
     """
+    import random
+    
     from main import get_user, update_balance, deduct_balance, log_game_session, format_usd
     
     # Initialize scores
@@ -268,14 +273,11 @@ async def play_basketball_1v1(user_id: int, bet_amount: float) -> dict:
         round_points_bot = 0
         
         if player_made_shot and not bot_made_shot:
-            # Player scores, bot misses = Player gets 1 point
             round_points_player = 1
             player_score += 1
         elif bot_made_shot and not player_made_shot:
-            # Bot scores, player misses = Bot gets 1 point
             round_points_bot = 1
             bot_score += 1
-        # If both score or both miss, no points awarded (tie round)
         
         # Log this round
         game_log.append({
@@ -295,7 +297,6 @@ async def play_basketball_1v1(user_id: int, bet_amount: float) -> dict:
         
         round_num += 1
         
-        # Safety check - max 20 rounds (since ties don't count, may take longer)
         if round_num > 20:
             break
     
@@ -357,27 +358,23 @@ async def show_basketball_menu(update: Update, context: ContextTypes.DEFAULT_TYP
 💰 <b>Balance:</b> {balance_str}
 
 🎯 <b>How to Play:</b>
-Interactive basketball shootout using real Telegram emoji!
-• You and the bot both send basketball emojis 🏀
-• The animated emoji result determines if you score
-• First to {TARGET_SCORE} points wins the match!
+You vs Bot in a basketball shootout!
+• Both take shots each round
+• Score when you make it and bot misses
+• Bot scores when bot makes it and you miss
+• If both score or both miss: no points (tie round)
+• First to {TARGET_SCORE} points wins!
 • Win {WIN_MULTIPLIER}x your bet!
 
-<b>Interactive Gameplay:</b>
-• 🏀 You send a basketball emoji
-• 🤖 Bot sends a basketball emoji  
-• Real emoji animations determine results!
-• Watch the basketball spin and see if it goes in
+<b>Scoring:</b>
+• 🚫 Miss (1-2): 0 points
+• 😬 Rim (3): 0 points (close!)
+• 🏀 Score (4-5): 1 point
 
-<b>Scoring System:</b>
-• 🚫 Miss: Ball doesn't go in (0 points)
-• 😬 Near Miss: Close but no score (0 points)
-• 🏀 Score: Ball goes in! (+1 point)
-
-<b>1v1 Match Rules:</b>
+<b>Point System:</b>
 🟢 You score + Bot misses = +1 point for you
 🔴 Bot scores + You miss = +1 point for bot
-🟡 Both score or both miss = Tie round (no points)
+🟡 Both score or both miss = Tie (no points)
 
 💵 <b>Min Bet:</b> ${MIN_BET:.2f}
 💰 <b>Max Bet:</b> ${MAX_BET:.2f}
@@ -519,19 +516,20 @@ async def basketball_play_callback(update: Update, context: ContextTypes.DEFAULT
         balance_str = await format_usd(user['balance'])
         await query.edit_message_text(f"❌ Insufficient balance! You have {balance_str}")
         return
-    
-    # Deduct bet amount
+     # Deduct bet amount
     deducted = await deduct_balance(user_id, bet_amount)
     if not deducted:
         await query.edit_message_text("❌ Failed to place bet. Please try again.")
         return
-    
+
     # Play the interactive 1v1 game with real emoji animations
     result = await play_basketball_1v1_interactive(update, context, user_id, bet_amount)
     
-    # Format final summary (the detailed game was already shown during play)
+    # Format game summary
     bet_str = await format_usd(result['bet_amount'])
     balance_str = await format_usd(result['new_balance'])
+    
+    # Since the interactive game already showed all the details, keep summary simple
     
     if result['player_won']:
         win_str = await format_usd(result['win_amount'])
@@ -543,18 +541,19 @@ async def basketball_play_callback(update: Update, context: ContextTypes.DEFAULT
         result_emoji = "😞"
         result_text = f"<b>BOT WINS!</b> 🤖\n📉 Lost: {loss_str}"
     
-    # Send final summary message
     text = f"""
-🏀 <b>GAME COMPLETE!</b> 🏀
+🏀 <b>BASKETBALL 1v1 RESULT</b> 🏀
 
 🎯 <b>Final Score:</b>
 👤 You: {result['player_score']} points
 🤖 Bot: {result['bot_score']} points
 
-💰 <b>Bet Amount:</b> {bet_str}
+{game_summary}
+
+� <b>Bet Amount:</b> {bet_str}
 {result_emoji} {result_text}
 
-💳 <b>New Balance:</b> {balance_str}
+� <b>New Balance:</b> {balance_str}
 
 <b>Play again?</b>
 """
@@ -566,8 +565,7 @@ async def basketball_play_callback(update: Update, context: ContextTypes.DEFAULT
         ]
     ]
     
-    # Send new message instead of editing (since the interactive game shows progress)
-    await update.effective_message.reply_text(
+    await query.edit_message_text(
         text,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode=ParseMode.HTML
