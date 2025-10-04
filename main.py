@@ -2455,14 +2455,15 @@ If your referral loses $100, you earn $20!
         if data.startswith('deposit_') or data.startswith('withdraw_') or data.startswith('check_payment_'):
             return
         
-        if data == "main_panel":
+        if data == "main_panel" or data == "start":
             # Return to main panel (simulate /start)
             await start_panel_callback(update, context)
         elif data == "deposit":
             await deposit_callback(update, context)
         elif data == "withdraw":
             await withdraw_start(update, context)
-        elif data == "mini_app_centre":
+        elif data == "mini_app_centre" or data == "games":
+            # Both "mini_app_centre" and "games" go to games menu
             await games_menu_callback(update, context)
         elif data == "referral_menu":
             await referral_menu_callback(update, context)
@@ -2472,8 +2473,12 @@ If your referral loses $100, you earn $20!
             await help_menu_callback(update, context)
         elif data == "admin_panel" and (is_admin(user_id) or is_owner(user_id)):
             await admin_panel_callback(update, context)
-        elif data == "bonus_menu":
+        elif data == "bonus_menu" or data == "weekly_bonus":
             await bonus_menu_callback(update, context)
+        elif data == "help" or data == "help_menu":
+            # Some games use "help" for main menu (legacy)
+            # Route to main panel instead
+            await start_panel_callback(update, context)
         # Game handlers
         elif data == "game_slots":
             await game_slots_callback(update, context)
