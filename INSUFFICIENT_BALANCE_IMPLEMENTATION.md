@@ -9,8 +9,9 @@ Added comprehensive insufficient balance messages throughout the casino bot to i
 
 Enhanced the `games_menu_callback` function to:
 - **Check user balance** before showing game options
-- **Display warning** when balance is below $1.00
-- **Suggest actions** to get funds (deposit, weekly bonus)
+- **Display warning banner** when balance is below $1.00
+- **Show all games** even with insufficient balance (users can browse)
+- **Add quick funding buttons** when balance is low
 - **Show balance** in the menu header
 
 #### Before:
@@ -21,8 +22,9 @@ Enhanced the `games_menu_callback` function to:
 #### After:
 ```python
 if balance < 1.0:
-    # Shows insufficient balance warning with helpful actions
-    # Buttons: Deposit, Weekly Bonus, Back
+    # Shows warning banner at top
+    # Lists all games (grayed out/informational)
+    # Adds quick Deposit & Bonus buttons
 else:
     # Shows normal games menu with all available games
 ```
@@ -33,16 +35,26 @@ else:
 
 💰 Your Balance: $0.00 USD
 
-⚠️ INSUFFICIENT BALANCE ⚠️
-
+⚠️ INSUFFICIENT BALANCE TO PLAY ⚠️
 You need at least $1.00 to play games.
 
-Get started with:
-• 💳 Make a deposit
-• 🎁 Claim your weekly bonus
-• 👥 Use a referral code
+💡 Get funds: Deposit • Weekly Bonus • Referrals
 
-Fund your account to start playing!
+━━━━━━━━━━━━━━━━━━━━━━
+
+Available Games:
+
+🎰 Slots - Classic slot machine
+🃏 Blackjack - Beat the dealer
+🎲 Dice - Roll to win
+🪙 Coin Flip - Heads or Tails
+🎯 Roulette - European roulette
+🂠 Poker - Texas Hold'em
+🔮 Dice Predict - Predict the dice
+
+[Game Buttons - All Visible]
+[💳 Deposit] [🎁 Bonus]
+[🔙 Back to Menu]
 ```
 
 #### Sufficient Balance Display:
@@ -57,6 +69,9 @@ Choose your game:
 🃏 Blackjack - Beat the dealer
 🎲 Dice - Roll to win
 ...
+
+[All Game Buttons]
+[🔙 Back to Menu]
 ```
 
 ### 2. Withdrawal Balance Check (`main.py` ~line 1937)
@@ -131,9 +146,11 @@ if user_data['balance'] < bet_amount:
 
 ### Scenario 1: New User with $0 Balance
 1. User clicks "🎮 Games" from main menu
-2. **NEW**: Sees insufficient balance warning with helpful suggestions
-3. User clicks "💳 Deposit" or "🎁 Weekly Bonus"
-4. After funding, can access games normally
+2. **NEW**: Sees warning banner at top of games list
+3. **NEW**: Can browse all available games (informational)
+4. **NEW**: Quick access buttons for "💳 Deposit" and "🎁 Bonus"
+5. If user clicks a game, individual game will show insufficient balance error
+6. After funding, can play games normally
 
 ### Scenario 2: User Tries to Withdraw More Than Balance
 1. User enters withdrawal amount exceeding balance
@@ -152,14 +169,16 @@ if user_data['balance'] < bet_amount:
 ## Benefits
 
 ### 1. **Proactive Warning**
-- Users know upfront if they can't play
-- Prevents frustration of clicking through menus
-- Saves time and improves UX
+- Users see warning banner upfront if balance is low
+- Can still browse and explore all available games
+- Quick funding buttons added when needed
+- Prevents confusion while maintaining discoverability
 
 ### 2. **Clear Guidance**
-- Suggests specific actions to get funds
+- Warning banner shows minimum balance needed
+- Quick-access funding buttons appear when needed
 - Links directly to deposit/bonus options
-- Makes onboarding smoother
+- Makes onboarding smoother while allowing exploration
 
 ### 3. **Better Feedback**
 - Shows exact amounts in all messages
@@ -168,10 +187,12 @@ if user_data['balance'] < bet_amount:
 
 ### 4. **Consistent Experience**
 - Balance checks at multiple levels:
-  - Games menu entry point
-  - Individual game selection
-  - Bet placement
-  - Withdrawal requests
+  - Games menu entry point (warning banner)
+  - Individual game selection (full error message)
+  - Bet placement (detailed balance check)
+  - Withdrawal requests (insufficient funds error)
+- Users can always browse games, even without funds
+- Funding options always accessible when needed
 
 ## Technical Details
 
@@ -199,16 +220,18 @@ Required: $Y.YY
 ## Testing Recommendations
 
 ### Test Cases
-1. ✅ New user with $0 balance accesses games menu
-2. ✅ User with $0.50 accesses games menu (< $1.00)
-3. ✅ User with $5.00 accesses games menu (sufficient)
-4. ✅ User tries to withdraw more than balance
-5. ✅ User tries to bet more than balance in each game
+1. ✅ New user with $0 balance accesses games menu → Shows warning banner + all games + funding buttons
+2. ✅ User with $0.50 accesses games menu (< $1.00) → Shows warning banner + all games + funding buttons
+3. ✅ User with $5.00 accesses games menu (sufficient) → Shows normal menu without warning
+4. ✅ User with $0 clicks a game button → Game shows insufficient balance error
+5. ✅ User tries to withdraw more than balance → Shows detailed error with shortfall
+6. ✅ User tries to bet more than balance in each game → Game-specific error message
 
 ### Expected Behavior
-- **$0 balance**: Shows warning, hides game buttons
-- **< $1 balance**: Shows warning, hides game buttons
-- **>= $1 balance**: Shows all games normally
+- **$0 balance**: Shows warning banner, displays all games, adds funding buttons
+- **< $1 balance**: Shows warning banner, displays all games, adds funding buttons
+- **>= $1 balance**: Shows all games normally, no warning banner
+- **Click game with $0**: Individual game shows insufficient balance error
 - **Withdrawal > balance**: Shows detailed error with shortfall
 - **Bet > balance**: Game-specific error message
 

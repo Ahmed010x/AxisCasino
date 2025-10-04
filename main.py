@@ -2579,33 +2579,30 @@ If your referral loses $100, you earn $20!
         balance = user['balance']
         balance_str = await format_usd(balance)
         
-        # Check if user has insufficient balance
+        # Always show games, but add warning if balance is insufficient
         if balance < 1.0:
             text = f"""
 🎮 <b>CASINO GAMES</b> 🎮
 
 💰 <b>Your Balance:</b> {balance_str}
 
-⚠️ <b>INSUFFICIENT BALANCE</b> ⚠️
+⚠️ <b>INSUFFICIENT BALANCE TO PLAY</b> ⚠️
+<i>You need at least $1.00 to play games.</i>
 
-You need at least $1.00 to play games.
+💡 <b>Get funds:</b> Deposit • Weekly Bonus • Referrals
 
-<b>Get started with:</b>
-• 💳 Make a deposit
-• 🎁 Claim your weekly bonus
-• 👥 Use a referral code
+━━━━━━━━━━━━━━━━━━━━━━
 
-<i>Fund your account to start playing!</i>
+<b>Available Games:</b>
+
+🎰 <b>Slots</b> - Classic slot machine
+🃏 <b>Blackjack</b> - Beat the dealer
+🎲 <b>Dice</b> - Roll to win
+🪙 <b>Coin Flip</b> - Heads or Tails
+🎯 <b>Roulette</b> - European roulette
+� <b>Poker</b> - Texas Hold'em
+🔮 <b>Dice Predict</b> - Predict the dice
 """
-            keyboard = [
-                [
-                    InlineKeyboardButton("💳 Deposit", callback_data="deposit"),
-                    InlineKeyboardButton("🎁 Weekly Bonus", callback_data="weekly_bonus")
-                ],
-                [
-                    InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")
-                ]
-            ]
         else:
             text = f"""
 🎮 <b>CASINO GAMES</b> 🎮
@@ -2624,26 +2621,34 @@ Choose your game:
 
 <i>Good luck!</i>
 """
-            keyboard = [
-                [
-                    InlineKeyboardButton("🎰 Slots", callback_data="game_slots"),
-                    InlineKeyboardButton("🃏 Blackjack", callback_data="game_blackjack")
-                ],
-                [
-                    InlineKeyboardButton("🎲 Dice", callback_data="game_dice"),
-                    InlineKeyboardButton("🪙 Coin Flip", callback_data="game_coinflip")
-                ],
-                [
-                    InlineKeyboardButton("🎯 Roulette", callback_data="game_roulette"),
-                    InlineKeyboardButton("🂠 Poker", callback_data="game_poker")
-                ],
-                [
-                    InlineKeyboardButton("🔮 Dice Predict", callback_data="game_dice_predict")
-                ],
-                [
-                    InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")
-                ]
+        
+        # Always show all game buttons
+        keyboard = [
+            [
+                InlineKeyboardButton("🎰 Slots", callback_data="game_slots"),
+                InlineKeyboardButton("🃏 Blackjack", callback_data="game_blackjack")
+            ],
+            [
+                InlineKeyboardButton("🎲 Dice", callback_data="game_dice"),
+                InlineKeyboardButton("🪙 Coin Flip", callback_data="game_coinflip")
+            ],
+            [
+                InlineKeyboardButton("🎯 Roulette", callback_data="game_roulette"),
+                InlineKeyboardButton("🂠 Poker", callback_data="game_poker")
+            ],
+            [
+                InlineKeyboardButton("🔮 Dice Predict", callback_data="game_dice_predict")
             ]
+        ]
+        
+        # Add funding options if balance is low
+        if balance < 1.0:
+            keyboard.append([
+                InlineKeyboardButton("� Deposit", callback_data="deposit"),
+                InlineKeyboardButton("🎁 Bonus", callback_data="weekly_bonus")
+            ])
+        
+        keyboard.append([InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")])
         
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     
