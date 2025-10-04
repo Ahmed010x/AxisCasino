@@ -210,7 +210,7 @@ WITHDRAW_LTC_ADDRESS = "WITHDRAW_LTC_ADDRESS"
 MIN_WITHDRAWAL_USD = float(os.environ.get("MIN_WITHDRAWAL_USD", "1.00"))
 MAX_WITHDRAWAL_USD = float(os.environ.get("MAX_WITHDRAWAL_USD", "10000.00"))
 MAX_WITHDRAWAL_USD_DAILY = float(os.environ.get("MAX_WITHDRAWAL_USD_DAILY", "10000.00"))
-WITHDRAWAL_FEE_PERCENT = float(os.environ.get("WITHDRAWAL_FEE_PERCENT", "0.02"))
+WITHDRAWAL_FEE_PERCENT = float(os.environ.get("WITHDRAWAL_FEE_PERCENT", "0.01"))
 WITHDRAWAL_COOLDOWN_SECONDS = int(os.environ.get("WITHDRAWAL_COOLDOWN_SECONDS", "300"))
 MIN_WITHDRAWAL_FEE = 1.0
 
@@ -1936,7 +1936,13 @@ async def handle_withdraw_amount_input(update: Update, context: ContextTypes.DEF
         user_balance = user.get('balance', 0.0)
         if amount_usd > user_balance:
             balance_str = await format_usd(user_balance)
-            await update.message.reply_text(f"❌ Insufficient balance. Your balance: {balance_str}")
+            await update.message.reply_text(
+                f"❌ <b>Insufficient Balance</b>\n\n"
+                f"Your balance: {balance_str}\n"
+                f"Withdrawal amount: ${amount_usd:.2f} USD\n\n"
+                f"You need ${amount_usd - user_balance:.2f} more to complete this withdrawal.",
+                parse_mode=ParseMode.HTML
+            )
             return
             
         # Check limits
@@ -2560,8 +2566,51 @@ If your referral loses $100, you earn $20!
     
     async def games_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show games menu"""
-        text = """
+        user_id = update.callback_query.from_user.id
+        user = await get_user(user_id)
+        
+        if not user:
+            await update.callback_query.edit_message_text(
+                "❌ User not found. Please use /start to register.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="main_panel")]])
+            )
+            return
+        
+        balance = user['balance']
+        balance_str = await format_usd(balance)
+        
+        # Check if user has insufficient balance
+        if balance < 1.0:
+            text = f"""
 🎮 <b>CASINO GAMES</b> 🎮
+
+💰 <b>Your Balance:</b> {balance_str}
+
+⚠️ <b>INSUFFICIENT BALANCE</b> ⚠️
+
+You need at least $1.00 to play games.
+
+<b>Get started with:</b>
+• 💳 Make a deposit
+• 🎁 Claim your weekly bonus
+• 👥 Use a referral code
+
+<i>Fund your account to start playing!</i>
+"""
+            keyboard = [
+                [
+                    InlineKeyboardButton("💳 Deposit", callback_data="deposit"),
+                    InlineKeyboardButton("🎁 Weekly Bonus", callback_data="weekly_bonus")
+                ],
+                [
+                    InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")
+                ]
+            ]
+        else:
+            text = f"""
+🎮 <b>CASINO GAMES</b> 🎮
+
+💰 <b>Your Balance:</b> {balance_str}
 
 Choose your game:
 
@@ -2575,26 +2624,27 @@ Choose your game:
 
 <i>Good luck!</i>
 """
-        keyboard = [
-            [
-                InlineKeyboardButton("🎰 Slots", callback_data="game_slots"),
-                InlineKeyboardButton("🃏 Blackjack", callback_data="game_blackjack")
-            ],
-            [
-                InlineKeyboardButton("🎲 Dice", callback_data="game_dice"),
-                InlineKeyboardButton("🪙 Coin Flip", callback_data="game_coinflip")
-            ],
-            [
-                InlineKeyboardButton("🎯 Roulette", callback_data="game_roulette"),
-                InlineKeyboardButton("🂠 Poker", callback_data="game_poker")
-            ],
-            [
-                InlineKeyboardButton("🔮 Dice Predict", callback_data="game_dice_predict")
-            ],
-            [
-                InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")
+            keyboard = [
+                [
+                    InlineKeyboardButton("🎰 Slots", callback_data="game_slots"),
+                    InlineKeyboardButton("🃏 Blackjack", callback_data="game_blackjack")
+                ],
+                [
+                    InlineKeyboardButton("🎲 Dice", callback_data="game_dice"),
+                    InlineKeyboardButton("🪙 Coin Flip", callback_data="game_coinflip")
+                ],
+                [
+                    InlineKeyboardButton("🎯 Roulette", callback_data="game_roulette"),
+                    InlineKeyboardButton("🂠 Poker", callback_data="game_poker")
+                ],
+                [
+                    InlineKeyboardButton("🔮 Dice Predict", callback_data="game_dice_predict")
+                ],
+                [
+                    InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")
+                ]
             ]
-        ]
+        
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     
     async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
