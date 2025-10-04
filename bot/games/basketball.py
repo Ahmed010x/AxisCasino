@@ -1,27 +1,22 @@
 """
 Basketball Game - 1v1 Player vs Bot
 
-Interactive basketball game using Telegram's basketball emoji animation!
-Both player and bot send basketball emojis, and the animation results determine winners.
+Telegram emoji-based basketball game where player competes against the bot!
+Both player and bot take shots using Telegram's basketball dice emoji (🏀).
 First to reach the target score wins!
 """
 
 import asyncio
+import random
 from typing import Tuple
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from telegram.constants import ParseMode, MessageEntityType
-from telegram.error import TelegramError
+from telegram.constants import ParseMode
 import sys
 import os
+import asyncio
 
-import sys
-import os
-
-# Add 💰 <b>Bet Amount:</b> {bet_str}
-{result_emoji} {result_text}
-
-💳 <b>New Balance:</b> {balance_str} directory to path for imports
+# Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 # Bet limits
@@ -29,10 +24,10 @@ MIN_BET = 0.50
 MAX_BET = 1000.0
 
 # Game settings
-TARGET_SCORE = 3  # First to 3 points wins
+DEFAULT_TARGET_SCORE = 3  # Default target score
 WIN_MULTIPLIER = 1.9  # 1.9x payout for winning
 
-# Basketball dice values (from Telegram's basketball emoji):
+# Basketball dice values:
 # 1-2: Miss (0 points)
 # 3: Near miss (0 points, but close!)
 # 4-5: Score! (1 point)
@@ -49,6 +44,8 @@ def get_shot_result(dice_value: int) -> Tuple[int, str, str]:
     else:  # 4 or 5
         return 1, "SCORE", "🏀"
 
+# --- Interactive Basketball Emoji Functions ---
+
 async def send_basketball_emoji(update: Update, context: ContextTypes.DEFAULT_TYPE, is_bot: bool = False) -> int:
     """
     Send a basketball emoji and return the animation result.
@@ -62,19 +59,11 @@ async def send_basketball_emoji(update: Update, context: ContextTypes.DEFAULT_TY
         int: The dice value (1-5) from the basketball animation
     """
     try:
-        if is_bot:
-            # Bot sends basketball emoji
-            message = await context.bot.send_dice(
-                chat_id=update.effective_chat.id,
-                emoji="🏀"
-            )
-        else:
-            # This would be the player's shot, but we'll simulate it since 
-            # we can't make the user send an emoji programmatically
-            message = await context.bot.send_dice(
-                chat_id=update.effective_chat.id,
-                emoji="🏀"
-            )
+        # Both bot and player shots use the same emoji sending mechanism
+        message = await context.bot.send_dice(
+            chat_id=update.effective_chat.id,
+            emoji="🏀"
+        )
         
         # Wait a moment for the animation to complete
         await asyncio.sleep(3)
@@ -82,21 +71,22 @@ async def send_basketball_emoji(update: Update, context: ContextTypes.DEFAULT_TY
         # Get the dice value from the message
         return message.dice.value
         
-    except TelegramError as e:
+    except Exception as e:
         # Fallback to random if emoji fails
         import random
         return random.randint(1, 5)
 
-async def play_basketball_1v1_interactive(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int, bet_amount: float) -> dict:
+async def play_basketball_1v1_interactive(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int, bet_amount: float, target_score: int = DEFAULT_TARGET_SCORE) -> dict:
     """
     Play an interactive 1v1 basketball game against the bot using real Telegram emojis.
-    First to TARGET_SCORE points wins.
+    First to target_score points wins.
     
     Args:
         update: Telegram update object
         context: Bot context
         user_id: User's Telegram ID
         bet_amount: Amount to bet in USD
+        target_score: Points needed to win (1, 2, or 3)
     
     Returns:
         dict with complete game results
@@ -115,13 +105,13 @@ async def play_basketball_1v1_interactive(update: Update, context: ContextTypes.
     await update.effective_message.reply_text(
         f"🏀 <b>BASKETBALL 1v1 MATCH STARTING!</b> 🏀\n\n"
         f"💰 Bet: {await format_usd(bet_amount)}\n"
-        f"🎯 First to {TARGET_SCORE} points wins!\n\n"
+        f"🎯 First to {target_score} points wins!\n\n"
         f"<i>Watch the basketball animations to see the results!</i>",
         parse_mode=ParseMode.HTML
     )
     
     # Play until someone reaches target score
-    while player_score < TARGET_SCORE and bot_score < TARGET_SCORE:
+    while player_score < target_score and bot_score < target_score:
         # Send round announcement
         await update.effective_message.reply_text(
             f"📢 <b>Round {round_num}</b>\n"
@@ -196,7 +186,7 @@ async def play_basketball_1v1_interactive(update: Update, context: ContextTypes.
         round_num += 1
         
         # Brief pause before next round
-        if player_score < TARGET_SCORE and bot_score < TARGET_SCORE:
+        if player_score < target_score and bot_score < target_score:
             await asyncio.sleep(2)
         
         # Safety check - max 20 rounds (since ties don't count, may take longer)
@@ -204,7 +194,7 @@ async def play_basketball_1v1_interactive(update: Update, context: ContextTypes.
             break
     
     # Determine winner
-    player_won = player_score >= TARGET_SCORE and player_score > bot_score
+    player_won = player_score >= target_score and player_score > bot_score
     
     # Calculate winnings
     if player_won:
@@ -239,13 +229,20 @@ async def play_basketball_1v1_interactive(update: Update, context: ContextTypes.
         'total_rounds': len(game_log)
     }
 
-# Keep the old function for backwards compatibility (used in tests)
-async def play_basketball_1v1(user_id: int, bet_amount: float) -> dict:
+
+async def play_basketball_1v1(user_id: int, bet_amount: float, target_score: int = DEFAULT_TARGET_SCORE) -> dict:
     """
-    Non-interactive version for testing and backwards compatibility.
-    """
-    import random
+    Play a 1v1 basketball game against the bot.
+    First to target_score points wins.
     
+    Args:
+        user_id: User's Telegram ID
+        bet_amount: Amount to bet in USD
+        target_score: Points needed to win (1, 2, or 3)
+    
+    Returns:
+        dict with complete game results
+    """
     from main import get_user, update_balance, deduct_balance, log_game_session, format_usd
     
     # Initialize scores
@@ -257,7 +254,7 @@ async def play_basketball_1v1(user_id: int, bet_amount: float) -> dict:
     round_num = 1
     
     # Play until someone reaches target score
-    while player_score < TARGET_SCORE and bot_score < TARGET_SCORE:
+    while player_score < target_score and bot_score < target_score:
         # Player's shot
         player_dice = random.randint(1, 5)
         player_points, player_desc, player_emoji = get_shot_result(player_dice)
@@ -273,11 +270,14 @@ async def play_basketball_1v1(user_id: int, bet_amount: float) -> dict:
         round_points_bot = 0
         
         if player_made_shot and not bot_made_shot:
+            # Player scores, bot misses = Player gets 1 point
             round_points_player = 1
             player_score += 1
         elif bot_made_shot and not player_made_shot:
+            # Bot scores, player misses = Bot gets 1 point
             round_points_bot = 1
             bot_score += 1
+        # If both score or both miss, no points awarded (tie round)
         
         # Log this round
         game_log.append({
@@ -297,11 +297,12 @@ async def play_basketball_1v1(user_id: int, bet_amount: float) -> dict:
         
         round_num += 1
         
+        # Safety check - max 20 rounds (since ties don't count, may take longer)
         if round_num > 20:
             break
     
     # Determine winner
-    player_won = player_score >= TARGET_SCORE and player_score > bot_score
+    player_won = player_score >= target_score and player_score > bot_score
     
     # Calculate winnings
     if player_won:
@@ -358,44 +359,42 @@ async def show_basketball_menu(update: Update, context: ContextTypes.DEFAULT_TYP
 💰 <b>Balance:</b> {balance_str}
 
 🎯 <b>How to Play:</b>
-You vs Bot in a basketball shootout!
-• Both take shots each round
-• Score when you make it and bot misses
-• Bot scores when bot makes it and you miss
-• If both score or both miss: no points (tie round)
-• First to {TARGET_SCORE} points wins!
+Interactive basketball shootout using real Telegram emoji!
+• You and the bot both send basketball emojis 🏀
+• The animated emoji result determines if you score
+• First to win the chosen number of points!
 • Win {WIN_MULTIPLIER}x your bet!
 
-<b>Scoring:</b>
-• 🚫 Miss (1-2): 0 points
-• 😬 Rim (3): 0 points (close!)
-• 🏀 Score (4-5): 1 point
+<b>Interactive Gameplay:</b>
+• 🏀 You send a basketball emoji
+• 🤖 Bot sends a basketball emoji  
+• Real emoji animations determine results!
+• Watch the basketball spin and see if it goes in
 
-<b>Point System:</b>
+<b>Scoring System:</b>
+• 🚫 Miss: Ball doesn't go in (0 points)
+• 😬 Near Miss: Close but no score (0 points)
+• 🏀 Score: Ball goes in! (+1 point)
+
+<b>1v1 Match Rules:</b>
 🟢 You score + Bot misses = +1 point for you
 🔴 Bot scores + You miss = +1 point for bot
-🟡 Both score or both miss = Tie (no points)
+🟡 Both score or both miss = Tie round (no points)
 
 💵 <b>Min Bet:</b> ${MIN_BET:.2f}
 💰 <b>Max Bet:</b> ${MAX_BET:.2f}
 🎯 <b>Win Multiplier:</b> {WIN_MULTIPLIER}x
 
-<b>Choose your bet amount:</b>
+<b>Choose target score to win:</b>
 """
     
     keyboard = [
         [
-            InlineKeyboardButton("$1", callback_data="basketball_bet_1"),
-            InlineKeyboardButton("$5", callback_data="basketball_bet_5"),
-            InlineKeyboardButton("$10", callback_data="basketball_bet_10")
+            InlineKeyboardButton("🏆 First to 1 Point", callback_data="basketball_target_1"),
+            InlineKeyboardButton("🏆 First to 2 Points", callback_data="basketball_target_2")
         ],
         [
-            InlineKeyboardButton("$25", callback_data="basketball_bet_25"),
-            InlineKeyboardButton("$50", callback_data="basketball_bet_50"),
-            InlineKeyboardButton("$100", callback_data="basketball_bet_100")
-        ],
-        [
-            InlineKeyboardButton("✏️ Custom Amount", callback_data="basketball_custom_bet")
+            InlineKeyboardButton("🏆 First to 3 Points", callback_data="basketball_target_3")
         ],
         [
             InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")
@@ -416,6 +415,12 @@ async def basketball_bet_callback(update: Update, context: ContextTypes.DEFAULT_
     user_id = query.from_user.id
     
     from main import get_user, format_usd
+    
+    # Check if target score is set
+    if 'basketball_target_score' not in context.user_data:
+        await query.answer("❌ Please select target score first", show_alert=True)
+        await show_basketball_menu(update, context)
+        return
     
     # Get bet amount from callback data
     bet_amount_str = query.data.split('_')[-1]
@@ -446,31 +451,32 @@ async def basketball_bet_callback(update: Update, context: ContextTypes.DEFAULT_
         await query.answer(f"❌ Insufficient balance! You have {balance_str}", show_alert=True)
         return
     
-    # Store bet amount and show shot selection
+    # Store bet amount and get target score
     context.user_data['basketball_bet_amount'] = bet_amount
+    target_score = context.user_data['basketball_target_score']
     
     bet_str = await format_usd(bet_amount)
     balance_str = await format_usd(user['balance'])
+    win_str = await format_usd(bet_amount * WIN_MULTIPLIER)
+    profit_str = await format_usd(bet_amount * (WIN_MULTIPLIER - 1))
     
     text = f"""
-🏀 <b>BASKETBALL GAME</b> 🏀
+🏀 <b>BASKETBALL 1v1 - READY TO PLAY!</b> 🏀
 
 💰 <b>Balance:</b> {balance_str}
 💵 <b>Bet Amount:</b> {bet_str}
+🎯 <b>Target Score:</b> First to {target_score} point{'s' if target_score > 1 else ''}
 
-🎯 <b>Choose your bet:</b>
+📊 <b>Potential Winnings:</b>
+� Win: {win_str}
+📈 Profit: {profit_str}
 
-🏀 <b>SCORE</b> (4-5 to win)
-  • 40% win chance
-  • Win: {await format_usd(bet_amount * 1.8)}
-  • Profit: +{await format_usd(bet_amount * 0.8)}
+🎮 <b>Game Rules:</b>
+• Interactive emoji basketball shootout!
+• First to {target_score} point{'s' if target_score > 1 else ''} wins!
+• Real Telegram emoji animations determine results
 
-🚫 <b>MISS</b> (1-3 to win)
-  • 60% win chance
-  • Win: {await format_usd(bet_amount * 1.5)}
-  • Profit: +{await format_usd(bet_amount * 0.5)}
-
-<b>What's your prediction?</b>
+<b>Ready to start?</b>
 """
     
     keyboard = [
@@ -498,8 +504,9 @@ async def basketball_play_callback(update: Update, context: ContextTypes.DEFAULT
     
     from main import get_user, deduct_balance, format_usd
     
-    # Get bet amount from context
+    # Get bet amount and target score from context
     bet_amount = context.user_data.get('basketball_bet_amount', 1.0)
+    target_score = context.user_data.get('basketball_target_score', DEFAULT_TARGET_SCORE)
     
     # Validate bet amount
     if bet_amount < MIN_BET or bet_amount > MAX_BET:
@@ -516,20 +523,19 @@ async def basketball_play_callback(update: Update, context: ContextTypes.DEFAULT
         balance_str = await format_usd(user['balance'])
         await query.edit_message_text(f"❌ Insufficient balance! You have {balance_str}")
         return
-     # Deduct bet amount
+    
+    # Deduct bet amount
     deducted = await deduct_balance(user_id, bet_amount)
     if not deducted:
         await query.edit_message_text("❌ Failed to place bet. Please try again.")
         return
-
-    # Play the interactive 1v1 game with real emoji animations
-    result = await play_basketball_1v1_interactive(update, context, user_id, bet_amount)
     
-    # Format game summary
+    # Play the interactive 1v1 game with real emoji animations
+    result = await play_basketball_1v1_interactive(update, context, user_id, bet_amount, target_score)
+    
+    # Format final summary (the detailed game was already shown during play)
     bet_str = await format_usd(result['bet_amount'])
     balance_str = await format_usd(result['new_balance'])
-    
-    # Since the interactive game already showed all the details, keep summary simple
     
     if result['player_won']:
         win_str = await format_usd(result['win_amount'])
@@ -541,19 +547,18 @@ async def basketball_play_callback(update: Update, context: ContextTypes.DEFAULT
         result_emoji = "😞"
         result_text = f"<b>BOT WINS!</b> 🤖\n📉 Lost: {loss_str}"
     
+    # Send final summary message
     text = f"""
-🏀 <b>BASKETBALL 1v1 RESULT</b> 🏀
+🏀 <b>GAME COMPLETE!</b> 🏀
 
 🎯 <b>Final Score:</b>
 👤 You: {result['player_score']} points
 🤖 Bot: {result['bot_score']} points
 
-{game_summary}
-
-� <b>Bet Amount:</b> {bet_str}
+💰 <b>Bet Amount:</b> {bet_str}
 {result_emoji} {result_text}
 
-� <b>New Balance:</b> {balance_str}
+💳 <b>New Balance:</b> {balance_str}
 
 <b>Play again?</b>
 """
@@ -565,7 +570,8 @@ async def basketball_play_callback(update: Update, context: ContextTypes.DEFAULT
         ]
     ]
     
-    await query.edit_message_text(
+    # Send new message instead of editing (since the interactive game shows progress)
+    await update.effective_message.reply_text(
         text,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode=ParseMode.HTML
@@ -608,8 +614,9 @@ async def handle_custom_bet_input(update: Update, context: ContextTypes.DEFAULT_
     # Store bet amount
     context.user_data['basketball_bet_amount'] = bet_amount
     context.user_data.pop('awaiting_basketball_custom_bet', None)
-    # Clear awaiting state
-    context.user_data.pop('awaiting_basketball_custom_bet', None)
+    
+    # Get target score (must be set before custom bet)
+    target_score = context.user_data.get('basketball_target_score', DEFAULT_TARGET_SCORE)
     
     # Deduct bet amount
     deducted = await deduct_balance(user_id, bet_amount)
@@ -617,8 +624,8 @@ async def handle_custom_bet_input(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text("❌ Failed to place bet. Please try again.")
         return
     
-    # Play the 1v1 game
-    result = await play_basketball_1v1(user_id, bet_amount)
+    # Play the 1v1 game with target score
+    result = await play_basketball_1v1(user_id, bet_amount, target_score)
     
     # Format game summary
     bet_str = await format_usd(result['bet_amount'])
@@ -692,13 +699,108 @@ async def basketball_custom_bet_callback(update: Update, context: ContextTypes.D
     query = update.callback_query
     await query.answer()
     
+    # Check if target score is set
+    if 'basketball_target_score' not in context.user_data:
+        await query.answer("❌ Please select target score first", show_alert=True)
+        await show_basketball_menu(update, context)
+        return
+    
     context.user_data['awaiting_basketball_custom_bet'] = True
+    
+    target_score = context.user_data['basketball_target_score']
     
     await query.edit_message_text(
         f"💵 <b>Enter your bet amount:</b>\n\n"
+        f"🎯 Target: First to {target_score} point{'s' if target_score > 1 else ''}\n"
         f"Min: ${MIN_BET:.2f}\n"
         f"Max: ${MAX_BET:.2f}\n\n"
         f"<i>Type the amount and send it.</i>",
+        parse_mode=ParseMode.HTML
+    )
+
+
+async def basketball_target_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle basketball target score selection."""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    from main import get_user, format_usd
+    
+    # Get target score from callback data
+    target_score_str = query.data.split('_')[-1]
+    
+    try:
+        target_score = int(target_score_str)
+    except ValueError:
+        await query.edit_message_text("❌ Invalid target score.")
+        return
+    
+    # Validate target score
+    if target_score not in [1, 2, 3]:
+        await query.answer("❌ Target score must be 1, 2, or 3", show_alert=True)
+        return
+    
+    # Store target score
+    context.user_data['basketball_target_score'] = target_score
+    
+    # Show bet selection
+    user = await get_user(user_id)
+    if not user:
+        await query.edit_message_text("❌ User not found.")
+        return
+    
+    balance_str = await format_usd(user['balance'])
+    
+    # Calculate game duration estimate
+    duration_text = {
+        1: "⚡ Quick Match (1-3 rounds)",
+        2: "🚀 Fast Match (2-6 rounds)", 
+        3: "🏀 Classic Match (3-9 rounds)"
+    }
+    
+    text = f"""
+🏀 <b>BASKETBALL 1v1 - TARGET: {target_score} POINT{'S' if target_score > 1 else ''}</b> 🏀
+
+💰 <b>Balance:</b> {balance_str}
+🎯 <b>Target Score:</b> First to {target_score} point{'s' if target_score > 1 else ''}
+⏱️ <b>Duration:</b> {duration_text[target_score]}
+
+🎮 <b>Game Format:</b>
+• Interactive basketball shootout using real Telegram emoji!
+• First to {target_score} point{'s' if target_score > 1 else ''} wins!
+• Win {WIN_MULTIPLIER}x your bet!
+
+💵 <b>Min Bet:</b> ${MIN_BET:.2f}
+💰 <b>Max Bet:</b> ${MAX_BET:.2f}
+🎯 <b>Win Multiplier:</b> {WIN_MULTIPLIER}x
+
+<b>Choose your bet amount:</b>
+"""
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("$1", callback_data="basketball_bet_1"),
+            InlineKeyboardButton("$5", callback_data="basketball_bet_5"),
+            InlineKeyboardButton("$10", callback_data="basketball_bet_10")
+        ],
+        [
+            InlineKeyboardButton("$25", callback_data="basketball_bet_25"),
+            InlineKeyboardButton("$50", callback_data="basketball_bet_50"),
+            InlineKeyboardButton("$100", callback_data="basketball_bet_100")
+        ],
+        [
+            InlineKeyboardButton("✏️ Custom Amount", callback_data="basketball_custom_bet")
+        ],
+        [
+            InlineKeyboardButton("🔄 Change Target", callback_data="basketball"),
+            InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")
+        ]
+    ]
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode=ParseMode.HTML
     )
 
@@ -708,8 +810,10 @@ async def handle_basketball_callback(update: Update, context: ContextTypes.DEFAU
     query = update.callback_query
     data = query.data
     
-    if data == "game_basketball":
+    if data == "game_basketball" or data == "basketball":
         await show_basketball_menu(update, context)
+    elif data.startswith("basketball_target_"):
+        await basketball_target_callback(update, context)
     elif data.startswith("basketball_bet_") and data != "basketball_bet_custom":
         await basketball_bet_callback(update, context)
     elif data == "basketball_custom_bet":
