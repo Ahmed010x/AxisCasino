@@ -66,33 +66,50 @@ async def play_basketball_1v1(user_id: int, bet_amount: float) -> dict:
     
     # Play until someone reaches target score
     while player_score < TARGET_SCORE and bot_score < TARGET_SCORE:
-        # Player's turn
+        # Player's shot
         player_dice = random.randint(1, 5)
         player_points, player_desc, player_emoji = get_shot_result(player_dice)
-        player_score += player_points
+        player_made_shot = player_points > 0
         
-        # Bot's turn
+        # Bot's shot
         bot_dice = random.randint(1, 5)
         bot_points, bot_desc, bot_emoji = get_shot_result(bot_dice)
-        bot_score += bot_points
+        bot_made_shot = bot_points > 0
+        
+        # Award points based on who scored
+        round_points_player = 0
+        round_points_bot = 0
+        
+        if player_made_shot and not bot_made_shot:
+            # Player scores, bot misses = Player gets 1 point
+            round_points_player = 1
+            player_score += 1
+        elif bot_made_shot and not player_made_shot:
+            # Bot scores, player misses = Bot gets 1 point
+            round_points_bot = 1
+            bot_score += 1
+        # If both score or both miss, no points awarded (tie round)
         
         # Log this round
         game_log.append({
             'round': round_num,
             'player_dice': player_dice,
             'player_result': f"{player_emoji} {player_desc}",
-            'player_points': player_points,
+            'player_made_shot': player_made_shot,
+            'player_round_points': round_points_player,
             'bot_dice': bot_dice,
             'bot_result': f"{bot_emoji} {bot_desc}",
-            'bot_points': bot_points,
+            'bot_made_shot': bot_made_shot,
+            'bot_round_points': round_points_bot,
             'player_score': player_score,
-            'bot_score': bot_score
+            'bot_score': bot_score,
+            'round_result': "PLAYER" if round_points_player > 0 else "BOT" if round_points_bot > 0 else "TIE"
         })
         
         round_num += 1
         
-        # Safety check - max 10 rounds
-        if round_num > 10:
+        # Safety check - max 20 rounds (since ties don't count, may take longer)
+        if round_num > 20:
             break
     
     # Determine winner
@@ -154,7 +171,11 @@ async def show_basketball_menu(update: Update, context: ContextTypes.DEFAULT_TYP
 
 🎯 <b>How to Play:</b>
 You vs Bot in a basketball shootout!
-• First to {TARGET_SCORE} points wins
+• Both take shots each round
+• Score when you make it and bot misses
+• Bot scores when bot makes it and you miss
+• If both score or both miss: no points (tie round)
+• First to {TARGET_SCORE} points wins!
 • Win {WIN_MULTIPLIER}x your bet!
 
 <b>Scoring:</b>
@@ -162,10 +183,10 @@ You vs Bot in a basketball shootout!
 • 😬 Rim (3): 0 points (close!)
 • 🏀 Score (4-5): 1 point
 
-<b>Game Flow:</b>
-1. You and bot take turns shooting
-2. Each successful shot = 1 point
-3. First to {TARGET_SCORE} points wins the game!
+<b>Point System:</b>
+🟢 You score + Bot misses = +1 point for you
+🔴 Bot scores + You miss = +1 point for bot
+🟡 Both score or both miss = Tie (no points)
 
 💵 <b>Min Bet:</b> ${MIN_BET:.2f}
 💰 <b>Max Bet:</b> ${MAX_BET:.2f}
@@ -324,9 +345,23 @@ async def basketball_play_callback(update: Update, context: ContextTypes.DEFAULT
     # Build game log display
     game_summary = ""
     for round_data in result['game_log']:
-        game_summary += f"\n<b>Round {round_data['round']}:</b>\n"
-        game_summary += f"👤 You: {round_data['player_result']} (+{round_data['player_points']})\n"
-        game_summary += f"🤖 Bot: {round_data['bot_result']} (+{round_data['bot_points']})\n"
+        round_result_emoji = ""
+        if round_data['round_result'] == "PLAYER":
+            round_result_emoji = "🟢"
+        elif round_data['round_result'] == "BOT":
+            round_result_emoji = "🔴"
+        else:
+            round_result_emoji = "🟡"
+        
+        game_summary += f"\n<b>Round {round_data['round']}:</b> {round_result_emoji}\n"
+        game_summary += f"👤 You: {round_data['player_result']}"
+        if round_data['player_round_points'] > 0:
+            game_summary += f" (+1 point)"
+        game_summary += f"\n"
+        game_summary += f"🤖 Bot: {round_data['bot_result']}"
+        if round_data['bot_round_points'] > 0:
+            game_summary += f" (+1 point)"
+        game_summary += f"\n"
         game_summary += f"📊 Score: {round_data['player_score']}-{round_data['bot_score']}\n"
     
     if result['player_won']:
@@ -377,7 +412,7 @@ async def handle_custom_bet_input(update: Update, context: ContextTypes.DEFAULT_
     """Handle custom bet amount input for basketball."""
     user_id = update.message.from_user.id
     
-    from main import get_user, format_usd
+    from main import get_user, format_usd, deduct_balance
     
     try:
         bet_amount = float(update.message.text.strip().replace('$', ''))
@@ -406,35 +441,75 @@ async def handle_custom_bet_input(update: Update, context: ContextTypes.DEFAULT_
     # Store bet amount
     context.user_data['basketball_bet_amount'] = bet_amount
     context.user_data.pop('awaiting_basketball_custom_bet', None)
+    # Clear awaiting state
+    context.user_data.pop('awaiting_basketball_custom_bet', None)
     
-    # Show shot selection
-    bet_str = await format_usd(bet_amount)
-    balance_str = await format_usd(user['balance'])
+    # Deduct bet amount
+    deducted = await deduct_balance(user_id, bet_amount)
+    if not deducted:
+        await update.message.reply_text("❌ Failed to place bet. Please try again.")
+        return
+    
+    # Play the 1v1 game
+    result = await play_basketball_1v1(user_id, bet_amount)
+    
+    # Format game summary
+    bet_str = await format_usd(result['bet_amount'])
+    balance_str = await format_usd(result['new_balance'])
+    
+    # Build game log display (same as in callback handler)
+    game_summary = ""
+    for round_data in result['game_log']:
+        round_result_emoji = ""
+        if round_data['round_result'] == "PLAYER":
+            round_result_emoji = "🟢"
+        elif round_data['round_result'] == "BOT":
+            round_result_emoji = "🔴"
+        else:
+            round_result_emoji = "�"
+        
+        game_summary += f"\n<b>Round {round_data['round']}:</b> {round_result_emoji}\n"
+        game_summary += f"👤 You: {round_data['player_result']}"
+        if round_data['player_round_points'] > 0:
+            game_summary += f" (+1 point)"
+        game_summary += f"\n"
+        game_summary += f"🤖 Bot: {round_data['bot_result']}"
+        if round_data['bot_round_points'] > 0:
+            game_summary += f" (+1 point)"
+        game_summary += f"\n"
+        game_summary += f"📊 Score: {round_data['player_score']}-{round_data['bot_score']}\n"
+    
+    if result['player_won']:
+        win_str = await format_usd(result['win_amount'])
+        profit_str = await format_usd(result['net_result'])
+        result_emoji = "🎉"
+        result_text = f"<b>YOU WIN!</b> 🏆\n💰 Won: {win_str}\n📈 Profit: {profit_str}"
+    else:
+        loss_str = await format_usd(result['bet_amount'])
+        result_emoji = "😞"
+        result_text = f"<b>BOT WINS!</b> 🤖\n📉 Lost: {loss_str}"
     
     text = f"""
-🏀 <b>BASKETBALL GAME</b> 🏀
+🏀 <b>BASKETBALL 1v1 RESULT</b> 🏀
 
-💰 <b>Balance:</b> {balance_str}
+🎯 <b>Final Score:</b>
+👤 You: {result['player_score']} points
+🤖 Bot: {result['bot_score']} points
+
+{game_summary}
+
 💵 <b>Bet Amount:</b> {bet_str}
+{result_emoji} {result_text}
 
-🎯 <b>Choose your bet:</b>
+📊 <b>New Balance:</b> {balance_str}
 
-🏀 <b>SCORE</b> (4-5 to win)
-  • 40% win chance
-  • Win: {await format_usd(bet_amount * 1.8)}
-
-🚫 <b>MISS</b> (1-3 to win)
-  • 60% win chance
-  • Win: {await format_usd(bet_amount * 1.5)}
+<b>Play again?</b>
 """
     
     keyboard = [
         [
-            InlineKeyboardButton("🏀 BET SCORE", callback_data="basketball_play_score"),
-            InlineKeyboardButton("🚫 BET MISS", callback_data="basketball_play_miss")
-        ],
-        [
-            InlineKeyboardButton("🔙 Change Bet", callback_data="game_basketball")
+            InlineKeyboardButton("� Play Again", callback_data="game_basketball"),
+            InlineKeyboardButton("🎮 All Games", callback_data="mini_app_centre")
         ]
     ]
     
