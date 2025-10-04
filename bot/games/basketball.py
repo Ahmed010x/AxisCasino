@@ -357,23 +357,27 @@ async def show_basketball_menu(update: Update, context: ContextTypes.DEFAULT_TYP
 💰 <b>Balance:</b> {balance_str}
 
 🎯 <b>How to Play:</b>
-You vs Bot in a basketball shootout!
-• Both take shots each round
-• Score when you make it and bot misses
-• Bot scores when bot makes it and you miss
-• If both score or both miss: no points (tie round)
-• First to {TARGET_SCORE} points wins!
+Interactive basketball shootout using real Telegram emoji!
+• You and the bot both send basketball emojis 🏀
+• The animated emoji result determines if you score
+• First to {TARGET_SCORE} points wins the match!
 • Win {WIN_MULTIPLIER}x your bet!
 
-<b>Scoring:</b>
-• 🚫 Miss (1-2): 0 points
-• 😬 Rim (3): 0 points (close!)
-• 🏀 Score (4-5): 1 point
+<b>Interactive Gameplay:</b>
+• 🏀 You send a basketball emoji
+• 🤖 Bot sends a basketball emoji  
+• Real emoji animations determine results!
+• Watch the basketball spin and see if it goes in
 
-<b>Point System:</b>
+<b>Scoring System:</b>
+• 🚫 Miss: Ball doesn't go in (0 points)
+• 😬 Near Miss: Close but no score (0 points)
+• 🏀 Score: Ball goes in! (+1 point)
+
+<b>1v1 Match Rules:</b>
 🟢 You score + Bot misses = +1 point for you
 🔴 Bot scores + You miss = +1 point for bot
-🟡 Both score or both miss = Tie (no points)
+🟡 Both score or both miss = Tie round (no points)
 
 💵 <b>Min Bet:</b> ${MIN_BET:.2f}
 💰 <b>Max Bet:</b> ${MAX_BET:.2f}
