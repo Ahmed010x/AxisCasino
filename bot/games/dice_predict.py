@@ -125,7 +125,7 @@ async def show_dice_predict_menu(update: Update, context: ContextTypes.DEFAULT_T
     keyboard.append(custom_row)
     
     # Back button
-    keyboard.append([InlineKeyboardButton("🔙 Back to Games", callback_data="games")])
+    keyboard.append([InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -570,7 +570,7 @@ async def play_dice_predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
         [
             InlineKeyboardButton("🎲 New Bet", callback_data="game_dice_predict"),
-            InlineKeyboardButton("🎮 Other Games", callback_data="games")
+            InlineKeyboardButton("🎮 Other Games", callback_data="mini_app_centre")
         ]
     ]
     

@@ -2455,15 +2455,17 @@ If your referral loses $100, you earn $20!
         if data.startswith('deposit_') or data.startswith('withdraw_') or data.startswith('check_payment_'):
             return
         
-        if data == "main_panel" or data == "start":
+        if data == "main_panel":
             # Return to main panel (simulate /start)
             await start_panel_callback(update, context)
         elif data == "deposit":
             await deposit_callback(update, context)
         elif data == "withdraw":
             await withdraw_start(update, context)
-        elif data == "mini_app_centre" or data == "games":
-            # Both "mini_app_centre" and "games" go to games menu
+        elif data == "mini_app_centre":
+            await games_menu_callback(update, context)
+        elif data == "games":
+            # Alternative callback data for "Back to Games" - redirect to games menu
             await games_menu_callback(update, context)
         elif data == "referral_menu":
             await referral_menu_callback(update, context)
@@ -2473,12 +2475,8 @@ If your referral loses $100, you earn $20!
             await help_menu_callback(update, context)
         elif data == "admin_panel" and (is_admin(user_id) or is_owner(user_id)):
             await admin_panel_callback(update, context)
-        elif data == "bonus_menu" or data == "weekly_bonus":
+        elif data == "bonus_menu":
             await bonus_menu_callback(update, context)
-        elif data == "help" or data == "help_menu":
-            # Some games use "help" for main menu (legacy)
-            # Route to main panel instead
-            await start_panel_callback(update, context)
         # Game handlers
         elif data == "game_slots":
             await game_slots_callback(update, context)
@@ -2507,6 +2505,14 @@ If your referral loses $100, you earn $20!
             await handle_dice_predict_callback(update, context)
         elif data.startswith("coinflip_"):
             await handle_coinflip_callback(update, context)
+        elif data.startswith("roulette_"):
+            await handle_roulette_callback(update, context)
+        elif data.startswith("poker_"):
+            await handle_poker_callback(update, context)
+        elif data == "weekly_bonus":
+            await weekly_bonus_callback(update, context)
+        elif data == "claim_weekly_bonus":
+            await claim_weekly_bonus_callback(update, context)
         else:
             await query.edit_message_text("❌ Unknown action. Returning to main menu.")
             await start_panel_callback(update, context)
@@ -2850,6 +2856,100 @@ Contact our support team for assistance.
             [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
         ]
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    async def weekly_bonus_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show weekly bonus information"""
+        user_id = update.callback_query.from_user.id
+        can_claim, seconds_remaining = await can_claim_weekly_bonus(user_id)
+        
+        if can_claim:
+            text = f"""
+🎁 <b>WEEKLY BONUS</b> 🎁
+
+✅ <b>Available!</b>
+
+💰 <b>Bonus Amount:</b> ${WEEKLY_BONUS_AMOUNT}
+🎯 <b>Frequency:</b> Every {WEEKLY_BONUS_INTERVAL} days
+
+<i>Click the button below to claim your bonus!</i>
+"""
+            keyboard = [
+                [InlineKeyboardButton("🎉 Claim Bonus", callback_data="claim_weekly_bonus")],
+                [InlineKeyboardButton("🔙 Back", callback_data="bonus_menu")]
+            ]
+        else:
+            # Calculate time remaining
+            hours_remaining = seconds_remaining // 3600
+            minutes_remaining = (seconds_remaining % 3600) // 60
+            
+            text = f"""
+🎁 <b>WEEKLY BONUS</b> 🎁
+
+⏰ <b>Not Available Yet</b>
+
+💰 <b>Bonus Amount:</b> ${WEEKLY_BONUS_AMOUNT}
+🎯 <b>Frequency:</b> Every {WEEKLY_BONUS_INTERVAL} days
+
+⏳ <b>Time Remaining:</b> {hours_remaining}h {minutes_remaining}m
+
+<i>Come back later to claim your next bonus!</i>
+"""
+            keyboard = [
+                [InlineKeyboardButton("🔙 Back", callback_data="bonus_menu")]
+            ]
+        
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    async def claim_weekly_bonus_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle weekly bonus claim"""
+        user_id = update.callback_query.from_user.id
+        can_claim, seconds_remaining = await can_claim_weekly_bonus(user_id)
+        
+        if not can_claim:
+            hours_remaining = seconds_remaining // 3600
+            minutes_remaining = (seconds_remaining % 3600) // 60
+            
+            text = f"""
+❌ <b>Bonus Not Available</b>
+
+You can claim your next weekly bonus in {hours_remaining}h {minutes_remaining}m.
+"""
+            keyboard = [
+                [InlineKeyboardButton("🔙 Back", callback_data="bonus_menu")]
+            ]
+            await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+            return
+        
+        # Claim the bonus
+        success = await claim_weekly_bonus(user_id)
+        
+        if success:
+            user = await get_user(user_id)
+            balance_str = await format_usd(user['balance'])
+            
+            text = f"""
+🎉 <b>BONUS CLAIMED!</b> 🎉
+
+💰 <b>Bonus Amount:</b> ${WEEKLY_BONUS_AMOUNT}
+💳 <b>New Balance:</b> {balance_str}
+
+<i>Congratulations! Your bonus has been added to your account.</i>
+"""
+        else:
+            text = f"""
+❌ <b>Error Claiming Bonus</b>
+
+Something went wrong while processing your bonus. Please try again later or contact support.
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre")],
+            [InlineKeyboardButton("🔙 Back", callback_data="bonus_menu")]
+        ]
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    # Add callback handler for claim_weekly_bonus
+    application.add_handler(CallbackQueryHandler(claim_weekly_bonus_callback, pattern=r"^claim_weekly_bonus$"))
     
     application.add_handler(CallbackQueryHandler(callback_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input_main))
