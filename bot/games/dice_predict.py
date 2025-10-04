@@ -105,23 +105,21 @@ async def show_dice_predict_menu(update: Update, context: ContextTypes.DEFAULT_T
     # Create betting keyboard
     keyboard = []
     
-    # Quick bet amounts
+    # Quick bet amounts - ALWAYS SHOW, even if balance is $0.00
     quick_bets = [5.0, 10.0, 25.0, 50.0, 100.0]
     row = []
     for bet in quick_bets:
-        if bet <= balance:
-            row.append(InlineKeyboardButton(f"${bet:.0f}", callback_data=f"dice_predict_bet_{bet}"))
-            if len(row) == 3:
-                keyboard.append(row)
-                row = []
+        row.append(InlineKeyboardButton(f"${bet:.0f}", callback_data=f"dice_predict_bet_{bet}"))
+        if len(row) == 3:
+            keyboard.append(row)
+            row = []
     if row:
         keyboard.append(row)
     
-    # Custom bet options
+    # Custom bet options - ALWAYS SHOW Half/All-In/Custom
     custom_row = []
-    if balance >= 1.0:
+    if balance >= MIN_BET:
         custom_row.append(InlineKeyboardButton("💰 Half", callback_data=f"dice_predict_bet_{balance/2}"))
-    if balance >= 2.0:
         custom_row.append(InlineKeyboardButton("🎰 All-In", callback_data=f"dice_predict_bet_{balance}"))
     custom_row.append(InlineKeyboardButton("✏️ Custom", callback_data="dice_predict_custom_bet"))
     keyboard.append(custom_row)
