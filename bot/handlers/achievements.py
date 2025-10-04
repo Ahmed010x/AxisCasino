@@ -68,11 +68,11 @@ ACHIEVEMENTS = {
         'reward': 150.0,
         'condition': lambda stats: stats['total_wagered'] >= 10000
     },
-    'dice_master': {
-        'name': '🎲 Dice Master',
-        'description': 'Win 50 Dice Predict games',
+    'prediction_master': {
+        'name': '🔮 Prediction Master',
+        'description': 'Win 50 Prediction games',
         'reward': 40.0,
-        'condition': lambda stats: stats.get('dice_predict_wins', 0) >= 50
+        'condition': lambda stats: stats.get('prediction_wins', 0) >= 50
     },
     'referral_pro': {
         'name': '👥 Referral Pro',
@@ -132,7 +132,7 @@ async def check_and_award_achievements(user_id: int, context: ContextTypes.DEFAU
             cursor = await db.execute("""
                 SELECT 
                     MAX(bet_amount) as biggest_bet,
-                    SUM(CASE WHEN game_type = 'dice_predict' AND win_amount > bet_amount THEN 1 ELSE 0 END) as dice_predict_wins,
+                    SUM(CASE WHEN game_type = 'prediction' AND win_amount > bet_amount THEN 1 ELSE 0 END) as prediction_wins,
                     SUM(win_amount - bet_amount) as net_profit
                 FROM game_sessions
                 WHERE user_id = ?
@@ -146,7 +146,7 @@ async def check_and_award_achievements(user_id: int, context: ContextTypes.DEFAU
                 'max_win_streak': user.get('max_win_streak', 0),
                 'total_wagered': user.get('total_wagered', 0.0),
                 'biggest_bet': game_stats[0] if game_stats and game_stats[0] else 0.0,
-                'dice_predict_wins': game_stats[1] if game_stats and game_stats[1] else 0,
+                'prediction_wins': game_stats[1] if game_stats and game_stats[1] else 0,
                 'net_profit': game_stats[2] if game_stats and game_stats[2] else 0.0,
                 'referral_count': user.get('referral_count', 0),
                 'total_deposited': user.get('total_deposited', 0.0),

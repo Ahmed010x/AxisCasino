@@ -32,7 +32,7 @@ def test_main_imports():
         from bot.games.coinflip import handle_coinflip_callback, handle_custom_bet_input as handle_coinflip_custom_bet
         print("✅ Coin Flip handler imported successfully")
         
-        from bot.games.dice_predict import handle_dice_predict_callback, handle_custom_bet_input as handle_dice_predict_custom_bet
+        from bot.games.prediction import handle_prediction_callback, handle_custom_bet_input as handle_prediction_custom_bet
         print("✅ Dice Predict handler imported successfully")
         
         print("\n🎉 All game handlers imported successfully from main.py perspective!")
@@ -55,7 +55,7 @@ def test_min_bet_values():
         ('coinflip', 'bot.games.coinflip'),
         ('slots', 'bot.games.slots'),
         ('dice', 'bot.games.dice'),
-        ('dice_predict', 'bot.games.dice_predict'),
+        ('prediction', 'bot.games.prediction'),
         ('blackjack', 'bot.games.blackjack'),
         ('roulette', 'bot.games.roulette'),
     ]
@@ -94,7 +94,7 @@ def test_callable_handlers():
         from bot.games.blackjack import handle_blackjack_callback
         from bot.games.roulette import handle_roulette_callback
         from bot.games.coinflip import handle_coinflip_callback
-        from bot.games.dice_predict import handle_dice_predict_callback
+        from bot.games.prediction import handle_prediction_callback
         
         handlers = {
             'Slots': handle_slots_callback,
@@ -102,7 +102,7 @@ def test_callable_handlers():
             'Blackjack': handle_blackjack_callback,
             'Roulette': handle_roulette_callback,
             'Coin Flip': handle_coinflip_callback,
-            'Dice Predict': handle_dice_predict_callback,
+            'Prediction': handle_prediction_callback,
         }
         
         all_callable = True

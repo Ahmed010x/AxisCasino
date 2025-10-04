@@ -51,7 +51,6 @@ from telegram.error import BadRequest, TelegramError
 
 # Apply nest_asyncio only if needed
 try:
-    import nest_asyncio
     nest_asyncio.apply()
 except ImportError:
     pass  # nest_asyncio not available
@@ -74,7 +73,7 @@ try:
     from bot.games.blackjack import handle_blackjack_callback, handle_custom_bet_input as handle_blackjack_custom_bet
     from bot.games.roulette import handle_roulette_callback, handle_custom_bet_input as handle_roulette_custom_bet
     from bot.games.coinflip import handle_coinflip_callback, handle_custom_bet_input as handle_coinflip_custom_bet
-    from bot.games.dice_predict import handle_dice_predict_callback, handle_custom_bet_input as handle_dice_predict_custom_bet
+    from bot.games.prediction import handle_prediction_callback, handle_custom_bet_input as handle_prediction_custom_bet
     from bot.games.basketball import handle_basketball_callback, handle_custom_bet_input as handle_basketball_custom_bet
 except ImportError as e:
     logger.warning(f"Could not import game modules: {e}")
@@ -83,8 +82,8 @@ except ImportError as e:
         await update.callback_query.edit_message_text("🚧 Slots game temporarily unavailable")
     async def handle_dice_callback(update, context):
         await update.callback_query.edit_message_text("🚧 Dice game temporarily unavailable")
-    async def handle_dice_predict_callback(update, context):
-        await update.callback_query.edit_message_text("🚧 Dice Predict game temporarily unavailable")
+    async def handle_prediction_callback(update, context):
+        await update.callback_query.edit_message_text("🚧 Prediction games temporarily unavailable")
     async def handle_blackjack_callback(update, context):
         await update.callback_query.edit_message_text("🚧 Blackjack game temporarily unavailable")
     async def handle_roulette_callback(update, context):
@@ -1651,8 +1650,8 @@ async def handle_text_input_main(update: Update, context: ContextTypes.DEFAULT_T
         await handle_coinflip_custom_bet(update, context)
     elif 'awaiting_dice_custom_bet' in context.user_data:
         await handle_dice_custom_bet(update, context)
-    elif 'awaiting_dice_predict_custom_bet' in context.user_data:
-        await handle_dice_predict_custom_bet(update, context)
+    elif 'awaiting_prediction_custom_bet' in context.user_data:
+        await handle_prediction_custom_bet(update, context)
     elif 'awaiting_basketball_custom_bet' in context.user_data:
         await handle_basketball_custom_bet(update, context)
     elif 'awaiting_blackjack_bet' in context.user_data:
@@ -2484,8 +2483,8 @@ If your referral loses $100, you earn $20!
             await game_blackjack_callback(update, context)
         elif data == "game_dice":
             await game_dice_callback(update, context)
-        elif data == "game_dice_predict":
-            await handle_dice_predict_callback(update, context)
+        elif data == "game_prediction":
+            await handle_prediction_callback(update, context)
         elif data == "game_basketball":
             await handle_basketball_callback(update, context)
         elif data == "game_coinflip":
@@ -2501,8 +2500,8 @@ If your referral loses $100, you earn $20!
             await handle_dice_bet(update, context)
         elif data.startswith("dice_play_"):
             await handle_dice_play(update, context)
-        elif data.startswith("dice_predict_"):
-            await handle_dice_predict_callback(update, context)
+        elif data.startswith("prediction_"):
+            await handle_prediction_callback(update, context)
         elif data.startswith("basketball_"):
             await handle_basketball_callback(update, context)
         elif data.startswith("coinflip_"):
@@ -2648,7 +2647,7 @@ Choose your game:
                 InlineKeyboardButton("🏀 Basketball", callback_data="game_basketball")
             ],
             [
-                InlineKeyboardButton("🔮 Dice Predict", callback_data="game_dice_predict")
+                InlineKeyboardButton("🔮 Prediction", callback_data="game_prediction")
             ]
         ]
         
