@@ -60,6 +60,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data == "game_dice":
         from bot.handlers.games import dice
         await dice(update, context)
+    elif data == "game_basketball":
+        from bot.handlers.games import basketball
+        await basketball(update, context)
     
     # Achievement callbacks
     elif data.startswith("check_achievements") or data.startswith("achievements_"):

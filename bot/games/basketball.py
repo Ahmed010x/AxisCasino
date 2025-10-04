@@ -1,9 +1,9 @@
 """
-Basketball Game
+Basketball Game - 1v1 Player vs Bot
 
-Telegram emoji-based basketball game where players shoot hoops!
-Uses Telegram's basketball dice emoji (🏀) which shows values 1-5.
-Players can bet on the outcome of the shot.
+Telegram emoji-based basketball game where player competes against the bot!
+Both player and bot take shots using Telegram's basketball dice emoji (🏀).
+First to reach the target score wins!
 """
 
 import random
@@ -21,94 +21,119 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 MIN_BET = 0.50
 MAX_BET = 1000.0
 
-# Basketball dice values:
-# 1-2: Miss (Ball doesn't go in)
-# 3: Near miss (Ball hits rim)
-# 4-5: Score! (Ball goes in the hoop)
+# Game settings
+TARGET_SCORE = 3  # First to 3 points wins
+WIN_MULTIPLIER = 1.9  # 1.9x payout for winning
 
-async def play_basketball_game(user_id: int, bet_type: str, bet_amount: float) -> dict:
+# Basketball dice values:
+# 1-2: Miss (0 points)
+# 3: Near miss (0 points, but close!)
+# 4-5: Score! (1 point)
+
+def get_shot_result(dice_value: int) -> Tuple[int, str, str]:
     """
-    Play a basketball game.
+    Get shot result from dice value.
+    Returns: (points, description, emoji)
+    """
+    if dice_value in [1, 2]:
+        return 0, "MISS", "🚫"
+    elif dice_value == 3:
+        return 0, "RIM", "😬"
+    else:  # 4 or 5
+        return 1, "SCORE", "🏀"
+
+async def play_basketball_1v1(user_id: int, bet_amount: float) -> dict:
+    """
+    Play a 1v1 basketball game against the bot.
+    First to TARGET_SCORE points wins.
     
     Args:
         user_id: User's Telegram ID
-        bet_type: 'score' (bet on making the shot) or 'miss' (bet on missing)
         bet_amount: Amount to bet in USD
     
     Returns:
-        dict with game results
+        dict with complete game results
     """
     from main import get_user, update_balance, deduct_balance, log_game_session, format_usd
     
-    # Basketball emoji dice values (1-5)
-    # In Telegram: 1-2 = miss, 3 = rim, 4-5 = score
-    dice_value = random.randint(1, 5)
+    # Initialize scores
+    player_score = 0
+    bot_score = 0
     
-    # Determine if shot scored
-    scored = dice_value >= 4  # 4 or 5 = score
+    # Game log for display
+    game_log = []
+    round_num = 1
     
-    # Determine if bet wins
-    is_win = False
-    payout_multiplier = 0
+    # Play until someone reaches target score
+    while player_score < TARGET_SCORE and bot_score < TARGET_SCORE:
+        # Player's turn
+        player_dice = random.randint(1, 5)
+        player_points, player_desc, player_emoji = get_shot_result(player_dice)
+        player_score += player_points
+        
+        # Bot's turn
+        bot_dice = random.randint(1, 5)
+        bot_points, bot_desc, bot_emoji = get_shot_result(bot_dice)
+        bot_score += bot_points
+        
+        # Log this round
+        game_log.append({
+            'round': round_num,
+            'player_dice': player_dice,
+            'player_result': f"{player_emoji} {player_desc}",
+            'player_points': player_points,
+            'bot_dice': bot_dice,
+            'bot_result': f"{bot_emoji} {bot_desc}",
+            'bot_points': bot_points,
+            'player_score': player_score,
+            'bot_score': bot_score
+        })
+        
+        round_num += 1
+        
+        # Safety check - max 10 rounds
+        if round_num > 10:
+            break
     
-    if bet_type == 'score':
-        is_win = scored
-        payout_multiplier = 1.8  # 1.8x payout (2/5 chance = 40%)
-        result_text = f"SCORE BET ({'WIN' if is_win else 'LOSE'})"
-    elif bet_type == 'miss':
-        is_win = not scored
-        payout_multiplier = 1.5  # 1.5x payout (3/5 chance = 60%)
-        result_text = f"MISS BET ({'WIN' if is_win else 'LOSE'})"
+    # Determine winner
+    player_won = player_score >= TARGET_SCORE and player_score > bot_score
     
     # Calculate winnings
-    if is_win:
-        win_amount = bet_amount * payout_multiplier
-        net_win = win_amount - bet_amount
+    if player_won:
+        win_amount = bet_amount * WIN_MULTIPLIER
+        net_result = win_amount - bet_amount
+        result_text = "PLAYER WINS"
     else:
         win_amount = 0
-        net_win = -bet_amount
+        net_result = -bet_amount
+        result_text = "BOT WINS"
     
     # Update balance
-    await update_balance(user_id, net_win)
+    await update_balance(user_id, net_result)
     
     # Log game session
-    await log_game_session(user_id, 'basketball', bet_amount, win_amount, result_text)
+    await log_game_session(user_id, 'basketball_1v1', bet_amount, win_amount, result_text)
     
     # Get updated balance
     user_data = await get_user(user_id)
     new_balance = user_data['balance'] if user_data else 0
     
-    # Get shot description
-    shot_result = get_shot_description(dice_value)
-    
     return {
-        'dice_value': dice_value,
-        'scored': scored,
-        'is_win': is_win,
+        'player_won': player_won,
+        'player_score': player_score,
+        'bot_score': bot_score,
+        'game_log': game_log,
         'bet_amount': bet_amount,
         'win_amount': win_amount,
-        'net_win': net_win,
+        'net_result': net_result,
         'new_balance': new_balance,
         'result_text': result_text,
-        'shot_result': shot_result,
-        'payout_multiplier': payout_multiplier
+        'total_rounds': len(game_log)
     }
-
-
-def get_shot_description(value: int) -> str:
-    """Get description for basketball shot result."""
-    descriptions = {
-        1: "🚫 **AIR BALL!** - Complete miss!",
-        2: "❌ **MISSED!** - Shot bounced off the backboard",
-        3: "😬 **SO CLOSE!** - Ball hit the rim!",
-        4: "🏀 **SWISH!** - Clean shot!",
-        5: "🔥 **PERFECT!** - Nothing but net!"
-    }
-    return descriptions.get(value, "🏀 Shot taken!")
 
 
 async def show_basketball_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show basketball game menu."""
+    """Show basketball 1v1 game menu."""
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
@@ -123,29 +148,28 @@ async def show_basketball_menu(update: Update, context: ContextTypes.DEFAULT_TYP
     balance_str = await format_usd(user['balance'])
     
     text = f"""
-🏀 <b>BASKETBALL GAME</b> 🏀
+🏀 <b>BASKETBALL 1v1</b> 🏀
 
 💰 <b>Balance:</b> {balance_str}
 
 🎯 <b>How to Play:</b>
-Take your shot and bet on the outcome!
+You vs Bot in a basketball shootout!
+• First to {TARGET_SCORE} points wins
+• Win {WIN_MULTIPLIER}x your bet!
 
-<b>Bet Options:</b>
-🏀 <b>SCORE</b> - Bet the ball goes in (4-5)
-  • 40% chance to win
-  • 1.8x payout
+<b>Scoring:</b>
+• 🚫 Miss (1-2): 0 points
+• 😬 Rim (3): 0 points (close!)
+• 🏀 Score (4-5): 1 point
 
-🚫 <b>MISS</b> - Bet the ball misses (1-3)
-  • 60% chance to win
-  • 1.5x payout
-
-<b>Shot Results:</b>
-• 1-2: Miss 🚫
-• 3: Rim (close!) 😬
-• 4-5: Score! 🏀
+<b>Game Flow:</b>
+1. You and bot take turns shooting
+2. Each successful shot = 1 point
+3. First to {TARGET_SCORE} points wins the game!
 
 💵 <b>Min Bet:</b> ${MIN_BET:.2f}
 💰 <b>Max Bet:</b> ${MAX_BET:.2f}
+🎯 <b>Win Multiplier:</b> {WIN_MULTIPLIER}x
 
 <b>Choose your bet amount:</b>
 """
@@ -258,15 +282,12 @@ async def basketball_bet_callback(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def basketball_play_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle basketball game play."""
+    """Handle basketball 1v1 game play."""
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
     
     from main import get_user, deduct_balance, format_usd
-    
-    # Get bet type from callback data
-    bet_type = query.data.split('_')[-1]  # 'score' or 'miss'
     
     # Get bet amount from context
     bet_amount = context.user_data.get('basketball_bet_amount', 1.0)
@@ -293,38 +314,44 @@ async def basketball_play_callback(update: Update, context: ContextTypes.DEFAULT
         await query.edit_message_text("❌ Failed to place bet. Please try again.")
         return
     
-    # Play the game
-    result = await play_basketball_game(user_id, bet_type, bet_amount)
+    # Play the 1v1 game
+    result = await play_basketball_1v1(user_id, bet_amount)
     
-    # Format result message
+    # Format game summary
     bet_str = await format_usd(result['bet_amount'])
     balance_str = await format_usd(result['new_balance'])
     
-    if result['is_win']:
+    # Build game log display
+    game_summary = ""
+    for round_data in result['game_log']:
+        game_summary += f"\n<b>Round {round_data['round']}:</b>\n"
+        game_summary += f"👤 You: {round_data['player_result']} (+{round_data['player_points']})\n"
+        game_summary += f"🤖 Bot: {round_data['bot_result']} (+{round_data['bot_points']})\n"
+        game_summary += f"📊 Score: {round_data['player_score']}-{round_data['bot_score']}\n"
+    
+    if result['player_won']:
         win_str = await format_usd(result['win_amount'])
-        profit_str = await format_usd(result['net_win'])
+        profit_str = await format_usd(result['net_result'])
         result_emoji = "🎉"
         result_text = f"<b>YOU WIN!</b> 🏆\n💰 Won: {win_str}\n📈 Profit: {profit_str}"
     else:
         loss_str = await format_usd(result['bet_amount'])
         result_emoji = "😞"
-        result_text = f"<b>YOU LOSE</b>\n📉 Lost: {loss_str}"
-    
-    # Get shot animation
-    shot_emoji = "🏀"
+        result_text = f"<b>BOT WINS!</b> 🤖\n📉 Lost: {loss_str}"
     
     text = f"""
-🏀 <b>BASKETBALL GAME</b> 🏀
+🏀 <b>BASKETBALL 1v1 RESULT</b> 🏀
 
-{shot_emoji} <b>SHOT RESULT:</b>
-{result['shot_result']}
+🎯 <b>Final Score:</b>
+👤 You: {result['player_score']} points
+🤖 Bot: {result['bot_score']} points
 
-🎯 <b>Your Bet:</b> {bet_type.upper()} - {bet_str}
-{'🏀 Ball scored!' if result['scored'] else '🚫 Ball missed!'}
+{game_summary}
 
+� <b>Bet Amount:</b> {bet_str}
 {result_emoji} {result_text}
 
-💰 <b>New Balance:</b> {balance_str}
+� <b>New Balance:</b> {balance_str}
 
 <b>Play again?</b>
 """
