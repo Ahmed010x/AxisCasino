@@ -12,7 +12,7 @@ from bot.games.slots import handle_slots_callback
 from bot.games.blackjack import handle_blackjack_callback
 from bot.games.roulette import handle_roulette_callback
 from bot.games.dice import handle_dice_callback
-from bot.games.poker import handle_poker_callback
+from bot.games.basketball import handle_basketball_callback
 from bot.utils.achievements import handle_achievements_callback
 from bot.handlers.leaderboard import handle_leaderboard_callback
 from bot.handlers.payment_handlers import (
@@ -60,9 +60,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data == "game_dice":
         from bot.handlers.games import dice
         await dice(update, context)
-    elif data == "game_poker":
-        from bot.handlers.games import poker
-        await poker(update, context)
     
     # Achievement callbacks
     elif data.startswith("check_achievements") or data.startswith("achievements_"):
@@ -81,8 +78,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await handle_roulette_callback(update, context)
     elif data.startswith("dice_"):
         await handle_dice_callback(update, context)
-    elif data.startswith("poker_"):
-        await handle_poker_callback(update, context)
+    elif data.startswith("basketball_"):
+        await handle_basketball_callback(update, context)
     
     # Payment callbacks
     elif data == "payment_menu":

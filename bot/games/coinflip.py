@@ -1,7 +1,7 @@
 # bot/games/coinflip.py
 """
 Coin Flip Game Module
-Simple 50/50 game - bet on Bitcoin or Ethereum
+Simple 50/50 game - bet on Heads or Tails with custom Telegram emoji
 """
 
 import random
@@ -17,9 +17,9 @@ MIN_BET = 0.50
 MAX_BET = 1000.0
 WIN_MULTIPLIER = 1.95  # 95% payout (5% house edge)
 
-# Sticker IDs for Bitcoin and Ethereum
-BITCOIN_STICKER_ID = "CAACAgEAAxkBAAE7-Apo33tf-s6ZkKsrTN6XPoH9A2ZnnwACIAYAAhUgyUYrIh_7ZdalyDYE"
-ETHEREUM_STICKER_ID = "CAACAgEAAxkBAAE7-zto38pyTGfQQ670ZjqdmTffjdIuUgACHwYAAhUgyUaS92CoIHXqcDYE"
+# Custom Telegram Emoji IDs for Heads and Tails
+HEADS_EMOJI_ID = "5886663771962743061"
+TAILS_EMOJI_ID = "5886234567290918532"
 
 async def handle_coinflip_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Main handler for coin flip game"""
@@ -61,18 +61,18 @@ async def show_coinflip_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
     all_balance = user['balance']
     
     text = f"""
-🪙 <b>CRYPTO FLIP</b> 🪙
+🪙 <b>COIN FLIP</b> 🪙
 
 💰 <b>Your Balance:</b> {balance_str}
 
 🎮 <b>How to Play:</b>
 • Choose your bet amount
-• Pick Bitcoin ₿ or Ethereum Ξ
+• Pick Heads or Tails
 • Win {WIN_MULTIPLIER}x your bet!
 
 💡 <b>Game Info:</b>
 • Fair 50/50 odds
-• Instant results with stickers
+• Instant results with custom emoji
 • Win probability: 50%
 • Payout: {WIN_MULTIPLIER}x bet
 
@@ -130,19 +130,19 @@ async def show_coinflip_choice(update: Update, context: ContextTypes.DEFAULT_TYP
     potential_win = bet_amount * WIN_MULTIPLIER
     
     text = f"""
-🪙 <b>CRYPTO FLIP</b> 🪙
+🪙 <b>COIN FLIP</b> 🪙
 
 💰 <b>Bet Amount:</b> ${bet_amount:.2f}
 💵 <b>Potential Win:</b> ${potential_win:.2f}
 
-<b>Choose your crypto:</b>
-Will it be Bitcoin ₿ or Ethereum Ξ?
+<b>Choose your side:</b>
+Will it be Heads or Tails?
 """
     
     keyboard = [
         [
-            InlineKeyboardButton("₿ BITCOIN", callback_data=f"coinflip_play_bitcoin_{bet_amount}"),
-            InlineKeyboardButton("Ξ ETHEREUM", callback_data=f"coinflip_play_ethereum_{bet_amount}")
+            InlineKeyboardButton("🟡 HEADS", callback_data=f"coinflip_play_heads_{bet_amount}"),
+            InlineKeyboardButton("🔵 TAILS", callback_data=f"coinflip_play_tails_{bet_amount}")
         ],
         [InlineKeyboardButton("🔙 Back", callback_data="game_coinflip")]
     ]
@@ -156,7 +156,7 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_id = query.from_user.id
     data_parts = query.data.split("_")
-    choice = data_parts[2]  # "bitcoin" or "ethereum"
+    choice = data_parts[2]  # "heads" or "tails"
     bet_amount = float(data_parts[3])
     
     # Import here to avoid circular dependency
@@ -188,7 +188,7 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Flip the coin
-    result = random.choice(['bitcoin', 'ethereum'])
+    result = random.choice(['heads', 'tails'])
     won = (result == choice)
     
     # Calculate winnings
@@ -215,10 +215,10 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     updated_user = await get_user(user_id)
     new_balance_str = await format_usd(updated_user['balance'])
     
-    # Build result message with crypto theme
-    coin_emoji = "₿" if result == "bitcoin" else "Ξ"
-    result_text = "BITCOIN" if result == "bitcoin" else "ETHEREUM"
-    result_color = "🟠" if result == "bitcoin" else "🔷"  # Orange for BTC, Blue for ETH
+    # Determine which emoji to use
+    emoji_id = HEADS_EMOJI_ID if result == "heads" else TAILS_EMOJI_ID
+    result_text = "HEADS" if result == "heads" else "TAILS"
+    result_color = "�" if result == "heads" else "�"  # Yellow for Heads, Blue for Tails
     
     # Delete the old message first
     try:
@@ -227,19 +227,20 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Could not delete message: {e}")
     
-    # Send animated coin flip message
-    coin_animation = "🪙" if result == "bitcoin" else "💎"
-    flip_animation = f"""
+    # Send the custom emoji result
+    try:
+        # Format custom emoji for Telegram
+        custom_emoji_text = f"<tg-emoji emoji-id=\"{emoji_id}\">🪙</tg-emoji>"
+        flip_animation = f"""
 🎰 <b>COIN FLIP RESULT</b> 🎰
 
-{'🟠' * 10 if result == 'bitcoin' else '🔷' * 10}
+{result_color * 10}
 
-{coin_animation * 3}  <b>{result_text}</b>  {coin_animation * 3}
+{custom_emoji_text * 3}  <b>{result_text}</b>  {custom_emoji_text * 3}
 
-{'🟠' * 10 if result == 'bitcoin' else '🔷' * 10}
+{result_color * 10}
 """
-    
-    try:
+        
         await context.bot.send_message(
             chat_id=query.message.chat_id,
             text=flip_animation,
@@ -250,11 +251,13 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Failed to send animation: {e}")
     
     # Build result text
+    custom_emoji_display = f"<tg-emoji emoji-id=\"{emoji_id}\">🪙</tg-emoji>"
+    
     if won:
         text = f"""
 🎉 <b>YOU WIN!</b> 🎉
 
-{result_color} <b>Result: {coin_emoji} {result_text}</b>
+{result_color} <b>Result: {custom_emoji_display} {result_text}</b>
 
 💰 <b>Bet:</b> ${bet_amount:.2f}
 💵 <b>Won:</b> ${win_amount:.2f}
@@ -268,7 +271,7 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = f"""
 😔 <b>YOU LOSE</b> 😔
 
-{result_color} <b>Result: {coin_emoji} {result_text}</b>
+{result_color} <b>Result: {custom_emoji_display} {result_text}</b>
 
 💰 <b>Bet:</b> ${bet_amount:.2f}
 💸 <b>Lost:</b> ${bet_amount:.2f}
@@ -385,19 +388,19 @@ async def handle_custom_bet_input(update: Update, context: ContextTypes.DEFAULT_
         potential_win = bet_amount * WIN_MULTIPLIER
         
         text = f"""
-🪙 <b>CRYPTO FLIP</b> 🪙
+🪙 <b>COIN FLIP</b> 🪙
 
 💰 <b>Bet Amount:</b> ${bet_amount:.2f}
 💵 <b>Potential Win:</b> ${potential_win:.2f}
 
-<b>Choose your crypto:</b>
-Will it be Bitcoin ₿ or Ethereum Ξ?
+<b>Choose your side:</b>
+Will it be Heads or Tails?
 """
         
         keyboard = [
             [
-                InlineKeyboardButton("₿ BITCOIN", callback_data=f"coinflip_play_bitcoin_{bet_amount}"),
-                InlineKeyboardButton("Ξ ETHEREUM", callback_data=f"coinflip_play_ethereum_{bet_amount}")
+                InlineKeyboardButton("🟡 HEADS", callback_data=f"coinflip_play_heads_{bet_amount}"),
+                InlineKeyboardButton("🔵 TAILS", callback_data=f"coinflip_play_tails_{bet_amount}")
             ],
             [InlineKeyboardButton("🔙 Back", callback_data="game_coinflip")]
         ]

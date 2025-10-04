@@ -29,9 +29,6 @@ def test_main_imports():
         from bot.games.roulette import handle_roulette_callback, handle_custom_bet_input as handle_roulette_custom_bet
         print("✅ Roulette handler imported successfully")
         
-        from bot.games.poker import handle_poker_callback, handle_custom_bet_input as handle_poker_custom_bet
-        print("✅ Poker handler imported successfully")
-        
         from bot.games.coinflip import handle_coinflip_callback, handle_custom_bet_input as handle_coinflip_custom_bet
         print("✅ Coin Flip handler imported successfully")
         
@@ -61,7 +58,6 @@ def test_min_bet_values():
         ('dice_predict', 'bot.games.dice_predict'),
         ('blackjack', 'bot.games.blackjack'),
         ('roulette', 'bot.games.roulette'),
-        ('poker', 'bot.games.poker'),
     ]
     
     all_correct = True
@@ -97,7 +93,6 @@ def test_callable_handlers():
         from bot.games.dice import handle_dice_callback
         from bot.games.blackjack import handle_blackjack_callback
         from bot.games.roulette import handle_roulette_callback
-        from bot.games.poker import handle_poker_callback
         from bot.games.coinflip import handle_coinflip_callback
         from bot.games.dice_predict import handle_dice_predict_callback
         
@@ -106,7 +101,6 @@ def test_callable_handlers():
             'Dice': handle_dice_callback,
             'Blackjack': handle_blackjack_callback,
             'Roulette': handle_roulette_callback,
-            'Poker': handle_poker_callback,
             'Coin Flip': handle_coinflip_callback,
             'Dice Predict': handle_dice_predict_callback,
         }

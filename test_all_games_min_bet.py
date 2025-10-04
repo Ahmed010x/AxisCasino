@@ -23,7 +23,6 @@ def test_game_imports():
         ('dice_predict', 'bot.games.dice_predict'),
         ('blackjack', 'bot.games.blackjack'),
         ('roulette', 'bot.games.roulette'),
-        ('poker', 'bot.games.poker'),
     ]
     
     results = {}
@@ -104,7 +103,6 @@ def test_handler_functions(results):
         'dice_predict': 'handle_dice_predict_callback',
         'blackjack': 'handle_blackjack_callback',
         'roulette': 'handle_roulette_callback',
-        'poker': 'handle_poker_callback',
     }
     
     for game_name, handler_name in handler_map.items():

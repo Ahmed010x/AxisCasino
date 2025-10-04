@@ -73,9 +73,9 @@ try:
     from bot.games.dice import handle_dice_callback, handle_custom_bet_input as handle_dice_custom_bet
     from bot.games.blackjack import handle_blackjack_callback, handle_custom_bet_input as handle_blackjack_custom_bet
     from bot.games.roulette import handle_roulette_callback, handle_custom_bet_input as handle_roulette_custom_bet
-    from bot.games.poker import handle_poker_callback, handle_custom_bet_input as handle_poker_custom_bet
     from bot.games.coinflip import handle_coinflip_callback, handle_custom_bet_input as handle_coinflip_custom_bet
     from bot.games.dice_predict import handle_dice_predict_callback, handle_custom_bet_input as handle_dice_predict_custom_bet
+    from bot.games.basketball import handle_basketball_callback, handle_custom_bet_input as handle_basketball_custom_bet
 except ImportError as e:
     logger.warning(f"Could not import game modules: {e}")
     # Define placeholder functions
@@ -89,10 +89,10 @@ except ImportError as e:
         await update.callback_query.edit_message_text("🚧 Blackjack game temporarily unavailable")
     async def handle_roulette_callback(update, context):
         await update.callback_query.edit_message_text("🚧 Roulette game temporarily unavailable")
-    async def handle_poker_callback(update, context):
-        await update.callback_query.edit_message_text("🚧 Poker game temporarily unavailable")
     async def handle_coinflip_callback(update, context):
         await update.callback_query.edit_message_text("🚧 Coin Flip game temporarily unavailable")
+    async def handle_basketball_callback(update, context):
+        await update.callback_query.edit_message_text("🚧 Basketball game temporarily unavailable")
 
 # --- Owner (Super Admin) Configuration ---
 load_dotenv(".env.owner")  # Load owner ID from dedicated file
@@ -1653,12 +1653,12 @@ async def handle_text_input_main(update: Update, context: ContextTypes.DEFAULT_T
         await handle_dice_custom_bet(update, context)
     elif 'awaiting_dice_predict_custom_bet' in context.user_data:
         await handle_dice_predict_custom_bet(update, context)
+    elif 'awaiting_basketball_custom_bet' in context.user_data:
+        await handle_basketball_custom_bet(update, context)
     elif 'awaiting_blackjack_bet' in context.user_data:
         await handle_blackjack_custom_bet(update, context)
     elif 'awaiting_roulette_bet' in context.user_data or 'awaiting_roulette_number_bet' in context.user_data:
         await handle_roulette_custom_bet(update, context)
-    elif 'awaiting_poker_ante' in context.user_data:
-        await handle_poker_custom_bet(update, context)
     else:
         # Ignore text messages that don't match any expected state
         # This prevents interference with conversation handlers for games
@@ -2486,12 +2486,12 @@ If your referral loses $100, you earn $20!
             await game_dice_callback(update, context)
         elif data == "game_dice_predict":
             await handle_dice_predict_callback(update, context)
+        elif data == "game_basketball":
+            await handle_basketball_callback(update, context)
         elif data == "game_coinflip":
             await handle_coinflip_callback(update, context)
         elif data == "game_roulette":
             await game_roulette_callback(update, context)
-        elif data == "game_poker":
-            await game_poker_callback(update, context)
         # Game betting handlers
         elif data.startswith("slots_bet_"):
             await handle_slots_bet(update, context)
@@ -2503,12 +2503,12 @@ If your referral loses $100, you earn $20!
             await handle_dice_play(update, context)
         elif data.startswith("dice_predict_"):
             await handle_dice_predict_callback(update, context)
+        elif data.startswith("basketball_"):
+            await handle_basketball_callback(update, context)
         elif data.startswith("coinflip_"):
             await handle_coinflip_callback(update, context)
         elif data.startswith("roulette_"):
             await handle_roulette_callback(update, context)
-        elif data.startswith("poker_"):
-            await handle_poker_callback(update, context)
         elif data == "weekly_bonus":
             await weekly_bonus_callback(update, context)
         elif data == "claim_weekly_bonus":
@@ -2611,7 +2611,7 @@ If your referral loses $100, you earn $20!
 🎲 <b>Dice</b> - Roll to win
 🪙 <b>Coin Flip</b> - Heads or Tails
 🎯 <b>Roulette</b> - European roulette
-� <b>Poker</b> - Texas Hold'em
+🏀 <b>Basketball</b> - Shoot hoops!
 🔮 <b>Dice Predict</b> - Predict the dice
 """
         else:
@@ -2627,7 +2627,7 @@ Choose your game:
 🎲 <b>Dice</b> - Roll to win
 🪙 <b>Coin Flip</b> - Heads or Tails
 🎯 <b>Roulette</b> - European roulette
-🂠 <b>Poker</b> - Texas Hold'em
+🏀 <b>Basketball</b> - Shoot hoops!
 🔮 <b>Dice Predict</b> - Predict the dice (5x payout!)
 
 <i>Good luck!</i>
@@ -2645,7 +2645,7 @@ Choose your game:
             ],
             [
                 InlineKeyboardButton("🎯 Roulette", callback_data="game_roulette"),
-                InlineKeyboardButton("🂠 Poker", callback_data="game_poker")
+                InlineKeyboardButton("🏀 Basketball", callback_data="game_basketball")
             ],
             [
                 InlineKeyboardButton("🔮 Dice Predict", callback_data="game_dice_predict")
@@ -3162,30 +3162,6 @@ Features coming soon:
 • Multiple betting options
 • Live spinning animation
 • High payout multipliers
-
-Stay tuned for updates!
-"""
-    
-    keyboard = [[InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]]
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-
-async def game_poker_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show poker game interface"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = """
-🂠 <b>POKER</b> 🂠
-
-🚧 <b>Coming Soon!</b> 🚧
-
-Texas Hold'em poker is currently under development.
-
-Features coming soon:
-• Texas Hold'em gameplay
-• Multi-player tables
-• Tournament modes
-• Progressive jackpots
 
 Stay tuned for updates!
 """

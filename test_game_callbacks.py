@@ -54,8 +54,7 @@ async def test_game_callbacks():
         ("game_slots", main.game_slots_callback),
         ("game_blackjack", main.game_blackjack_callback), 
         ("game_dice", main.game_dice_callback),
-        ("game_roulette", main.game_roulette_callback),
-        ("game_poker", main.game_poker_callback)
+        ("game_roulette", main.game_roulette_callback)
     ]
     
     for game_name, callback_func in games:
@@ -96,8 +95,7 @@ async def test_main_callback_routing():
         "game_slots",
         "game_blackjack", 
         "game_dice",
-        "game_roulette",
-        "game_poker"
+        "game_roulette"
     ]
     
     for callback_data in game_callbacks:

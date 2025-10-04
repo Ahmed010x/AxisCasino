@@ -1,7 +1,13 @@
 """
 Start and Help Command Handlers
 
-Handles the basic bot commands like /start and /help.
+Handles the basic bot commands like /start a        ],
+        [
+            InlineKeyboardButton("🏆 Achievements", callback_data="check_achievements"),
+            InlineKeyboardButton("💰 Balance", callback_data="check_balance")
+        ],
+        [
+            InlineKeyboardButton("🎁 Daily Bonus", callback_data="daily_bonus"),lp.
 """
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -61,7 +67,6 @@ Hello {user.first_name}! Welcome to the ultimate Telegram casino experience!
 🃏 Blackjack - Beat the dealer  
 🎲 Roulette - Spin the wheel of fortune
 🎯 Dice - Multiple dice betting games
-🃏 Poker - Texas Hold'em against the house
 
 📊 **Features:**
 🏆 Achievement system with rewards
@@ -82,16 +87,15 @@ Use the buttons below or type /help to see all commands!
             InlineKeyboardButton("🎯 Dice Game", callback_data="game_dice")
         ],
         [
-            InlineKeyboardButton("🃏 Poker", callback_data="game_poker"),
-            InlineKeyboardButton("🏆 Achievements", callback_data="check_achievements")
+            InlineKeyboardButton(" Achievements", callback_data="check_achievements"),
+            InlineKeyboardButton("💰 Balance", callback_data="check_balance")
         ],
         [
-            InlineKeyboardButton("💰 Balance", callback_data="check_balance"),
-            InlineKeyboardButton("🎁 Daily Bonus", callback_data="daily_bonus")
+            InlineKeyboardButton("🎁 Daily Bonus", callback_data="daily_bonus"),
+            InlineKeyboardButton("💰 Payments", callback_data="payment_menu")
         ],
         [
-            InlineKeyboardButton("� Payments", callback_data="payment_menu"),
-            InlineKeyboardButton("�📊 Statistics", callback_data="check_stats")
+            InlineKeyboardButton("📊 Statistics", callback_data="check_stats"),
         ],
         [
             InlineKeyboardButton("🏆 Leaderboard", callback_data="leaderboard_menu"),
@@ -124,7 +128,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 /blackjack - Start a blackjack game
 /roulette - Play roulette
 /dice - Play various dice games
-/poker - Play Texas Hold'em Poker
+/basketball - Shoot hoops and win!
 
 **Payments:**
 💰 **Deposits** - Add chips to your account
@@ -156,9 +160,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 🎯 **Dice**: Multiple games - High/Low, Exact Sum, Triple Dice
 
-🃏 **Poker**: Texas Hold'em - Beat the dealer's hand!
-
-🏆 **Achievements**: Complete challenges for bonus chips!
+ **Achievements**: Complete challenges for bonus chips!
 
 💱 **Exchange Rate**: 100 chips = $1 USD
 

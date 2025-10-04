@@ -11,7 +11,7 @@ from bot.games.slots import play_slots, handle_slots_callback
 from bot.games.blackjack import start_blackjack, handle_blackjack_callback
 from bot.games.roulette import show_roulette_menu, handle_roulette_callback
 from bot.games.dice import show_dice_menu, handle_dice_callback
-from bot.games.poker import show_poker_menu, handle_poker_callback
+from bot.games.basketball import show_basketball_menu, handle_basketball_callback
 
 
 async def slots(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -144,8 +144,8 @@ async def dice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await show_dice_menu(update, user_data['balance'])
 
 
-async def poker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /poker command."""
+async def basketball(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the /basketball command."""
     user_id = update.effective_user.id
     user_data = await get_user(user_id)
     
@@ -153,11 +153,11 @@ async def poker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("❌ Please use /start first to register.")
         return
     
-    if user_data['balance'] < 25:
-        await update.message.reply_text("❌ You need at least 25 chips to play poker! Use /daily for free chips.")
+    if user_data['balance'] < 1:
+        await update.message.reply_text("❌ You need at least $1.00 to play basketball! Use /deposit for funds.")
         return
     
-    await show_poker_menu(update, user_data['balance'])
+    await show_basketball_menu(update, context)
 
 
 async def achievements(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -186,8 +186,10 @@ async def games_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             InlineKeyboardButton("🎯 Dice", callback_data="game_dice")
         ],
         [
-            InlineKeyboardButton("🃏 Poker", callback_data="game_poker"),
-            InlineKeyboardButton("🏆 Achievements", callback_data="check_achievements")
+            InlineKeyboardButton("🏀 Basketball", callback_data="game_basketball")
+        ],
+        [
+            InlineKeyboardButton(" Achievements", callback_data="check_achievements")
         ],
         [
             InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")
@@ -206,7 +208,7 @@ Choose a game to play:
 🃏 **Blackjack** - Beat the dealer
 🎲 **Roulette** - Spin the wheel
 🎯 **Dice** - Multiple dice games
-🃏 **Poker** - Texas Hold'em
+🏀 **Basketball** - Shoot some hoops
 """
     
     if update.callback_query:
@@ -227,7 +229,8 @@ async def mini_casino_app(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     keyboard = [
         [InlineKeyboardButton("🎰 Slots", callback_data="mini_slots"), InlineKeyboardButton("🃏 Blackjack", callback_data="mini_blackjack")],
         [InlineKeyboardButton("🎲 Roulette", callback_data="mini_roulette"), InlineKeyboardButton("🎯 Dice", callback_data="mini_dice")],
-        [InlineKeyboardButton("🃏 Poker", callback_data="mini_poker"), InlineKeyboardButton("🏆 Achievements", callback_data="mini_achievements")],
+        [InlineKeyboardButton("🏀 Basketball", callback_data="mini_basketball")],
+        [InlineKeyboardButton(" Achievements", callback_data="mini_achievements")],
         [InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -258,8 +261,8 @@ async def mini_casino_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await roulette(update, context)
     elif data == "mini_dice":
         await dice(update, context)
-    elif data == "mini_poker":
-        await poker(update, context)
+    elif data == "mini_basketball":
+        await basketball(update, context)
     elif data == "mini_achievements":
         await achievements(update, context)
     elif data == "main_menu":

@@ -25,7 +25,6 @@ def test_callback_patterns():
         "game_dice_predict",
         "game_coinflip",
         "game_roulette",
-        "game_poker",
         
         # Game betting patterns
         "slots_bet_5",
@@ -38,7 +37,6 @@ def test_callback_patterns():
         "coinflip_bet_5",
         "coinflip_play_bitcoin_5",
         "roulette_select_red",
-        "poker_ante_5",
         
         # Bonus callbacks
         "weekly_bonus",
@@ -116,8 +114,7 @@ def test_game_file_callbacks():
         'bot/games/dice_predict.py',
         'bot/games/slots.py',
         'bot/games/blackjack.py',
-        'bot/games/roulette.py',
-        'bot/games/poker.py'
+        'bot/games/roulette.py'
     ]
     
     consistent_callbacks = []
@@ -182,11 +179,9 @@ def test_missing_functions():
             'game_blackjack_callback',
             'game_dice_callback',
             'game_roulette_callback', 
-            'game_poker_callback',
             'handle_dice_predict_callback',
             'handle_coinflip_callback',
-            'handle_roulette_callback',
-            'handle_poker_callback'
+            'handle_roulette_callback'
         ]
         
         missing_functions = []
