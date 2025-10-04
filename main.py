@@ -2624,10 +2624,10 @@ Choose your game:
 
 🎰 <b>Slots</b> - Classic slot machine
 🃏 <b>Blackjack</b> - Beat the dealer
-🎲 <b>Dice</b> - Roll to win
+🎲 <b>Dice 1v1</b> - Roll against the bot
 🪙 <b>Coin Flip</b> - Heads or Tails
 🎯 <b>Roulette</b> - European roulette
-🏀 <b>Basketball</b> - Shoot hoops!
+🏀 <b>Basketball 1v1</b> - Shoot hoops vs bot!
 🔮 <b>Dice Predict</b> - Predict the dice (5x payout!)
 
 <i>Good luck!</i>
