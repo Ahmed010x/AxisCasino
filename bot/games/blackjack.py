@@ -12,6 +12,10 @@ from telegram.ext import ContextTypes
 from bot.database.user import get_user, save_game_session, get_game_session, delete_game_session, add_game_result
 
 
+# Game constants
+MIN_BET = 0.50
+MAX_BET = 1000.0
+
 # Card values and suits
 SUITS = ['♠️', '♥️', '♦️', '♣️']
 RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']
@@ -199,8 +203,8 @@ async def handle_blackjack_callback(update: Update, context: ContextTypes.DEFAUL
             # Request custom amount from user
             context.user_data['awaiting_blackjack_bet'] = True
             await query.edit_message_text(
-                f"💰 Current Balance: **{user_data['balance']} chips**\n\n"
-                "✏️ Please enter your bet amount (minimum 20 chips):",
+                f"💰 Current Balance: **${user_data['balance']:.2f}**\n\n"
+                f"✏️ Please enter your bet amount (minimum ${MIN_BET:.2f}):",
                 parse_mode='Markdown'
             )
             return
@@ -213,8 +217,8 @@ async def handle_blackjack_callback(update: Update, context: ContextTypes.DEFAUL
             await query.edit_message_text("❌ Insufficient balance! Use /daily for free chips.")
             return
         
-        if bet_amount < 20:
-            await query.edit_message_text("❌ Minimum bet is 20 chips!")
+        if bet_amount < MIN_BET:
+            await query.edit_message_text(f"❌ Minimum bet is ${MIN_BET:.2f}!")
             return
         
         # Start new game
@@ -362,12 +366,12 @@ async def handle_custom_bet_input(update: Update, context: ContextTypes.DEFAULT_
     
     try:
         # Parse bet amount
-        bet_amount = int(update.message.text.strip())
+        bet_amount = float(update.message.text.strip())
         
         # Validate bet amount
-        if bet_amount < 20:
+        if bet_amount < MIN_BET:
             await update.message.reply_text(
-                f"❌ Bet amount too low!\n\nMinimum bet: 20 chips\nYour input: {bet_amount} chips\n\nPlease try again.",
+                f"❌ Bet amount too low!\n\nMinimum bet: ${MIN_BET:.2f}\nYour input: ${bet_amount:.2f}\n\nPlease try again.",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="game_blackjack")]])
             )
             return

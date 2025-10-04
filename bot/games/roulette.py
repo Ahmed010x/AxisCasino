@@ -11,6 +11,10 @@ from telegram.ext import ContextTypes
 from bot.database.user import get_user, add_game_result
 
 
+# Game constants
+MIN_BET = 0.50
+MAX_BET = 1000.0
+
 # Roulette wheel (European - single zero)
 ROULETTE_NUMBERS = list(range(0, 37))  # 0-36
 
@@ -323,8 +327,8 @@ async def handle_roulette_callback(update: Update, context: ContextTypes.DEFAULT
         if bet_amount > user_data['balance']:
             await query.answer("❌ Insufficient balance!")
             return
-        if bet_amount < 10:
-            await query.answer("❌ Minimum bet is 10 chips!")
+        if bet_amount < MIN_BET:
+            await query.answer(f"❌ Minimum bet is ${MIN_BET:.2f}!")
             return
         
         # Show number selection grid
@@ -361,8 +365,8 @@ async def handle_roulette_callback(update: Update, context: ContextTypes.DEFAULT
         if bet_amount > user_data['balance']:
             await query.answer("❌ Insufficient balance!")
             return
-        if bet_amount < 10:
-            await query.answer("❌ Minimum bet is 10 chips!")
+        if bet_amount < MIN_BET:
+            await query.answer(f"❌ Minimum bet is ${MIN_BET:.2f}!")
             return
         
         # Play the game
@@ -425,11 +429,11 @@ async def handle_custom_bet_input(update: Update, context: ContextTypes.DEFAULT_
         user_data = await get_user(user_id)
         
         try:
-            bet_amount = int(update.message.text.strip())
+            bet_amount = float(update.message.text.strip())
             
-            if bet_amount < 10:
+            if bet_amount < MIN_BET:
                 await update.message.reply_text(
-                    f"❌ Bet amount too low!\n\nMinimum bet: 10 chips\nYour input: {bet_amount} chips\n\nPlease try again.",
+                    f"❌ Bet amount too low!\n\nMinimum bet: ${MIN_BET:.2f}\nYour input: ${bet_amount:.2f}\n\nPlease try again.",
                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="game_roulette")]])
                 )
                 return
@@ -508,11 +512,11 @@ Better luck next time! 🍀
         user_data = await get_user(user_id)
         
         try:
-            bet_amount = int(update.message.text.strip())
+            bet_amount = float(update.message.text.strip())
             
-            if bet_amount < 10:
+            if bet_amount < MIN_BET:
                 await update.message.reply_text(
-                    f"❌ Bet amount too low!\n\nMinimum bet: 10 chips\nYour input: {bet_amount} chips\n\nPlease try again.",
+                    f"❌ Bet amount too low!\n\nMinimum bet: ${MIN_BET:.2f}\nYour input: ${bet_amount:.2f}\n\nPlease try again.",
                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="game_roulette")]])
                 )
                 return

@@ -13,7 +13,7 @@ from telegram.constants import ParseMode
 from bot.database.user import get_user, add_game_result
 
 # Bet limits
-MIN_BET = 1.0
+MIN_BET = 0.50
 MAX_BET = 1000.0
 
 

@@ -884,7 +884,7 @@ async def init_db():
             # Initialize default system configuration
             system_configs = [
                 ('maintenance_mode', 'false', 'boolean', 'Enable/disable maintenance mode'),
-                ('min_bet_amount', '1.0', 'number', 'Minimum bet amount in USD'),
+                ('min_bet_amount', '0.50', 'number', 'Minimum bet amount in USD'),
                 ('max_bet_amount', '1000.0', 'number', 'Maximum bet amount in USD'),
                 ('house_edge_slots', '3.5', 'number', 'House edge for slots games (%)'),
                 ('house_edge_blackjack', '1.5', 'number', 'House edge for blackjack (%)'),

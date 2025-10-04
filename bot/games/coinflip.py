@@ -13,7 +13,7 @@ from telegram.ext import ContextTypes
 logger = logging.getLogger(__name__)
 
 # Game configuration
-MIN_BET = 1.0
+MIN_BET = 0.50
 MAX_BET = 1000.0
 WIN_MULTIPLIER = 1.95  # 95% payout (5% house edge)
 

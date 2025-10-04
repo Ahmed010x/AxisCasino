@@ -13,6 +13,10 @@ from telegram.ext import ContextTypes
 from bot.database.user import get_user, save_game_session, get_game_session, delete_game_session, add_game_result
 
 
+# Game constants
+MIN_BET = 0.50
+MAX_BET = 1000.0
+
 # Card definitions
 SUITS = ['♠️', '♥️', '♦️', '♣️']
 RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
@@ -448,7 +452,7 @@ async def handle_poker_callback(update: Update, context: ContextTypes.DEFAULT_TY
         
         # Handle different ante types
         if ante_suffix == "half":
-            ante = max(25, user_data['balance'] // 2)
+            ante = max(MIN_BET, user_data['balance'] // 2)
         elif ante_suffix == "allin":
             ante = user_data['balance']
         elif ante_suffix == "custom":
@@ -456,7 +460,7 @@ async def handle_poker_callback(update: Update, context: ContextTypes.DEFAULT_TY
             context.user_data['awaiting_poker_ante'] = True
             await query.edit_message_text(
                 f"💰 Current Balance: **{user_data['balance']} chips**\n\n"
-                "✏️ Please enter your ante amount (minimum 25 chips):",
+                f"✏️ Please enter your ante amount (minimum ${MIN_BET:.2f}):",
                 parse_mode='Markdown'
             )
             return
@@ -469,8 +473,8 @@ async def handle_poker_callback(update: Update, context: ContextTypes.DEFAULT_TY
             await query.edit_message_text("❌ Insufficient balance! Use /daily for free chips.")
             return
         
-        if ante < 25:
-            await query.edit_message_text("❌ Minimum ante is 25 chips!")
+        if ante < MIN_BET:
+            await query.edit_message_text(f"❌ Minimum ante is ${MIN_BET:.2f}!")
             return
         
         # Start new game
@@ -546,9 +550,9 @@ async def handle_custom_bet_input(update: Update, context: ContextTypes.DEFAULT_
         ante = int(update.message.text.strip())
         
         # Validate ante amount
-        if ante < 25:
+        if ante < MIN_BET:
             await update.message.reply_text(
-                f"❌ Ante amount too low!\n\nMinimum ante: 25 chips\nYour input: {ante} chips\n\nPlease try again.",
+                f"❌ Ante amount too low!\n\nMinimum ante: ${MIN_BET:.2f}\nYour input: ${ante:.2f}\n\nPlease try again.",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="game_poker")]])
             )
             return
