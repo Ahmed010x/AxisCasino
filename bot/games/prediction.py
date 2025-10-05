@@ -1,15 +1,14 @@
 """
-Enhanced Prediction Games - Multiple Game Types
+Dice Prediction Game
 
-A comprehensive prediction gaming system featuring various prediction challenges:
+A focused dice prediction gaming system featuring:
 - Dice Prediction: Predict dice roll outcomes (1-6)
-- Coin Flip Prediction: Predict heads or tails
-- Number Prediction: Predict random numbers (1-100)
-- Color Prediction: Predict color outcomes
-- Card Prediction: Predict card suits/values
+- Multiple selection support for varied risk/reward
+- Fair 5% house edge with transparent multipliers
+- Secure random number generation
 
-Each game type offers different multipliers and difficulty levels.
-Players can choose single or multiple predictions for varied risk/reward.
+Players can choose single or multiple dice numbers to predict,
+with higher multipliers for fewer selections (higher risk).
 """
 
 import random
@@ -42,46 +41,6 @@ PREDICTION_GAMES = {
         "base_multiplier": 6.0,
         "min_selections": 1,
         "max_selections": 5
-    },
-    "coin": {
-        "name": "🪙 Coin Flip Prediction", 
-        "description": "Predict heads or tails",
-        "icon": "🪙",
-        "options": ["heads", "tails"],
-        "option_names": ["Heads 👑", "Tails ⚡"],
-        "base_multiplier": 2.0,
-        "min_selections": 1,
-        "max_selections": 1
-    },
-    "number": {
-        "name": "🔢 Number Prediction",
-        "description": "Predict numbers from 1-10",
-        "icon": "🔢", 
-        "options": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-        "option_names": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
-        "base_multiplier": 10.0,
-        "min_selections": 1,
-        "max_selections": 8
-    },
-    "color": {
-        "name": "🌈 Color Prediction",
-        "description": "Predict the winning color",
-        "icon": "🌈",
-        "options": ["red", "blue", "green", "yellow"],
-        "option_names": ["🔴 Red", "🔵 Blue", "🟢 Green", "🟡 Yellow"],
-        "base_multiplier": 4.0,
-        "min_selections": 1,
-        "max_selections": 3
-    },
-    "card": {
-        "name": "🃏 Card Prediction",
-        "description": "Predict the card suit",
-        "icon": "🃏",
-        "options": ["hearts", "diamonds", "clubs", "spades"],
-        "option_names": ["♥️ Hearts", "♦️ Diamonds", "♣️ Clubs", "♠️ Spades"],
-        "base_multiplier": 4.0,
-        "min_selections": 1,
-        "max_selections": 3
     }
 }
 
@@ -103,20 +62,8 @@ def get_random_outcome(game_type: str):
 
 def format_outcome_display(game_type: str, outcome) -> str:
     """Format outcome for display with appropriate emojis."""
-    game_info = PREDICTION_GAMES[game_type]
-    
     if game_type == "dice":
         return f"🎲 {outcome}"
-    elif game_type == "coin":
-        return "🪙 👑 Heads" if outcome == "heads" else "🪙 ⚡ Tails"
-    elif game_type == "number":
-        return f"🔢 {outcome}"
-    elif game_type == "color":
-        color_emojis = {"red": "🔴", "blue": "🔵", "green": "🟢", "yellow": "🟡"}
-        return f"{color_emojis[outcome]} {outcome.title()}"
-    elif game_type == "card":
-        suit_emojis = {"hearts": "♥️", "diamonds": "♦️", "clubs": "♣️", "spades": "♠️"}
-        return f"🃏 {suit_emojis[outcome]} {outcome.title()}"
     else:
         return str(outcome)
 
@@ -136,23 +83,21 @@ async def show_prediction_menu(update: Update, context: ContextTypes.DEFAULT_TYP
     balance_str = await format_usd(user['balance'])
     
     text = f"""
-🔮 <b>PREDICTION GAMES CENTRE</b> 🔮
+🔮 <b>DICE PREDICTION GAME</b> 🔮
 
 💰 <b>Your Balance:</b> {balance_str}
 
 🎯 <b>How It Works:</b>
-• Choose a prediction game type
-• Select your predictions (1 or more options)
+• Choose your dice predictions (1-6)
+• Select 1 or more numbers you think will be rolled
 • More predictions = lower risk, lower reward
 • Fewer predictions = higher risk, higher reward
 
-🎮 <b>Available Games:</b>
-
-🎲 <b>Dice Prediction:</b> Predict dice roll (1-6)
-🪙 <b>Coin Flip:</b> Predict heads or tails  
-🔢 <b>Number Game:</b> Predict number (1-10)
-🌈 <b>Color Game:</b> Predict winning color
-🃏 <b>Card Suit:</b> Predict card suit
+ <b>Dice Prediction:</b>
+Predict the outcome of a dice roll (1-6)
+• Single number: ~5.7x multiplier
+• 2 numbers: ~2.85x multiplier
+• 3 numbers: ~1.9x multiplier
 
 💡 <b>Strategy Tips:</b>
 • Single predictions offer highest multipliers
@@ -162,20 +107,12 @@ async def show_prediction_menu(update: Update, context: ContextTypes.DEFAULT_TYP
 💵 <b>Betting Limits:</b>
 Min: ${MIN_BET:.2f} | Max: ${MAX_BET:.2f}
 
-<b>🎯 Choose your prediction game:</b>
+<b>🎯 Start playing dice prediction:</b>
 """
     
     keyboard = [
         [
-            InlineKeyboardButton("🎲 Dice", callback_data="prediction_game_dice"),
-            InlineKeyboardButton("🪙 Coin Flip", callback_data="prediction_game_coin")
-        ],
-        [
-            InlineKeyboardButton("🔢 Numbers", callback_data="prediction_game_number"),
-            InlineKeyboardButton("🌈 Colors", callback_data="prediction_game_color")
-        ],
-        [
-            InlineKeyboardButton("🃏 Card Suits", callback_data="prediction_game_card")
+            InlineKeyboardButton("🎲 Play Dice Prediction", callback_data="prediction_game_dice")
         ],
         [
             InlineKeyboardButton("📊 Game Rules", callback_data="prediction_rules"),
@@ -195,48 +132,31 @@ async def show_prediction_rules(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer()
     
     text = f"""
-📚 <b>PREDICTION GAMES - RULES & STRATEGY</b> 📚
+📚 <b>DICE PREDICTION - RULES & STRATEGY</b> 📚
 
 🎯 <b>General Rules:</b>
-• Select one or more options to predict
-• The random outcome is generated fairly
-• If your prediction matches, you win!
-• Payouts depend on prediction difficulty
+• Select one or more dice numbers (1-6) to predict
+• The random outcome is generated fairly using secure randomization
+• If your prediction matches the dice roll, you win!
+• Payouts depend on how many numbers you select
 
 🎲 <b>Dice Prediction (1-6):</b>
-• Single number: ~5.7x multiplier
+• Single number: ~5.7x multiplier (highest risk, highest reward)
 • 2 numbers: ~2.85x multiplier  
 • 3 numbers: ~1.9x multiplier
-• More selections = lower multiplier
-
-🪙 <b>Coin Flip:</b>
-• Only one prediction allowed
-• 50/50 chance
-• ~1.9x multiplier
-
-🔢 <b>Number Prediction (1-10):</b>
-• Single number: ~9.5x multiplier
-• 2 numbers: ~4.75x multiplier
-• Higher risk, higher reward
-
-🌈 <b>Color Prediction (4 colors):</b>
-• Single color: ~3.8x multiplier
-• 2 colors: ~1.9x multiplier
-
-🃏 <b>Card Suit Prediction:</b>
-• Single suit: ~3.8x multiplier
-• 2 suits: ~1.9x multiplier
+• 4 numbers: ~1.43x multiplier
+• 5 numbers: ~1.14x multiplier (lowest risk, lowest reward)
 
 💰 <b>Payout Formula:</b>
-Multiplier = (Total Options ÷ Your Selections) × 0.95
+Multiplier = (6 ÷ Your Selections) × 0.95
 
 🎯 <b>Strategy Tips:</b>
-• Conservative: Choose more options (lower risk)
-• Aggressive: Choose fewer options (higher risk)
-• Balanced: Choose 2-3 options for moderate risk
+• <b>Conservative:</b> Choose 3-5 numbers (lower risk, steady wins)
+• <b>Aggressive:</b> Choose 1-2 numbers (higher risk, bigger payouts)
+• <b>Balanced:</b> Choose 2-3 numbers for moderate risk/reward
 
 🔒 <b>Fairness Guarantee:</b>
-All outcomes use cryptographically secure randomization. The house edge is a transparent 5%, which is very competitive in the gaming industry.
+All dice rolls use cryptographically secure randomization. The house edge is a transparent 5%, which is very competitive in the gaming industry.
 
 Ready to test your prediction skills? 🎮
 """
