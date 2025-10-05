@@ -1,7 +1,10 @@
 """
 Enhanced Prediction Games - Dice & Basketball
-
-A focused prediction gaming system featuring:
+        "option_names": ["        basketball_outcomes = {
+            "stuck": "🏀 �🔴 Stuck on rim!",
+            "miss": "🏀 ❌ Complete miss!", 
+            "in": "🏀 ✅ Swish! Nothing but net!"
+        }ck", "❌ Miss", "✅ In"],A focused prediction gaming system featuring:
 - Dice Prediction: Predict dice roll outcomes (1-6)
 - Basketball Prediction: Predict basketball game outcomes (score ranges & overtime)
 - Multiple selection support for varied risk/reward
@@ -45,13 +48,13 @@ PREDICTION_GAMES = {
     },
     "basketball": {
         "name": "🏀 Basketball Prediction", 
-        "description": "Predict basketball game outcomes",
+        "description": "Predict basketball shot outcomes",
         "icon": "🏀",
-        "options": ["low_score", "mid_score", "high_score", "overtime"],
-        "option_names": ["🔵 Low Score (60-80)", "🟡 Mid Score (81-100)", "🔴 High Score (101-120)", "⚡ Overtime"],
-        "base_multiplier": 4.0,
+        "options": ["stuck", "miss", "in"],
+        "option_names": ["� Stuck", "❌ Miss", "✅ In"],
+        "base_multiplier": 3.0,
         "min_selections": 1,
-        "max_selections": 3
+        "max_selections": 2
     }
 }
 
@@ -77,10 +80,9 @@ def format_outcome_display(game_type: str, outcome) -> str:
         return f"🎲 {outcome}"
     elif game_type == "basketball":
         basketball_outcomes = {
-            "low_score": "🏀 🔵 Low Score (68 points)",
-            "mid_score": "🏀 🟡 Mid Score (92 points)", 
-            "high_score": "🏀 🔴 High Score (115 points)",
-            "overtime": "🏀 ⚡ Overtime Game!"
+            "stuck": "🏀 � Stuck on rim!",
+            "miss": "🏀 ❌ Complete miss!", 
+            "in": "🏀 ✅ Swish! Nothing but net!"
         }
         return basketball_outcomes.get(outcome, f"🏀 {outcome}")
     else:
@@ -174,12 +176,11 @@ async def show_prediction_rules(update: Update, context: ContextTypes.DEFAULT_TY
 • 5 numbers: ~1.14x multiplier (lowest risk, lowest reward)
 • Formula: (6 ÷ Your Selections) × 0.95
 
-🏀 <b>Basketball Prediction (4 outcomes):</b>
-• Single outcome: ~3.8x multiplier (highest risk, highest reward)
-• 2 outcomes: ~1.9x multiplier
-• 3 outcomes: ~1.27x multiplier (lowest risk, lowest reward)
-• Options: Low Score (60-80), Mid Score (81-100), High Score (101-120), Overtime
-• Formula: (4 ÷ Your Selections) × 0.95
+🏀 <b>Basketball Prediction (3 outcomes):</b>
+• Single outcome: ~2.85x multiplier (highest risk, highest reward)
+• 2 outcomes: ~1.43x multiplier (lowest risk, lowest reward)
+• Options: Stuck (ball stuck on rim), Miss (complete miss), In (successful shot)
+• Formula: (3 ÷ Your Selections) × 0.95
 
 🎯 <b>Strategy Tips:</b>
 • <b>Conservative:</b> Choose more options (lower risk, steady wins)
@@ -247,8 +248,8 @@ async def show_game_selection_menu(update: Update, context: ContextTypes.DEFAULT
     option_names = game_info['option_names']
     
     # Create rows of buttons (2-3 per row depending on game type)
-    if game_type == "dice" or game_type == "number":
-        # Numbers: 3 per row
+    if game_type == "dice":
+        # Dice numbers: 3 per row
         for i in range(0, len(options), 3):
             row = []
             for j in range(i, min(i + 3, len(options))):
@@ -257,8 +258,17 @@ async def show_game_selection_menu(update: Update, context: ContextTypes.DEFAULT
                     callback_data=f"prediction_select_{game_type}_{j}"
                 ))
             keyboard.append(row)
+    elif game_type == "basketball":
+        # Basketball: 3 options in a single row
+        row = []
+        for j in range(len(options)):
+            row.append(InlineKeyboardButton(
+                option_names[j], 
+                callback_data=f"prediction_select_{game_type}_{j}"
+            ))
+        keyboard.append(row)
     else:
-        # Colors, cards, coin: 2 per row
+        # Other games: 2 per row
         for i in range(0, len(options), 2):
             row = []
             for j in range(i, min(i + 2, len(options))):
@@ -518,13 +528,11 @@ async def play_prediction_game(update: Update, context: ContextTypes.DEFAULT_TYP
     outcome_display = format_outcome_display(game_type, outcome)
     
     # Determine if player won
-    if game_type == "dice" or game_type == "number":
+    if game_type == "dice":
         outcome_index = game_info['options'].index(outcome)
-    elif game_type == "coin":
+    elif game_type == "basketball":
         outcome_index = game_info['options'].index(outcome)
-    elif game_type == "color":
-        outcome_index = game_info['options'].index(outcome)
-    elif game_type == "card":
+    else:
         outcome_index = game_info['options'].index(outcome)
     
     player_won = outcome_index in selections
