@@ -68,7 +68,7 @@ PREDICTION_GAMES = {
         "description": "Predict basketball emoji animation outcomes",
         "icon": "🏀",
         "options": ["stuck", "miss", "in"],
-        "option_names": ["� Stuck", "❌ Miss", "✅ In"],
+        "option_names": ["Stuck", "Miss", "In"],
         "base_multiplier": 3.0,
         "min_selections": 1,
         "max_selections": 2
@@ -103,11 +103,11 @@ def format_outcome_display(game_type: str, outcome) -> str:
         return f"🎲 {outcome}"
     elif game_type == "basketball":
         basketball_outcomes = {
-            "stuck": "🏀 � Stuck on rim!",
-            "miss": "🏀 ❌ Complete miss!", 
-            "in": "🏀 ✅ Swish! Nothing but net!"
+            "stuck": "Stuck on rim!",
+            "miss": "Complete miss!", 
+            "in": "Swish! Nothing but net!"
         }
-        return basketball_outcomes.get(outcome, f"🏀 {outcome}")
+        return basketball_outcomes.get(outcome, f"{outcome}")
     else:
         return str(outcome)
 
