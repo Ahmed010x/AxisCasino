@@ -1686,27 +1686,22 @@ async def deposit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     balance_str = await format_usd(user['balance'])
     
     text = f"""
-💳 <b>DEPOSIT FUNDS</b> 💳
+<b>DEPOSIT FUNDS</b>
 
-💰 <b>Current Balance:</b> {balance_str}
+<b>Current Balance:</b> {balance_str}
 
-🔒 <b>Secure Payment Methods:</b>
-We accept Litecoin (LTC) deposits for fast and secure transactions.
+<b>Payment Method:</b>
+We accept Litecoin (LTC) deposits for fast transactions.
 
-• <b>Cryptocurrency:</b> Instant deposits with low fees
-• <b>Minimum:</b> $1.00 USD equivalent
-• <b>Processing:</b> Usually within minutes
-
-💡 <b>Why choose Litecoin?</b>
-✅ Fast processing times
-✅ Lower transaction fees
-✅ Enhanced privacy
-✅ 24/7 availability
+<b>Details:</b>
+• Minimum: $1.00 USD
+• Processing: Usually within minutes
+• Low fees and enhanced privacy
 """
     
     keyboard = [
-        [InlineKeyboardButton("🪙 Deposit Litecoin (LTC)", callback_data="deposit_LTC")],
-        [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
+        [InlineKeyboardButton("Deposit Litecoin (LTC)", callback_data="deposit_LTC")],
+        [InlineKeyboardButton("Back to Menu", callback_data="main_panel")]
     ]
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
@@ -1729,27 +1724,27 @@ async def deposit_crypto_callback(update: Update, context: ContextTypes.DEFAULT_
     rate_text = f"${rate:.4f}" if rate > 0 else "Rate unavailable"
     
     text = f"""
-💰 <b>DEPOSIT {crypto_type}</b> 💰
+<b>DEPOSIT {crypto_type}</b>
 
-📊 <b>Current Rate:</b> 1 {crypto_type} = {rate_text} USD
+<b>Current Rate:</b> 1 {crypto_type} = {rate_text} USD
 
-💵 <b>Enter Deposit Amount</b>
+<b>Enter Deposit Amount</b>
 Please type the amount you want to deposit in USD.
 
-<b>Deposit Limits:</b>
+<b>Limits:</b>
 • Minimum: $1.00 USD
 • Maximum: $10,000.00 USD per transaction
 
-💡 <i>Simply type your amount in USD (e.g., type "50" for $50.00)</i>
+Simply type your amount in USD (e.g., type "50" for $50.00)
 
-⌨️ <b>Waiting for your input...</b>
+<b>Waiting for your input...</b>
 """
     
-    keyboard = [[InlineKeyboardButton("🚫 Cancel", callback_data="main_panel")]]
+    keyboard = [[InlineKeyboardButton("Cancel", callback_data="main_panel")]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     
     keyboard = [
-        [InlineKeyboardButton("🔙 Back to Deposit", callback_data="deposit")]
+        [InlineKeyboardButton("Back to Deposit", callback_data="deposit")]
     ]
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
@@ -1866,25 +1861,23 @@ async def withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     fee_amount = calculate_withdrawal_fee(balance)
     max_withdrawal = min(balance - fee_amount, MAX_WITHDRAWAL_USD)
     text = f"""
-🏦 <b>WITHDRAW FUNDS</b> 🏦
+<b>WITHDRAW FUNDS</b>
 
-💰 <b>Current Balance:</b> {await format_usd(balance)}
-💸 <b>Available to Withdraw:</b> {await format_usd(max_withdrawal)}
+<b>Current Balance:</b> {await format_usd(balance)}
+<b>Available to Withdraw:</b> {await format_usd(max_withdrawal)}
 
-📋 <b>Withdrawal Limits:</b>
+<b>Limits:</b>
 • Minimum: {await format_usd(MIN_WITHDRAWAL_USD)}
 • Maximum: {await format_usd(MAX_WITHDRAWAL_USD)} per transaction
 • Daily Limit: {await format_usd(MAX_WITHDRAWAL_USD_DAILY)}
 • Fee: {WITHDRAWAL_FEE_PERCENT * 100:.1f}% (min ${MIN_WITHDRAWAL_FEE:.2f})
 
-🔒 <b>Supported Cryptocurrency:</b>
-We support Litecoin (LTC) withdrawals for fast and secure transactions.
-
-⏰ <b>Processing Time:</b> Usually within 24 hours
+<b>Supported:</b> Litecoin (LTC) withdrawals
+<b>Processing Time:</b> Usually within 24 hours
 """
     keyboard = [
-        [InlineKeyboardButton("🪙 Withdraw Litecoin (LTC)", callback_data="withdraw_LTC")],
-        [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
+        [InlineKeyboardButton("Withdraw Litecoin (LTC)", callback_data="withdraw_LTC")],
+        [InlineKeyboardButton("Back to Menu", callback_data="main_panel")]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
@@ -1901,14 +1894,14 @@ async def withdraw_crypto_callback(update: Update, context: ContextTypes.DEFAULT
     max_withdrawal = min(user['balance'], MAX_WITHDRAWAL_USD)
     
     text = f"""
-🪙 <b>WITHDRAW LITECOIN (LTC)</b> 🪙
+<b>WITHDRAW LITECOIN (LTC)</b>
 
-💰 <b>Current Balance:</b> {balance_str}
-💸 <b>Available to Withdraw:</b> {await format_usd(max_withdrawal)}
+<b>Current Balance:</b> {balance_str}
+<b>Available to Withdraw:</b> {await format_usd(max_withdrawal)}
 
 Please enter the amount you wish to withdraw in USD (e.g., "50" for $50.00).
 """
-    keyboard = [[InlineKeyboardButton("🔙 Back to Withdraw", callback_data="withdraw")]]
+    keyboard = [[InlineKeyboardButton("Back to Withdraw", callback_data="withdraw")]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     context.user_data['awaiting_withdraw_amount'] = 'LTC'
 
@@ -1968,12 +1961,12 @@ async def handle_withdraw_amount_input(update: Update, context: ContextTypes.DEF
         net_str = await format_usd(net_amount)
         
         await update.message.reply_text(
-            f"💰 **Withdrawal Details**\n\n"
+            f"<b>Withdrawal Details</b>\n\n"
             f"Amount: ${amount_usd:.2f} USD\n"
             f"Fee: {fee_str}\n"
             f"You'll receive: {net_str}\n\n"
-            f"📧 Please enter your {crypto_type} address:",
-            parse_mode=ParseMode.MARKDOWN
+            f"Please enter your {crypto_type} address:",
+            parse_mode=ParseMode.HTML
         )
         
     except ValueError:
@@ -2347,28 +2340,36 @@ async def run_telegram_bot_async():
         
         # Build user panel message
         welcome_text = f"""
-🎰 <b>AXIS CASINO</b> 🎰\n<i>Welcome, {username}!</i>\n\n💰 <b>Balance:</b> {balance_str}\n🔗 <b>Referral Code:</b> <code>{referral_code}</code>\n\n<b>Choose an action:</b>\n"""
+<b>AXIS CASINO</b>
+
+Welcome, {username}!
+
+<b>Balance:</b> {balance_str}
+<b>Referral Code:</b> <code>{referral_code}</code>
+
+<b>Choose an action:</b>
+"""
         
         # Create navigation keyboard
         keyboard = [
             [
-                InlineKeyboardButton("💳 Deposit", callback_data="deposit"),
-                InlineKeyboardButton("🏦 Withdraw", callback_data="withdraw")
+                InlineKeyboardButton("Deposit", callback_data="deposit"),
+                InlineKeyboardButton("Withdraw", callback_data="withdraw")
             ],
             [
-                InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"),
-                InlineKeyboardButton("👥 Referrals", callback_data="referral_menu"),
-                InlineKeyboardButton("🎁 Bonuses", callback_data="bonus_menu")
+                InlineKeyboardButton("Play Games", callback_data="mini_app_centre"),
+                InlineKeyboardButton("Referrals", callback_data="referral_menu"),
+                InlineKeyboardButton("Bonuses", callback_data="bonus_menu")
             ],
             [
-                InlineKeyboardButton("📊 Statistics", callback_data="user_stats"),
-                InlineKeyboardButton("❓ Help", callback_data="help_menu")
+                InlineKeyboardButton("Statistics", callback_data="user_stats"),
+                InlineKeyboardButton("Help", callback_data="help_menu")
             ]
         ]
         
         # Add admin panel for admins
         if is_admin(user_id) or is_owner(user_id):
-            keyboard.append([InlineKeyboardButton("🔧 Admin Panel", callback_data="admin_panel")])
+            keyboard.append([InlineKeyboardButton("Admin Panel", callback_data="admin_panel")])
         
         await update.message.reply_text(
             welcome_text,
@@ -2398,18 +2399,18 @@ async def run_telegram_bot_async():
         earnings_str = await format_usd(stats['earnings'])
         
         text = f"""
-👥 <b>REFERRAL PROGRAM</b> 👥
+<b>REFERRAL PROGRAM</b>
 
-💰 <b>Earn 20% Commission!</b>
+<b>Earn 20% Commission!</b>
 
 Share your unique referral link and earn <b>20% of what your referrals lose</b> in games!
 
-🔗 <b>Your Referral Link:</b>
+<b>Your Referral Link:</b>
 <code>{referral_link}</code>
 
-📊 <b>Your Stats:</b>
-👥 Total Referrals: <b>{stats['count']}</b>
-💵 Total Earned: <b>{earnings_str}</b>
+<b>Your Stats:</b>
+Total Referrals: <b>{stats['count']}</b>
+Total Earned: <b>{earnings_str}</b>
 
 <b>How it works:</b>
 1. Share your link with friends
@@ -2417,24 +2418,24 @@ Share your unique referral link and earn <b>20% of what your referrals lose</b> 
 3. They get a ${REFERRAL_BONUS_REFEREE:.2f} welcome bonus
 4. You earn 20% commission every time they lose a game
 
-💡 <b>Example:</b>
+<b>Example:</b>
 If your referral loses $100, you earn $20!
 
-<i>Start sharing and earning today!</i>
+Start sharing and earning today!
 """
         
         # Add recent referrals if any
         if stats['recent']:
-            text += "\n\n📋 <b>Recent Referrals:</b>\n"
+            text += "\n\n<b>Recent Referrals:</b>\n"
             for ref in stats['recent'][:5]:
                 username = ref['username'] or 'User'
                 bonus = ref['bonus']
                 text += f"• {username} - Earned: ${bonus:.2f}\n"
         
         keyboard = [
-            [InlineKeyboardButton("📤 Share Link", url=f"https://t.me/share/url?url={referral_link}&text=Join this amazing casino bot!")],
-            [InlineKeyboardButton("🔄 Refresh Stats", callback_data="referral_menu")],
-            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+            [InlineKeyboardButton("Share Link", url=f"https://t.me/share/url?url={referral_link}&text=Join this amazing casino bot!")],
+            [InlineKeyboardButton("Refresh Stats", callback_data="referral_menu")],
+            [InlineKeyboardButton("Main Menu", callback_data="main_panel")]
         ]
         
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
@@ -2546,27 +2547,35 @@ If your referral loses $100, you earn $20!
         net_str = await format_usd(abs(net_result))
         
         welcome_text = f"""
-🎰 <b>AXIS CASINO</b> 🎰\n<i>Welcome, {username}!</i>\n\n💰 <b>Balance:</b> {balance_str}\n🔗 <b>Referral Code:</b> <code>{referral_code}</code>\n\n<b>Choose an action:</b>\n"""
+<b>AXIS CASINO</b>
+
+Welcome, {username}!
+
+<b>Balance:</b> {balance_str}
+<b>Referral Code:</b> <code>{referral_code}</code>
+
+<b>Choose an action:</b>
+"""
         
         keyboard = [
             [
-                InlineKeyboardButton("💳 Deposit", callback_data="deposit"),
-                InlineKeyboardButton("🏦 Withdraw", callback_data="withdraw")
+                InlineKeyboardButton("Deposit", callback_data="deposit"),
+                InlineKeyboardButton("Withdraw", callback_data="withdraw")
             ],
             [
-                InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"),
-                InlineKeyboardButton("👥 Referrals", callback_data="referral_menu"),
-                InlineKeyboardButton("🎁 Bonuses", callback_data="bonus_menu")
+                InlineKeyboardButton("Play Games", callback_data="mini_app_centre"),
+                InlineKeyboardButton("Referrals", callback_data="referral_menu"),
+                InlineKeyboardButton("Bonuses", callback_data="bonus_menu")
             ],
             [
-                InlineKeyboardButton("📊 Statistics", callback_data="user_stats"),
-                InlineKeyboardButton("❓ Help", callback_data="help_menu")
+                InlineKeyboardButton("Statistics", callback_data="user_stats"),
+                InlineKeyboardButton("Help", callback_data="help_menu")
             ]
         ]
         
         # Add admin panel for admins
         if is_admin(user_id) or is_owner(user_id):
-            keyboard.append([InlineKeyboardButton("🔧 Admin Panel", callback_data="admin_panel")])
+            keyboard.append([InlineKeyboardButton("Admin Panel", callback_data="admin_panel")])
         
         await update.callback_query.edit_message_text(
             welcome_text,
@@ -2592,62 +2601,60 @@ If your referral loses $100, you earn $20!
         # Always show games, but add warning if balance is insufficient
         if balance < 1.0:
             text = f"""
-🎮 <b>CASINO GAMES</b> 🎮
+<b>CASINO GAMES</b>
 
-💰 <b>Your Balance:</b> {balance_str}
+<b>Your Balance:</b> {balance_str}
 
-⚠️ <b>INSUFFICIENT BALANCE TO PLAY</b> ⚠️
-<i>You need at least $1.00 to play games.</i>
+<b>INSUFFICIENT BALANCE TO PLAY</b>
+You need at least $1.00 to play games.
 
-💡 <b>Get funds:</b> Deposit • Weekly Bonus • Referrals
-
-━━━━━━━━━━━━━━━━━━━━━━
+<b>Get funds:</b> Deposit • Weekly Bonus • Referrals
 
 <b>Available Games:</b>
 
-🎰 <b>Slots</b> - Classic slot machine
-🃏 <b>Blackjack</b> - Beat the dealer
-🎲 <b>Dice</b> - Roll to win
-🪙 <b>Coin Flip</b> - Heads or Tails
-🎯 <b>Roulette</b> - European roulette
-🏀 <b>Basketball</b> - Shoot hoops!
-🔮 <b>Dice Predict</b> - Predict the dice
+<b>Slots</b> - Classic slot machine
+<b>Blackjack</b> - Beat the dealer
+<b>Dice</b> - Roll to win
+<b>Coin Flip</b> - Heads or Tails
+<b>Roulette</b> - European roulette
+<b>Basketball</b> - Shoot hoops!
+<b>Dice Predict</b> - Predict the dice
 """
         else:
             text = f"""
-🎮 <b>CASINO GAMES</b> 🎮
+<b>CASINO GAMES</b>
 
-💰 <b>Your Balance:</b> {balance_str}
+<b>Your Balance:</b> {balance_str}
 
 Choose your game:
 
-🎰 <b>Slots</b> - Classic slot machine
-🃏 <b>Blackjack</b> - Beat the dealer
-🎲 <b>Dice 1v1</b> - Roll against the bot
-🪙 <b>Coin Flip</b> - Heads or Tails
-🎯 <b>Roulette</b> - European roulette
-🏀 <b>Basketball 1v1</b> - Shoot hoops vs bot!
-🔮 <b>Dice Predict</b> - Predict the dice (5x payout!)
+<b>Slots</b> - Classic slot machine
+<b>Blackjack</b> - Beat the dealer
+<b>Dice 1v1</b> - Roll against the bot
+<b>Coin Flip</b> - Heads or Tails
+<b>Roulette</b> - European roulette
+<b>Basketball 1v1</b> - Shoot hoops vs bot!
+<b>Dice Predict</b> - Predict the dice (5x payout!)
 
-<i>Good luck!</i>
+Good luck!
 """
         
         # Always show all game buttons
         keyboard = [
             [
-                InlineKeyboardButton("🎰 Slots", callback_data="game_slots"),
-                InlineKeyboardButton("🃏 Blackjack", callback_data="game_blackjack")
+                InlineKeyboardButton("Slots", callback_data="game_slots"),
+                InlineKeyboardButton("Blackjack", callback_data="game_blackjack")
             ],
             [
-                InlineKeyboardButton("🎲 Dice", callback_data="game_dice"),
-                InlineKeyboardButton("🪙 Coin Flip", callback_data="game_coinflip")
+                InlineKeyboardButton("Dice", callback_data="game_dice"),
+                InlineKeyboardButton("Coin Flip", callback_data="game_coinflip")
             ],
             [
-                InlineKeyboardButton("🎯 Roulette", callback_data="game_roulette"),
-                InlineKeyboardButton("🏀 Basketball", callback_data="game_basketball")
+                InlineKeyboardButton("Roulette", callback_data="game_roulette"),
+                InlineKeyboardButton("Basketball", callback_data="game_basketball")
             ],
             [
-                InlineKeyboardButton("🔮 Prediction", callback_data="game_prediction")
+                InlineKeyboardButton("Prediction", callback_data="game_prediction")
             ]
         ]
         
@@ -2658,7 +2665,7 @@ Choose your game:
                 InlineKeyboardButton("🎁 Bonus", callback_data="weekly_bonus")
             ])
         
-        keyboard.append([InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")])
+        keyboard.append([InlineKeyboardButton("Back to Menu", callback_data="main_panel")])
         
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     
@@ -2759,59 +2766,55 @@ If your referral loses $100, you earn $20!
         biggest_win_str = await format_usd(user.get('biggest_win', 0.0))
         
         text = f"""
-📊 <b>YOUR STATISTICS</b> 📊
+<b>YOUR STATISTICS</b>
 
-💰 <b>Current Balance:</b> {balance_str}
-🎮 <b>Games Played:</b> {user.get('games_played', 0):,}
-💸 <b>Total Wagered:</b> {wagered_str}
-🏆 <b>Total Won:</b> {won_str}
-💳 <b>Total Deposited:</b> {deposited_str}
-🏦 <b>Total Withdrawn:</b> {withdrawn_str}
+<b>Current Balance:</b> {balance_str}
+<b>Games Played:</b> {user.get('games_played', 0):,}
+<b>Total Wagered:</b> {wagered_str}
+<b>Total Won:</b> {won_str}
+<b>Total Deposited:</b> {deposited_str}
+<b>Total Withdrawn:</b> {withdrawn_str}
 
-🎯 <b>Performance:</b>
-🔥 <b>Current Win Streak:</b> {user.get('win_streak', 0)}
-⭐ <b>Max Win Streak:</b> {user.get('max_win_streak', 0)}
-💎 <b>Biggest Win:</b> {biggest_win_str}
-🏅 <b>VIP Level:</b> {user.get('vip_level', 0)}
+<b>Performance:</b>
+<b>Current Win Streak:</b> {user.get('win_streak', 0)}
+<b>Max Win Streak:</b> {user.get('max_win_streak', 0)}
+<b>Biggest Win:</b> {biggest_win_str}
+<b>VIP Level:</b> {user.get('vip_level', 0)}
 
-📅 <b>Member Since:</b> {user.get('created_at', '')[:10] if user.get('created_at') else 'Unknown'}
+<b>Member Since:</b> {user.get('created_at', '')[:10] if user.get('created_at') else 'Unknown'}
 """
-        keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]]
+        keyboard = [[InlineKeyboardButton("Back to Menu", callback_data="main_panel")]]
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     
     async def help_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show help menu"""
         text = """
-❓ <b>HELP & SUPPORT</b> ❓
+<b>HELP & SUPPORT</b>
 
-🎮 <b>How to Play:</b>
+<b>How to Play:</b>
 • Use /start to access your panel
 • Deposit funds to start playing
 • Choose games and place bets
 • Withdraw your winnings
 
-💳 <b>Deposits & Withdrawals:</b>
+<b>Deposits & Withdrawals:</b>
 • Supported: Litecoin (LTC)
 • Fast processing times
 • Secure transactions
 
-🎯 <b>Features:</b>
+<b>Features:</b>
 • Multiple casino games
 • Referral system
 • VIP rewards
 • 24/7 support
 
-• Referral system
-• VIP rewards
-• 24/7 support
-
-📞 <b>Need Help?</b>
+<b>Need Help?</b>
 Contact our support team for assistance.
 """
         keyboard = [
-            [InlineKeyboardButton("📖 Game Rules", callback_data="game_rules")],
-            [InlineKeyboardButton("💬 Support", url="https://t.me/casino_support")],
-            [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
+            [InlineKeyboardButton("Game Rules", callback_data="game_rules")],
+            [InlineKeyboardButton("Support", url="https://t.me/casino_support")],
+            [InlineKeyboardButton("Back to Menu", callback_data="main_panel")]
         ]
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     
@@ -2825,7 +2828,7 @@ Contact our support team for assistance.
         house_balance_info = await get_house_balance_display()
         
         text = f"""
-🔧 <b>ADMIN PANEL</b> 🔧
+<b>ADMIN PANEL</b>
 
 {house_balance_info}
 
@@ -2833,15 +2836,15 @@ Contact our support team for assistance.
 """
         keyboard = [
             [
-                InlineKeyboardButton("👥 User Management", callback_data="admin_users"),
-                InlineKeyboardButton("💰 Transactions", callback_data="admin_transactions")
+                InlineKeyboardButton("User Management", callback_data="admin_users"),
+                InlineKeyboardButton("Transactions", callback_data="admin_transactions")
             ],
             [
-                InlineKeyboardButton("📊 Analytics", callback_data="admin_analytics"),
-                InlineKeyboardButton("⚙️ Settings", callback_data="admin_settings")
+                InlineKeyboardButton("Analytics", callback_data="admin_analytics"),
+                InlineKeyboardButton("Settings", callback_data="admin_settings")
             ],
             [
-                InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")
+                InlineKeyboardButton("Back to Menu", callback_data="main_panel")
             ]
         ]
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
@@ -2849,10 +2852,19 @@ Contact our support team for assistance.
     async def bonus_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show bonuses menu"""
         text = """
-🎁 <b>BONUSES & REWARDS</b> 🎁\n\nClaim your available bonuses and see current promotions!\n\n• <b>Weekly Bonus</b>: Claim every 7 days\n• <b>Referral Bonus</b>: Earn for inviting friends\n• <b>Special Events</b>: Watch for announcements\n\n<i>More bonus types coming soon!</i>\n"""
+<b>BONUSES & REWARDS</b>
+
+Claim your available bonuses and see current promotions!
+
+• <b>Weekly Bonus</b>: Claim every 7 days
+• <b>Referral Bonus</b>: Earn for inviting friends
+• <b>Special Events</b>: Watch for announcements
+
+More bonus types coming soon!
+"""
         keyboard = [
-            [InlineKeyboardButton("🎉 Claim Weekly Bonus", callback_data="claim_weekly_bonus")],
-            [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
+            [InlineKeyboardButton("Claim Weekly Bonus", callback_data="claim_weekly_bonus")],
+            [InlineKeyboardButton("Back to Menu", callback_data="main_panel")]
         ]
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     
@@ -3015,16 +3027,16 @@ async def game_slots_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     balance_str = await format_usd(user['balance'])
     
     text = f"""
-🎰 <b>SLOTS GAME</b> 🎰
+<b>SLOTS GAME</b>
 
-💰 <b>Your Balance:</b> {balance_str}
+<b>Your Balance:</b> {balance_str}
 
-🎮 <b>How to Play:</b>
+<b>How to Play:</b>
 • Choose your bet amount
 • Spin the reels for matching symbols
 • Win up to 100x your bet!
 
-🍒 <b>Symbol Payouts:</b>
+<b>Symbol Payouts:</b>
 • 🍒🍒🍒 = 10x bet
 • 🍋🍋🍋 = 20x bet  
 • 🍊🍊🍊 = 30x bet
@@ -3045,7 +3057,7 @@ Choose your bet amount:
             InlineKeyboardButton("$50", callback_data="slots_bet_50"),
             InlineKeyboardButton("$100", callback_data="slots_bet_100")
         ],
-        [InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]
+        [InlineKeyboardButton("Back to Games", callback_data="mini_app_centre")]
     ]
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
@@ -3064,16 +3076,16 @@ async def game_blackjack_callback(update: Update, context: ContextTypes.DEFAULT_
     balance_str = await format_usd(user['balance'])
     
     text = f"""
-🃏 <b>BLACKJACK</b> 🃏
+<b>BLACKJACK</b>
 
-💰 <b>Your Balance:</b> {balance_str}
+<b>Your Balance:</b> {balance_str}
 
-🎮 <b>How to Play:</b>
+<b>How to Play:</b>
 • Get as close to 21 as possible
 • Beat the dealer without going over
 • Blackjack pays 3:2!
 
-📊 <b>Card Values:</b>
+<b>Card Values:</b>
 • Number cards = Face value
 • Face cards = 10 points
 • Ace = 1 or 11 points
@@ -3092,7 +3104,7 @@ Choose your bet amount:
             InlineKeyboardButton("$50", callback_data="blackjack_bet_50"),
             InlineKeyboardButton("$100", callback_data="blackjack_bet_100")
         ],
-        [InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]
+        [InlineKeyboardButton("Back to Games", callback_data="mini_app_centre")]
     ]
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
@@ -3111,16 +3123,16 @@ async def game_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     balance_str = await format_usd(user['balance'])
     
     text = f"""
-🎲 <b>DICE GAME</b> 🎲
+<b>DICE GAME</b>
 
-💰 <b>Your Balance:</b> {balance_str}
+<b>Your Balance:</b> {balance_str}
 
-🎮 <b>How to Play:</b>
+<b>How to Play:</b>
 • Two dice are rolled
 • Predict if the sum will be HIGH or LOW
 • HIGH (8-12) and LOW (2-7) both pay 2x
 
-🎯 <b>Betting Options:</b>
+<b>Betting Options:</b>
 • HIGH (8-12) = 2x payout
 • LOW (2-7) = 2x payout
 • Lucky 7 = 5x payout
@@ -3150,11 +3162,11 @@ async def game_roulette_callback(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
     
     text = """
-🎯 <b>ROULETTE</b> 🎯
+<b>ROULETTE</b>
 
-🚧 <b>Coming Soon!</b> 🚧
+<b>Coming Soon!</b>
 
-This exciting European roulette game is currently under development.
+This European roulette game is currently under development.
 
 Features coming soon:
 • European wheel (single zero)
@@ -3165,7 +3177,7 @@ Features coming soon:
 Stay tuned for updates!
 """
     
-    keyboard = [[InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]]
+    keyboard = [[InlineKeyboardButton("Back to Games", callback_data="mini_app_centre")]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
 # --- Game Logic Functions ---
@@ -3279,39 +3291,39 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if win_amount > 0:
         result_message = f"""
-🎰 <b>SLOT MACHINE RESULT</b> 🎰
+<b>SLOT RESULT</b>
 
 {slots_display}
 
 {result_text}
 
-💰 <b>Bet:</b> ${bet_amount:.2f}
-🏆 <b>Won:</b> ${win_amount:.2f}
-📊 <b>Balance:</b> {balance_str}
+<b>Bet:</b> ${bet_amount:.2f}
+<b>Won:</b> ${win_amount:.2f}
+<b>Balance:</b> {balance_str}
 
-Keep spinning! 🍀
+Keep spinning!
 """
     else:
         result_message = f"""
-🎰 <b>SLOT MACHINE RESULT</b> 🎰
+<b>SLOT RESULT</b>
 
 {slots_display}
 
 {result_text}
 
-💰 <b>Bet:</b> ${bet_amount:.2f}
-💸 <b>Lost:</b> ${bet_amount:.2f}
-📊 <b>Balance:</b> {balance_str}
+<b>Bet:</b> ${bet_amount:.2f}
+<b>Lost:</b> ${bet_amount:.2f}
+<b>Balance:</b> {balance_str}
 
-Better luck next time! 🍀
+Better luck next time!
 """
     
     keyboard = [
         [
-            InlineKeyboardButton("🎰 Play Again", callback_data="game_slots"),
-            InlineKeyboardButton("🎮 Other Games", callback_data="mini_app_centre")
+            InlineKeyboardButton("Play Again", callback_data="game_slots"),
+            InlineKeyboardButton("Other Games", callback_data="mini_app_centre")
         ],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        [InlineKeyboardButton("Main Menu", callback_data="main_panel")]
     ]
     
     await query.edit_message_text(result_message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
@@ -3393,24 +3405,24 @@ async def handle_blackjack_bet(update: Update, context: ContextTypes.DEFAULT_TYP
     dealer_cards = " ".join(dealer_hand)
     
     result_message = f"""
-🃏 <b>BLACKJACK RESULT</b> 🃏
+<b>BLACKJACK RESULT</b>
 
-👤 <b>Your Hand:</b> {player_cards} (Value: {player_value})
-🤖 <b>Dealer Hand:</b> {dealer_cards} (Value: {dealer_value})
+<b>Your Hand:</b> {player_cards} (Value: {player_value})
+<b>Dealer Hand:</b> {dealer_cards} (Value: {dealer_value})
 
 {result_text}
 
-💰 <b>Bet:</b> ${bet_amount:.2f}
-🏆 <b>Won:</b> ${win_amount:.2f}
-📊 <b>Balance:</b> {balance_str}
+<b>Bet:</b> ${bet_amount:.2f}
+<b>Won:</b> ${win_amount:.2f}
+<b>Balance:</b> {balance_str}
 """
     
     keyboard = [
         [
-            InlineKeyboardButton("🃏 Play Again", callback_data="game_blackjack"),
-            InlineKeyboardButton("🎮 Other Games", callback_data="mini_app_centre")
+            InlineKeyboardButton("Play Again", callback_data="game_blackjack"),
+            InlineKeyboardButton("Other Games", callback_data="mini_app_centre")
         ],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        [InlineKeyboardButton("Main Menu", callback_data="main_panel")]
     ]
     
     await query.edit_message_text(result_message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
@@ -3439,21 +3451,21 @@ async def handle_dice_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     balance_str = await format_usd(user['balance'])
     
     text = f"""
-🎲 <b>DICE GAME</b> 🎲
+<b>DICE GAME</b>
 
-💰 <b>Your Balance:</b> {balance_str}
-💵 <b>Bet Amount:</b> ${bet_amount:.2f}
+<b>Your Balance:</b> {balance_str}
+<b>Bet Amount:</b> ${bet_amount:.2f}
 
 Choose your prediction:
 """
     
     keyboard = [
         [
-            InlineKeyboardButton("🔺 HIGH (8-12) - 2x", callback_data=f"dice_play_high_{bet_amount}"),
-            InlineKeyboardButton("🔻 LOW (2-7) - 2x", callback_data=f"dice_play_low_{bet_amount}")
+            InlineKeyboardButton("HIGH (8-12) - 2x", callback_data=f"dice_play_high_{bet_amount}"),
+            InlineKeyboardButton("LOW (2-7) - 2x", callback_data=f"dice_play_low_{bet_amount}")
         ],
-        [InlineKeyboardButton("🎯 LUCKY 7 - 5x", callback_data=f"dice_play_seven_{bet_amount}")],
-        [InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]
+        [InlineKeyboardButton("LUCKY 7 - 5x", callback_data=f"dice_play_seven_{bet_amount}")],
+        [InlineKeyboardButton("Back to Games", callback_data="mini_app_centre")]
     ]
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
@@ -3521,24 +3533,24 @@ async def handle_dice_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Create result message
     result_message = f"""
-🎲 <b>DICE GAME RESULT</b> 🎲
+<b>DICE RESULT</b>
 
-🎲 <b>Dice Roll:</b> {die1_emoji} {die2_emoji}
-🔢 <b>Total:</b> {total}
+<b>Dice Roll:</b> {die1_emoji} {die2_emoji}
+<b>Total:</b> {total}
 
 {result_text}
 
-💰 <b>Bet:</b> ${bet_amount:.2f}
-🏆 <b>Won:</b> ${win_amount:.2f}
-📊 <b>Balance:</b> {balance_str}
+<b>Bet:</b> ${bet_amount:.2f}
+<b>Won:</b> ${win_amount:.2f}
+<b>Balance:</b> {balance_str}
 """
     
     keyboard = [
         [
-            InlineKeyboardButton("🎲 Play Again", callback_data="game_dice"),
-            InlineKeyboardButton("🎮 Other Games", callback_data="mini_app_centre")
+            InlineKeyboardButton("Play Again", callback_data="game_dice"),
+            InlineKeyboardButton("Other Games", callback_data="mini_app_centre")
         ],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        [InlineKeyboardButton("Main Menu", callback_data="main_panel")]
     ]
     
     await query.edit_message_text(result_message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
