@@ -1,13 +1,14 @@
 """
-Dice Prediction Game
+Enhanced Prediction Games - Dice & Basketball
 
-A focused dice prediction gaming system featuring:
+A focused prediction gaming system featuring:
 - Dice Prediction: Predict dice roll outcomes (1-6)
+- Basketball Prediction: Predict basketball game outcomes (score ranges & overtime)
 - Multiple selection support for varied risk/reward
 - Fair 5% house edge with transparent multipliers
 - Secure random number generation
 
-Players can choose single or multiple dice numbers to predict,
+Players can choose single or multiple options to predict,
 with higher multipliers for fewer selections (higher risk).
 """
 
@@ -41,6 +42,16 @@ PREDICTION_GAMES = {
         "base_multiplier": 6.0,
         "min_selections": 1,
         "max_selections": 5
+    },
+    "basketball": {
+        "name": "🏀 Basketball Prediction", 
+        "description": "Predict basketball game outcomes",
+        "icon": "🏀",
+        "options": ["low_score", "mid_score", "high_score", "overtime"],
+        "option_names": ["🔵 Low Score (60-80)", "🟡 Mid Score (81-100)", "🔴 High Score (101-120)", "⚡ Overtime"],
+        "base_multiplier": 4.0,
+        "min_selections": 1,
+        "max_selections": 3
     }
 }
 
@@ -64,6 +75,14 @@ def format_outcome_display(game_type: str, outcome) -> str:
     """Format outcome for display with appropriate emojis."""
     if game_type == "dice":
         return f"🎲 {outcome}"
+    elif game_type == "basketball":
+        basketball_outcomes = {
+            "low_score": "🏀 🔵 Low Score (68 points)",
+            "mid_score": "🏀 🟡 Mid Score (92 points)", 
+            "high_score": "🏀 🔴 High Score (115 points)",
+            "overtime": "🏀 ⚡ Overtime Game!"
+        }
+        return basketball_outcomes.get(outcome, f"🏀 {outcome}")
     else:
         return str(outcome)
 
@@ -83,21 +102,27 @@ async def show_prediction_menu(update: Update, context: ContextTypes.DEFAULT_TYP
     balance_str = await format_usd(user['balance'])
     
     text = f"""
-🔮 <b>DICE PREDICTION GAME</b> 🔮
+🔮 <b>PREDICTION GAMES CENTRE</b> 🔮
 
 💰 <b>Your Balance:</b> {balance_str}
 
 🎯 <b>How It Works:</b>
-• Choose your dice predictions (1-6)
-• Select 1 or more numbers you think will be rolled
+• Choose your prediction game type
+• Select 1 or more options you think will win
 • More predictions = lower risk, lower reward
 • Fewer predictions = higher risk, higher reward
 
- <b>Dice Prediction:</b>
-Predict the outcome of a dice roll (1-6)
+🎮 <b>Available Games:</b>
+
+🎲 <b>Dice Prediction:</b> Predict dice roll (1-6)
 • Single number: ~5.7x multiplier
 • 2 numbers: ~2.85x multiplier
 • 3 numbers: ~1.9x multiplier
+
+🏀 <b>Basketball Prediction:</b> Predict game outcomes
+• Single outcome: ~3.8x multiplier
+• 2 outcomes: ~1.9x multiplier
+• 3 outcomes: ~1.27x multiplier
 
 💡 <b>Strategy Tips:</b>
 • Single predictions offer highest multipliers
@@ -107,12 +132,13 @@ Predict the outcome of a dice roll (1-6)
 💵 <b>Betting Limits:</b>
 Min: ${MIN_BET:.2f} | Max: ${MAX_BET:.2f}
 
-<b>🎯 Start playing dice prediction:</b>
+<b>🎯 Choose your prediction game:</b>
 """
     
     keyboard = [
         [
-            InlineKeyboardButton("🎲 Play Dice Prediction", callback_data="prediction_game_dice")
+            InlineKeyboardButton("🎲 Dice Prediction", callback_data="prediction_game_dice"),
+            InlineKeyboardButton("🏀 Basketball Prediction", callback_data="prediction_game_basketball")
         ],
         [
             InlineKeyboardButton("📊 Game Rules", callback_data="prediction_rules"),
@@ -132,13 +158,13 @@ async def show_prediction_rules(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer()
     
     text = f"""
-📚 <b>DICE PREDICTION - RULES & STRATEGY</b> 📚
+📚 <b>PREDICTION GAMES - RULES & STRATEGY</b> 📚
 
 🎯 <b>General Rules:</b>
-• Select one or more dice numbers (1-6) to predict
+• Select one or more options to predict
 • The random outcome is generated fairly using secure randomization
-• If your prediction matches the dice roll, you win!
-• Payouts depend on how many numbers you select
+• If your prediction matches the result, you win!
+• Payouts depend on how many options you select
 
 🎲 <b>Dice Prediction (1-6):</b>
 • Single number: ~5.7x multiplier (highest risk, highest reward)
@@ -146,17 +172,22 @@ async def show_prediction_rules(update: Update, context: ContextTypes.DEFAULT_TY
 • 3 numbers: ~1.9x multiplier
 • 4 numbers: ~1.43x multiplier
 • 5 numbers: ~1.14x multiplier (lowest risk, lowest reward)
+• Formula: (6 ÷ Your Selections) × 0.95
 
-💰 <b>Payout Formula:</b>
-Multiplier = (6 ÷ Your Selections) × 0.95
+🏀 <b>Basketball Prediction (4 outcomes):</b>
+• Single outcome: ~3.8x multiplier (highest risk, highest reward)
+• 2 outcomes: ~1.9x multiplier
+• 3 outcomes: ~1.27x multiplier (lowest risk, lowest reward)
+• Options: Low Score (60-80), Mid Score (81-100), High Score (101-120), Overtime
+• Formula: (4 ÷ Your Selections) × 0.95
 
 🎯 <b>Strategy Tips:</b>
-• <b>Conservative:</b> Choose 3-5 numbers (lower risk, steady wins)
-• <b>Aggressive:</b> Choose 1-2 numbers (higher risk, bigger payouts)
-• <b>Balanced:</b> Choose 2-3 numbers for moderate risk/reward
+• <b>Conservative:</b> Choose more options (lower risk, steady wins)
+• <b>Aggressive:</b> Choose fewer options (higher risk, bigger payouts)
+• <b>Balanced:</b> Choose 2-3 options for moderate risk/reward
 
 🔒 <b>Fairness Guarantee:</b>
-All dice rolls use cryptographically secure randomization. The house edge is a transparent 5%, which is very competitive in the gaming industry.
+All outcomes use cryptographically secure randomization. The house edge is a transparent 5%, which is very competitive in the gaming industry.
 
 Ready to test your prediction skills? 🎮
 """
