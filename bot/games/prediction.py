@@ -1,29 +1,9 @@
 """
-Enhanced Prediction Games - Dice & Basketbal    "bas    "basketball": {
-        "name": "🏀 Basketball Prediction", 
-        "description": "Predict basketball emoji animation outcomes",
-        "icon": "🏀",
-        "options": ["stuck", "miss", "in"],
-        "option_names": ["🔴 Stuck", "❌ Miss", "✅ In"],
-        "base_multiplier": 3.0,
-        "min_selections": 1,
-        "max_selections": 2
-    }{
-        "name": "🏀 Basketball Prediction", 
-        "description": "Predict basketball emoji animation outcomes",
-        "icon": "🏀",
-        "options": ["stuck", "miss", "in"],
-        "option_names": ["🔴 Stuck", "❌ Miss", "✅ In"],
-        "base_multiplier": 3.0,
-        "min_selections": 1,
-        "max_selections": 2
-    }"option_names": ["        basketball_outcomes = {
-            "stuck": "🏀 �🔴 Stuck on rim!",
-            "miss": "🏀 ❌ Complete miss!", 
-            "in": "🏀 ✅ Swish! Nothing but net!"
-        }ck", "❌ Miss", "✅ In"],A focused prediction gaming system featuring:
+Enhanced Prediction Games - Dice & Basketball
+
+A focused prediction gaming system featuring:
 - Dice Prediction: Predict dice roll outcomes (1-6)
-- Basketball Prediction: Predict basketball game outcomes (score ranges & overtime)
+- Basketball Prediction: Predict basketball emoji animation outcomes
 - Multiple selection support for varied risk/reward
 - Fair 5% house edge with transparent multipliers
 - Secure random number generation
