@@ -547,7 +547,7 @@ async def play_dice_predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
 """
     else:
         text = f"""
-😔 <b>NO MATCH</b>
+<b>NO MATCH</b>
 
 � <b>Your Numbers:</b> {selected_display}
 🎲 <b>Dice Result:</b> {number_emojis[actual_number]}

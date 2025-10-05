@@ -410,7 +410,7 @@ async def end_poker_game(query, game: PokerGame, session_id: str, user_id: int):
 {'🏆' if win_amount > game.ante else '💸'} **{'Won' if win_amount > game.ante else 'Lost'}:** {abs(win_amount - game.ante)} chips
 📊 **Balance:** {new_balance} chips
 
-{'🎉 Great hand!' if winner == 'player' else '😔 Better luck next time!'}
+{'Great hand!' if winner == 'player' else 'Better luck next time!'}
 """
     
     # Add play again buttons

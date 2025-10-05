@@ -112,7 +112,7 @@ class BlackjackGame:
             if self.is_blackjack(self.dealer_hand):
                 return "Push! Both have blackjack.", self.bet_amount
             else:
-                return "BLACKJACK! 🎉", int(self.bet_amount * 2.5)
+                return "BLACKJACK!", int(self.bet_amount * 2.5)
         
         # Dealer must play if player didn't bust
         if not self.game_over:
@@ -125,11 +125,11 @@ class BlackjackGame:
         
         # Dealer bust
         if dealer_value > 21:
-            return "Dealer busts! You win! 🎉", self.bet_amount * 2
+            return "Dealer busts! You win!", self.bet_amount * 2
         
         # Compare values
         if player_value > dealer_value:
-            return "You win! 🎉", self.bet_amount * 2
+            return "You win!", self.bet_amount * 2
         elif player_value < dealer_value:
             return "Dealer wins. You lose.", 0
         else:
@@ -341,7 +341,7 @@ async def end_game(query, game: BlackjackGame, session_id: str, user_id: int):
 {'🏆' if win_amount > game.bet_amount else '💸'} **{'Won' if win_amount > game.bet_amount else 'Lost'}:** {abs(win_amount - game.bet_amount)} chips
 📊 **Balance:** {new_balance} chips
 
-{'🎉 Congratulations!' if win_amount > game.bet_amount else 'Better luck next time! 🍀'}
+{'Congratulations!' if win_amount > game.bet_amount else 'Better luck next time!'}
 """
     
     # Add play again button
@@ -424,7 +424,7 @@ async def handle_custom_bet_input(update: Update, context: ContextTypes.DEFAULT_
 {'🏆' if win_amount > game.bet_amount else '💸'} **{'Won' if win_amount > game.bet_amount else 'Lost'}:** {abs(win_amount - game.bet_amount)} chips
 📊 **Balance:** {new_balance} chips
 
-{'🎉 Congratulations!' if win_amount > game.bet_amount else 'Better luck next time! 🍀'}
+{'Congratulations!' if win_amount > game.bet_amount else 'Better luck next time!'}
 """
             
             keyboard = [

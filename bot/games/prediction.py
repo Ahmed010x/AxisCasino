@@ -583,13 +583,13 @@ async def play_prediction_game(update: Update, context: ContextTypes.DEFAULT_TYP
         
         result_text = "WIN"
         result_emoji = "🎉"
-        result_message = f"<b>🎉 PREDICTION CORRECT! 🎉</b>"
+        result_message = f"<b>PREDICTION CORRECT!</b>"
     else:
         win_amount = 0
         net_profit = -bet_amount
         result_text = "LOSS"
         result_emoji = "💔"
-        result_message = f"<b>💔 PREDICTION INCORRECT 💔</b>"
+        result_message = f"<b>PREDICTION INCORRECT</b>"
     
     # Get updated balance
     updated_user = await get_user(user_id)
@@ -609,9 +609,7 @@ async def play_prediction_game(update: Update, context: ContextTypes.DEFAULT_TYP
     
     if player_won:
         text = f"""
-🎊🔮🎊🔮🎊
 {result_message}
-🎊🔮🎊🔮🎊
 
 {game_info['icon']} <b>{game_info['name']}</b>
 
@@ -626,13 +624,11 @@ async def play_prediction_game(update: Update, context: ContextTypes.DEFAULT_TYP
 
 💳 <b>New Balance:</b> {await format_usd(new_balance)}
 
-<b>🔮 Ready for another prediction?</b>
+<b>Ready for another prediction?</b>
 """
     else:
         text = f"""
-💪🎯💪🎯💪
 {result_message}
-💪🎯💪🎯💪
 
 {game_info['icon']} <b>{game_info['name']}</b>
 
@@ -646,7 +642,7 @@ async def play_prediction_game(update: Update, context: ContextTypes.DEFAULT_TYP
 
 💡 <b>Tip:</b> Try adjusting your prediction strategy!
 
-<b>🔮 Ready to try again?</b>
+<b>Ready to try again?</b>
 """
     
     keyboard = [

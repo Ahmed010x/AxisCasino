@@ -255,7 +255,7 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if won:
         text = f"""
-🎉 <b>YOU WIN!</b> 🎉
+<b>YOU WIN!</b>
 
 {result_color} <b>Result: {custom_emoji_display} {result_text}</b>
 
@@ -265,11 +265,11 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 💳 <b>New Balance:</b> {new_balance_str}
 
-<i>🎊 Congratulations! You predicted correctly!</i>
+<i>Congratulations! You predicted correctly!</i>
 """
     else:
         text = f"""
-😔 <b>YOU LOSE</b> 😔
+<b>YOU LOSE</b>
 
 {result_color} <b>Result: {custom_emoji_display} {result_text}</b>
 

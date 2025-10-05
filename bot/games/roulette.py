@@ -384,14 +384,14 @@ async def handle_roulette_callback(update: Update, context: ContextTypes.DEFAULT
 
 **Winning Number:** {color_emoji} **{winning_number}**
 
-🎉 **YOU WIN!**
+**YOU WIN!**
 
 **Your Bet:** {BET_TYPES[bet_type]['name']} - {bet_amount} chips
 **Payout:** {BET_TYPES[bet_type]['payout']}:1
 🏆 **Won:** {win_amount - bet_amount} chips
 📊 **Balance:** {new_balance} chips
 
-Congratulations! 🍀
+Congratulations!
 """
         else:
             result_message = f"""
@@ -399,13 +399,13 @@ Congratulations! 🍀
 
 **Winning Number:** {color_emoji} **{winning_number}**
 
-😔 **YOU LOSE**
+**YOU LOSE**
 
 **Your Bet:** {BET_TYPES[bet_type]['name']} - {bet_amount} chips
 💸 **Lost:** {bet_amount} chips
 📊 **Balance:** {new_balance} chips
 
-Better luck next time! 🍀
+Better luck next time!
 """
         
         # Add play again buttons
@@ -467,14 +467,14 @@ async def handle_custom_bet_input(update: Update, context: ContextTypes.DEFAULT_
 
 **Winning Number:** {color_emoji} **{winning_number}**
 
-🎉 **YOU WIN!**
+**YOU WIN!**
 
 **Your Bet:** {BET_TYPES[bet_type]['name']} - {bet_amount} chips
 **Payout:** {BET_TYPES[bet_type]['payout']}:1
 🏆 **Won:** {win_amount - bet_amount} chips
 📊 **Balance:** {new_balance} chips
 
-Congratulations! 🍀
+Congratulations!
 """
             else:
                 result_message = f"""
@@ -482,7 +482,7 @@ Congratulations! 🍀
 
 **Winning Number:** {color_emoji} **{winning_number}**
 
-😔 **YOU LOSE**
+**YOU LOSE**
 
 **Your Bet:** {BET_TYPES[bet_type]['name']} - {bet_amount} chips
 💸 **Lost:** {bet_amount} chips

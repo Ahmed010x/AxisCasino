@@ -3191,14 +3191,14 @@ def calculate_slots_win(reels: List[str], bet_amount: float) -> Tuple[float, str
         symbol = reels[0]
         multiplier = payouts[symbol]
         win_amount = bet_amount * multiplier
-        return win_amount, f"🎉 JACKPOT! {symbol}{symbol}{symbol} - {multiplier}x multiplier!"
+        return win_amount, f"JACKPOT! {symbol}{symbol}{symbol} - {multiplier}x multiplier!"
     
     # Check for two matching symbols (small consolation)
     elif reels[0] == reels[1] or reels[1] == reels[2] or reels[0] == reels[2]:
         win_amount = bet_amount * 0.5
-        return win_amount, "🎊 Two matching symbols - small win!"
+        return win_amount, "Two matching symbols - small win!"
     
-    return 0.0, "😔 No match - try again!"
+    return 0.0, "No match - try again!"
 
 def generate_blackjack_hand() -> List[str]:
     """Generate a blackjack hand"""
@@ -3354,25 +3354,25 @@ async def handle_blackjack_bet(update: Update, context: ContextTypes.DEFAULT_TYP
     if player_value == 21:
         # Player blackjack
         win_amount = bet_amount * 2.5  # 3:2 payout
-        result_text = "🎉 BLACKJACK! You got 21!"
+        result_text = "BLACKJACK! You got 21!"
     elif player_value > 21:
         # Player bust
-        result_text = f"💥 BUST! You went over 21 with {player_value}"
+        result_text = f"BUST! You went over 21 with {player_value}"
     elif dealer_value > 21:
         # Dealer bust
         win_amount = bet_amount * 2
-        result_text = f"🎉 DEALER BUST! Dealer went over 21 with {dealer_value}"
+        result_text = f"DEALER BUST! Dealer went over 21 with {dealer_value}"
     elif player_value > dealer_value:
         # Player wins
         win_amount = bet_amount * 2
-        result_text = f"🎉 YOU WIN! {player_value} beats {dealer_value}"
+        result_text = f"YOU WIN! {player_value} beats {dealer_value}"
     elif player_value == dealer_value:
         # Push (tie)
         win_amount = bet_amount  # Return bet
-        result_text = f"🤝 PUSH! Both got {player_value}"
+        result_text = f"PUSH! Both got {player_value}"
     else:
         # Dealer wins
-        result_text = f"😔 DEALER WINS! {dealer_value} beats {player_value}"
+        result_text = f"DEALER WINS! {dealer_value} beats {player_value}"
     
     # Update balance if won
     if win_amount > 0:
@@ -3490,20 +3490,20 @@ async def handle_dice_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if prediction == "high" and total >= 8:
         win_amount = bet_amount * 2
-        result_text = f"🎉 YOU WIN! {total} is HIGH!"
+        result_text = f"YOU WIN! {total} is HIGH!"
     elif prediction == "low" and total <= 7:
         win_amount = bet_amount * 2
-        result_text = f"🎉 YOU WIN! {total} is LOW!"
+        result_text = f"YOU WIN! {total} is LOW!"
     elif prediction == "seven" and total == 7:
         win_amount = bet_amount * 5
-        result_text = f"🎉 LUCKY 7! Perfect prediction!"
+        result_text = f"LUCKY 7! Perfect prediction!"
     else:
         if prediction == "high":
-            result_text = f"😔 You predicted HIGH but got {total}"
+            result_text = f"You predicted HIGH but got {total}"
         elif prediction == "low":
-            result_text = f"😔 You predicted LOW but got {total}"
+            result_text = f"You predicted LOW but got {total}"
         elif prediction == "seven":
-            result_text = f"😔 You predicted 7 but got {total}"
+            result_text = f"You predicted 7 but got {total}"
     
     # Update balance if won
     if win_amount > 0:

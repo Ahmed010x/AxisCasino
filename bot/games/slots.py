@@ -310,7 +310,7 @@ async def play_slots_game(message_or_query, context: ContextTypes.DEFAULT_TYPE, 
 
 {slots_display}
 
-🎉 <b>{result_text}</b>
+<b>{result_text}</b>
 
 💰 <b>Bet:</b> ${bet_amount:.2f}
 🏆 <b>Won:</b> ${win_amount:.2f}
@@ -325,7 +325,7 @@ async def play_slots_game(message_or_query, context: ContextTypes.DEFAULT_TYPE, 
 
 {slots_display}
 
-😔 <b>{result_text}</b>
+<b>{result_text}</b>
 
 💰 <b>Bet:</b> ${bet_amount:.2f}
 💸 <b>Lost:</b> ${bet_amount:.2f}

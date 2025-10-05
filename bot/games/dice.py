@@ -342,7 +342,7 @@ async def handle_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         if game_result['player_won']:
             result_message += f"� <b>YOU WIN THE MATCH!</b>\n\n"
             result_message += f"💰 <b>Bet:</b> {await format_usd(game_result['bet_amount'])}\n"
-            result_message += f"🎉 <b>Won:</b> {await format_usd(game_result['win_amount'])}\n"
+            result_message += f"💵 <b>Won:</b> {await format_usd(game_result['win_amount'])}\n"
             result_message += f"📈 <b>Profit:</b> +{await format_usd(game_result['net_result'])}\n"
         else:
             result_message += f"😔 <b>BOT WINS THE MATCH</b>\n\n"
@@ -442,10 +442,10 @@ async def handle_custom_bet_input(update: Update, context: ContextTypes.DEFAULT_
         if game_result['player_won']:
             result_message += f"🏆 <b>YOU WIN THE MATCH!</b>\n\n"
             result_message += f"💰 <b>Bet:</b> {await format_usd(game_result['bet_amount'])}\n"
-            result_message += f"🎉 <b>Won:</b> {await format_usd(game_result['win_amount'])}\n"
+            result_message += f"💵 <b>Won:</b> {await format_usd(game_result['win_amount'])}\n"
             result_message += f"📈 <b>Profit:</b> +{await format_usd(game_result['net_result'])}\n"
         else:
-            result_message += f"😔 <b>BOT WINS THE MATCH</b>\n\n"
+            result_message += f"� <b>BOT WINS THE MATCH</b>\n\n"
             result_message += f"💸 <b>Lost:</b> {await format_usd(game_result['bet_amount'])}\n"
         
         result_message += f"� <b>New Balance:</b> {await format_usd(game_result['new_balance'])}\n"
