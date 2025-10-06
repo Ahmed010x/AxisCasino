@@ -17,9 +17,21 @@ MIN_BET = 0.50
 MAX_BET = 1000.0
 WIN_MULTIPLIER = 1.95  # 95% payout (5% house edge)
 
-# Custom Telegram Emoji IDs for Heads and Tails
-HEADS_EMOJI_ID = "5886663771962743061"
-TAILS_EMOJI_ID = "5886234567290918532"
+# Coin sticker configurations - Using working crypto coin stickers
+# Bitcoin for heads, Ethereum for tails (tested and verified working)
+COIN_STICKER_PACKS = {
+    "heads": [
+        "CAACAgEAAxkBAAEPfLto3fLKQk9KP9FaLSYjwZih82J-sQACIAYAAhUgyUYe7AYU47cPsDYE",  # Bitcoin (Gold = Heads)
+    ],
+    "tails": [
+        "CAACAgEAAxkBAAEPfL1o3fOba1jsv5rN1Ojdu5f0DCp_6wACHwYAAhUgyUbBT2yx1FdJ7DYE",  # Ethereum (Blue = Tails)
+    ]
+}
+
+# Alternative: Use Telegram's built-in dice emoji for coin flip animation
+# The slot machine emoji can serve as a coin flip with visual enhancement
+USE_DICE_ANIMATION = True
+USE_STICKERS = True  # Using verified working sticker file IDs
 
 async def handle_coinflip_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Main handler for coin flip game"""
@@ -72,13 +84,14 @@ async def show_coinflip_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 💡 <b>Game Info:</b>
 • Fair 50/50 odds
-• Animated coin flip results
+• Animated crypto coin stickers
 • Win probability: 50%
 • Payout: {WIN_MULTIPLIER}x bet
 
 🎨 <b>Visual Effects:</b>
-• Custom coin emojis (Telegram Premium)
-• Colored fallback emojis (Standard)
+• Bitcoin sticker for HEADS (golden)
+• Ethereum sticker for TAILS (blue)
+• Enhanced animated results
 
 <b>Choose your bet amount:</b>
 """
@@ -142,16 +155,15 @@ async def show_coinflip_choice(update: Update, context: ContextTypes.DEFAULT_TYP
 <b>Choose your side:</b>
 Will it be Heads or Tails?
 
-🟡 <b>HEADS</b> = Gold coin side
-🔵 <b>TAILS</b> = Blue coin side
+🪙 <b>HEADS</b> = Bitcoin (Golden coin)
+🔵 <b>TAILS</b> = Ethereum (Blue coin)
 
-💡 <i>Results shown with animated coin emojis
-(Custom emojis available with Telegram Premium)</i>
+💡 <i>Results shown with animated crypto coin stickers</i>
 """
     
-    # Button text with descriptions since custom emojis might not display in buttons
-    heads_button_text = "🟡 HEADS"
-    tails_button_text = "🔵 TAILS"
+    # Button text with crypto coin descriptions
+    heads_button_text = "🪙 HEADS (Bitcoin)"
+    tails_button_text = "🔵 TAILS (Ethereum)"
     
     keyboard = [
         [
@@ -229,11 +241,6 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     updated_user = await get_user(user_id)
     new_balance_str = await format_usd(updated_user['balance'])
     
-    # Determine which emoji to use
-    emoji_id = HEADS_EMOJI_ID if result == "heads" else TAILS_EMOJI_ID
-    result_text = "HEADS" if result == "heads" else "TAILS"
-    result_color = "�" if result == "heads" else "�"  # Yellow for Heads, Blue for Tails
-    
     # Delete the old message first
     try:
         await query.message.delete()
@@ -241,7 +248,7 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Could not delete message: {e}")
     
-    # Send the custom emoji result with improved handling
+    # Send coin flip animation using multiple approaches
     try:
         # Send animation message
         await context.bot.send_message(
@@ -252,103 +259,117 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Add dramatic effect delay
         import asyncio
-        await asyncio.sleep(1.5)
+        await asyncio.sleep(1)
         
-        # Determine display elements
-        emoji_char = "🟡" if result == "heads" else "🔵"  # Gold for heads, Blue for tails
-        coin_emoji = "🪙"
-        
-        logger.info(f"Attempting to send custom emoji for {result} with ID: {emoji_id}")
-        
-        # Try multiple methods to display custom emoji result
-        custom_emoji_success = False
-        
-        # Method 1: MessageEntity with custom_emoji_id (most reliable)
-        try:
-            from telegram import MessageEntity
-            
-            # Create message with coin emojis that will be replaced with custom ones
-            result_message = f"🎰 COIN FLIP RESULT 🎰\n\n{coin_emoji} {result_text}! {coin_emoji}\n\nThe coin has landed!"
-            
-            # Find all coin emoji positions
-            coin_positions = []
-            start = 0
-            while True:
-                pos = result_message.find(coin_emoji, start)
-                if pos == -1:
-                    break
-                coin_positions.append(pos)
-                start = pos + 1
-            
-            # Create custom emoji entities for each coin emoji
-            entities = []
-            for pos in coin_positions:
-                entities.append(MessageEntity(
-                    type=MessageEntity.CUSTOM_EMOJI,
-                    offset=pos,
-                    length=len(coin_emoji),
-                    custom_emoji_id=emoji_id
-                ))
-            
-            if entities:
-                await context.bot.send_message(
-                    chat_id=query.message.chat_id,
-                    text=result_message,
-                    entities=entities
-                )
-                custom_emoji_success = True
-                logger.info(f"✅ Custom emoji MessageEntity sent successfully for {result}")
-            else:
-                raise Exception("No coin emojis found in message")
-                
-        except Exception as entity_error:
-            logger.warning(f"⚠️ MessageEntity custom emoji failed: {entity_error}")
-        
-        # Method 2: HTML <tg-emoji> tags (alternative approach)
-        if not custom_emoji_success:
+        # Method 1: Try sending actual coin stickers if available
+        if USE_STICKERS:
             try:
-                custom_emoji_tag = f'<tg-emoji emoji-id="{emoji_id}">{coin_emoji}</tg-emoji>'
-                result_message_html = f"""🎰 <b>COIN FLIP RESULT</b> 🎰
+                sticker_ids = COIN_STICKER_PACKS.get(result, [])
+                if sticker_ids:
+                    # Send coin sticker
+                    await context.bot.send_sticker(
+                        chat_id=query.message.chat_id,
+                        sticker=sticker_ids[0]  # Use first available sticker
+                    )
+                    
+                    await asyncio.sleep(2)
+                    
+                    result_message = f"""🪙 <b>COIN FLIP RESULT</b> 🪙
 
-{custom_emoji_tag} <b>{result_text}!</b> {custom_emoji_tag}
+🎯 <b>Your Choice:</b> {"HEADS (Bitcoin)" if choice == "heads" else "TAILS (Ethereum)"}
+🎰 <b>Result:</b> {"HEADS (Bitcoin)" if result == "heads" else "TAILS (Ethereum)"}
+
+<i>The crypto coin sticker shows the result!</i>"""
+                    
+                    await context.bot.send_message(
+                        chat_id=query.message.chat_id,
+                        text=result_message,
+                        parse_mode=ParseMode.HTML
+                    )
+                    
+                    logger.info(f"✅ Successfully sent coin sticker for {result}")
+                    sticker_sent = True
+                else:
+                    sticker_sent = False
+            except Exception as sticker_error:
+                logger.warning(f"⚠️ Sticker sending failed: {sticker_error}")
+                sticker_sent = False
+        else:
+            sticker_sent = False
+        
+        # Method 2: Use dice animation if stickers failed or not enabled
+        if not sticker_sent and USE_DICE_ANIMATION:
+            # Use slot machine emoji as coin flip animation
+            dice_message = await context.bot.send_dice(
+                chat_id=query.message.chat_id,
+                emoji="🎰"  # Slot machine gives nice animation
+            )
+            
+            # Wait for animation to complete
+            await asyncio.sleep(3)
+            
+            # Send result with visual coin representation
+            result_emoji = "🪙" if result == "heads" else "🔵"  # Bitcoin symbol for heads, Blue for Ethereum tails
+            result_text = "HEADS (Bitcoin)" if result == "heads" else "TAILS (Ethereum)"
+            
+            result_message = f"""🪙 <b>COIN FLIP RESULT</b> 🪙
+
+{result_emoji} <b>{result_text}!</b> {result_emoji}
+
+🎯 <b>Your Choice:</b> {"HEADS" if choice == "heads" else "TAILS"}
+🎰 <b>Result:</b> {result_text}
 
 <i>The coin has landed!</i>"""
-                
-                await context.bot.send_message(
-                    chat_id=query.message.chat_id,
-                    text=result_message_html,
-                    parse_mode=ParseMode.HTML
-                )
-                custom_emoji_success = True
-                logger.info(f"✅ HTML custom emoji sent successfully for {result}")
-                
-            except Exception as html_error:
-                logger.warning(f"⚠️ HTML <tg-emoji> method failed: {html_error}")
-        
-        # Method 3: Enhanced fallback with colored emojis and explanation
-        if not custom_emoji_success:
-            result_message_fallback = f"""🎰 <b>COIN FLIP RESULT</b> 🎰
-
-{emoji_char} <b>{result_text}!</b> {emoji_char}
-
-<i>The coin has landed!</i>
-
-💡 <i>Note: Using standard emoji display
-Custom coin animations require Telegram Premium</i>"""
             
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
-                text=result_message_fallback,
+                text=result_message,
                 parse_mode=ParseMode.HTML
             )
-            logger.info(f"ℹ️ Fallback emoji sent for {result} (custom emojis unavailable)")
+            
+        # Method 3: Simple emoji animation fallback
+        elif not sticker_sent:
+            result_emoji = "🪙" if result == "heads" else "🔵"
+            result_text = "HEADS (Bitcoin)" if result == "heads" else "TAILS (Ethereum)"
+            
+            # Send multiple coin emojis for visual effect
+            coin_animation = "🪙 " * 5
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=coin_animation,
+            )
+            
+            await asyncio.sleep(1.5)
+            
+            result_message = f"""🪙 <b>COIN FLIP RESULT</b> 🪙
+
+{result_emoji} <b>{result_text}!</b> {result_emoji}
+
+🎯 <b>Your Choice:</b> {"HEADS" if choice == "heads" else "TAILS"}
+🎰 <b>Result:</b> {result_text}
+
+<i>The coin has landed!</i>"""
+            
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=result_message,
+                parse_mode=ParseMode.HTML
+            )
+        
+        logger.info(f"✅ Successfully sent coin flip result with animation for {result}")
         
     except Exception as e:
-        logger.error(f"❌ Failed to send coin flip result: {e}")
+        logger.error(f"❌ Failed to send coin flip animation: {e}")
         # Absolute final fallback
+        result_emoji = "🪙" if result == "heads" else "🔵"
+        result_text = "HEADS (Bitcoin)" if result == "heads" else "TAILS (Ethereum)"
+        
         fallback_text = f"""🎰 <b>COIN FLIP RESULT</b> 🎰
 
-<b>{result_text}!</b>
+{result_emoji} <b>{result_text}!</b> {result_emoji}
+
+🎯 <b>Your Choice:</b> {"HEADS" if choice == "heads" else "TAILS"}
+🎰 <b>Result:</b> {result_text}
 
 <i>The coin has landed!</i>"""
         

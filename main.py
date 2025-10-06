@@ -2615,7 +2615,7 @@ You need at least $1.00 to play games.
 🎰 <b>Slots</b> - Classic slot machine
 🃏 <b>Blackjack</b> - Beat the dealer
 🎲 <b>Dice</b> - Roll to win
-🪙 <b>Coin Flip</b> - Heads or Tails
+🪙 <b>Coin Flip</b> - Bitcoin vs Ethereum stickers
 🎯 <b>Roulette</b> - European roulette
 🏀 <b>Basketball</b> - Shoot hoops!
 🔮 <b>Dice Predict</b> - Predict the dice
@@ -2632,7 +2632,7 @@ Choose your game:
 🎰 <b>Slots</b> - Classic slot machine
 🃏 <b>Blackjack</b> - Beat the dealer
 🎲 <b>Dice 1v1</b> - Roll against the bot
-🪙 <b>Coin Flip</b> - Heads or Tails
+🪙 <b>Coin Flip</b> - Bitcoin vs Ethereum stickers
 🎯 <b>Roulette</b> - European roulette
 🏀 <b>Basketball 1v1</b> - Shoot hoops vs bot!
 🔮 <b>Dice Predict</b> - Predict the dice (5x payout!)
