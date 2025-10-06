@@ -247,17 +247,9 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
         import asyncio
         await asyncio.sleep(1)
         
-        # Try to send as custom emoji sticker first
+        # Send custom emoji in message using MessageEntity (custom emoji IDs are not sticker IDs)
+        logger.info(f"Using custom emoji ID: {emoji_id} for result: {result}")
         try:
-            await context.bot.send_sticker(
-                chat_id=query.message.chat_id,
-                sticker=emoji_id  # Send as custom emoji sticker
-            )
-            logger.info(f"Sent coin flip custom emoji sticker for {result}")
-        except Exception as sticker_error:
-            logger.warning(f"Custom emoji sticker failed, trying as emoji: {sticker_error}")
-            # Alternative: Send custom emoji in message using custom_emoji_id
-            try:
                 # This is the correct way to send custom emojis via Bot API
                 from telegram import MessageEntity
                 
@@ -285,7 +277,7 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     entities=entities
                 )
                 logger.info(f"Sent coin flip with custom emoji entities for {result}")
-            except Exception as entity_error:
+        except Exception as entity_error:
                 logger.error(f"Custom emoji entities failed: {entity_error}")
                 # Final fallback to regular message
                 await context.bot.send_message(
