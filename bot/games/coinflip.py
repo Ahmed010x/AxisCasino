@@ -33,6 +33,13 @@ COIN_STICKER_PACKS = {
 USE_DICE_ANIMATION = True
 USE_STICKERS = True  # Using verified working sticker file IDs
 
+# Log configuration on module load
+logger.info("🪙 Coinflip Module Configuration:")
+logger.info(f"   USE_STICKERS: {USE_STICKERS}")
+logger.info(f"   USE_DICE_ANIMATION: {USE_DICE_ANIMATION}")
+logger.info(f"   Bitcoin sticker ID: {COIN_STICKER_PACKS['heads'][0][:40]}...")
+logger.info(f"   Ethereum sticker ID: {COIN_STICKER_PACKS['tails'][0][:40]}...")
+
 async def handle_coinflip_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Main handler for coin flip game"""
     query = update.callback_query
@@ -262,15 +269,23 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await asyncio.sleep(1)
         
         # Method 1: Try sending actual coin stickers if available
+        sticker_sent = False
         if USE_STICKERS:
             try:
                 sticker_ids = COIN_STICKER_PACKS.get(result, [])
+                logger.info(f"🎯 Attempting to send {result} sticker. Available stickers: {len(sticker_ids)}")
+                
                 if sticker_ids:
+                    sticker_id = sticker_ids[0]
+                    logger.info(f"📤 Sending sticker ID: {sticker_id[:40]}... to chat {query.message.chat_id}")
+                    
                     # Send coin sticker
-                    await context.bot.send_sticker(
+                    sticker_msg = await context.bot.send_sticker(
                         chat_id=query.message.chat_id,
-                        sticker=sticker_ids[0]  # Use first available sticker
+                        sticker=sticker_id
                     )
+                    
+                    logger.info(f"✅ Sticker sent successfully! Message ID: {sticker_msg.message_id}")
                     
                     await asyncio.sleep(2)
                     
@@ -287,15 +302,18 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         parse_mode=ParseMode.HTML
                     )
                     
-                    logger.info(f"✅ Successfully sent coin sticker for {result}")
+                    logger.info(f"✅ Successfully completed sticker send for {result}")
                     sticker_sent = True
                 else:
+                    logger.warning(f"⚠️ No sticker IDs found for {result}")
                     sticker_sent = False
             except Exception as sticker_error:
-                logger.warning(f"⚠️ Sticker sending failed: {sticker_error}")
+                logger.error(f"❌ Sticker sending failed: {type(sticker_error).__name__}: {sticker_error}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
                 sticker_sent = False
         else:
-            sticker_sent = False
+            logger.info("ℹ️ USE_STICKERS is False, skipping sticker send")
         
         # Method 2: Use dice animation if stickers failed or not enabled
         if not sticker_sent and USE_DICE_ANIMATION:
