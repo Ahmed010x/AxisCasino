@@ -66,6 +66,26 @@ PREDICTION_GAMES = {
         "base_multiplier": 3.0,
         "min_selections": 1,
         "max_selections": 2
+    },
+    "bowling": {
+        "name": "🎳 Bowling Prediction",
+        "description": "Predict bowling emoji animation outcomes",
+        "icon": "🎳",
+        "options": ["gutter", "few_pins", "many_pins", "strike"],
+        "option_names": ["Gutter", "Few Pins", "Many Pins", "Strike"],
+        "base_multiplier": 4.0,
+        "min_selections": 1,
+        "max_selections": 3
+    },
+    "darts": {
+        "name": "🎯 Darts Prediction",
+        "description": "Predict darts emoji animation outcomes",
+        "icon": "🎯",
+        "options": ["outer", "middle", "inner", "bullseye"],
+        "option_names": ["Outer Ring", "Middle Ring", "Inner Ring", "Bullseye"],
+        "base_multiplier": 4.0,
+        "min_selections": 1,
+        "max_selections": 3
     }
 }
 
@@ -113,6 +133,22 @@ def format_outcome_display(game_type: str, outcome) -> str:
             "goal": "GOAL! Perfect shot!"
         }
         return soccer_outcomes.get(outcome, f"{outcome}")
+    elif game_type == "bowling":
+        bowling_outcomes = {
+            "gutter": "Gutter ball!",
+            "few_pins": "Few pins knocked down",
+            "many_pins": "Many pins knocked down!",
+            "strike": "STRIKE! Perfect shot!"
+        }
+        return bowling_outcomes.get(outcome, f"{outcome}")
+    elif game_type == "darts":
+        darts_outcomes = {
+            "outer": "Outer ring",
+            "middle": "Middle ring",
+            "inner": "Inner ring!",
+            "bullseye": "BULLSEYE! Perfect throw!"
+        }
+        return darts_outcomes.get(outcome, f"{outcome}")
     else:
         return str(outcome)
 
@@ -158,6 +194,16 @@ async def show_prediction_menu(update: Update, context: ContextTypes.DEFAULT_TYP
 • 2 outcomes: ~1.43x multiplier
 • Uses ⚽ emoji animation to determine result!
 
+🎳 <b>Bowling Prediction:</b> Predict bowling emoji outcomes
+• Single outcome: ~3.8x multiplier
+• 2 outcomes: ~1.9x multiplier
+• Uses 🎳 emoji animation to determine result!
+
+🎯 <b>Darts Prediction:</b> Predict darts emoji outcomes
+• Single outcome: ~3.8x multiplier
+• 2 outcomes: ~1.9x multiplier
+• Uses 🎯 emoji animation to determine result!
+
 💡 <b>Strategy Tips:</b>
 • Single predictions offer highest multipliers
 • Multiple predictions increase win chances
@@ -176,6 +222,10 @@ Min: ${MIN_BET:.2f} | Max: ${MAX_BET:.2f}
         ],
         [
             InlineKeyboardButton("⚽ Soccer Prediction", callback_data="prediction_game_soccer")
+        ],
+        [
+            InlineKeyboardButton("🎳 Bowling Prediction", callback_data="prediction_game_bowling"),
+            InlineKeyboardButton("🎯 Darts Prediction", callback_data="prediction_game_darts")
         ],
         [
             InlineKeyboardButton("📊 Game Rules", callback_data="prediction_rules"),
@@ -217,6 +267,29 @@ async def show_prediction_rules(update: Update, context: ContextTypes.DEFAULT_TY
 • Options: Stuck (ball stuck on rim), Miss (complete miss), In (successful shot)
 • <b>Special:</b> Uses animated basketball emoji 🏀 to determine outcome!
 • Formula: (3 ÷ Your Selections) × 0.95
+
+⚽ <b>Soccer Prediction (3 outcomes):</b>
+• Single outcome: ~2.85x multiplier (highest risk, highest reward)
+• 2 outcomes: ~1.43x multiplier (lowest risk, lowest reward)
+• Options: Miss (complete miss), Bar (hit the bar), Goal (perfect shot)
+• <b>Special:</b> Uses animated soccer emoji ⚽ to determine outcome!
+• Formula: (3 ÷ Your Selections) × 0.95
+
+🎳 <b>Bowling Prediction (4 outcomes):</b>
+• Single outcome: ~3.8x multiplier (highest risk, highest reward)
+• 2 outcomes: ~1.9x multiplier
+• 3 outcomes: ~1.27x multiplier (lowest risk, lowest reward)
+• Options: Gutter, Few Pins, Many Pins, Strike
+• <b>Special:</b> Uses animated bowling emoji 🎳 to determine outcome!
+• Formula: (4 ÷ Your Selections) × 0.95
+
+🎯 <b>Darts Prediction (4 outcomes):</b>
+• Single outcome: ~3.8x multiplier (highest risk, highest reward)
+• 2 outcomes: ~1.9x multiplier
+• 3 outcomes: ~1.27x multiplier (lowest risk, lowest reward)
+• Options: Outer Ring, Middle Ring, Inner Ring, Bullseye
+• <b>Special:</b> Uses animated darts emoji 🎯 to determine outcome!
+• Formula: (4 ÷ Your Selections) × 0.95
 
 🎯 <b>Strategy Tips:</b>
 • <b>Conservative:</b> Choose more options (lower risk, steady wins)
@@ -271,7 +344,7 @@ async def show_game_selection_menu(update: Update, context: ContextTypes.DEFAULT
 {game_info['icon']} <b>{game_info['name']}</b> {game_info['icon']}
 
 💰 <b>Balance:</b> {balance_str}
-📝 <b>Game:</b> {game_description}
+📝 <b>Game:</b> {game_info['description']}
 
 🎯 <b>Your Selections:</b> None yet
 💵 <b>Current Multiplier:</b> Select options to see
@@ -628,6 +701,80 @@ async def play_prediction_game(update: Update, context: ContextTypes.DEFAULT_TYP
             
         # Wait a moment for the animation to complete
         await asyncio.sleep(3)
+        
+    elif game_type == "bowling":
+        # Send bowling emoji animation and determine outcome from result
+        from telegram import Dice
+        
+        # Send the bowling emoji which will animate and show the result
+        bowling_message = await query.message.reply_dice(emoji="🎳")
+        dice_value = bowling_message.dice.value
+        
+        # Map bowling dice values (1-6) to our outcomes
+        # Bowling emoji values: 1=gutter, 2-3=few_pins, 4-5=many_pins, 6=strike
+        if dice_value == 1:
+            outcome = "gutter"
+        elif dice_value in [2, 3]:
+            outcome = "few_pins"
+        elif dice_value in [4, 5]:
+            outcome = "many_pins"
+        elif dice_value == 6:
+            outcome = "strike"
+        else:
+            # Fallback to random if unexpected value
+            outcome = random.choice(["gutter", "few_pins", "many_pins", "strike"])
+        
+        # DEBUG LOGGING
+        logger.info(f"🐛 BOWLING DEBUG - User {user_id}")
+        logger.info(f"🐛 Player selections indices: {selections}")
+        logger.info(f"🐛 Player selections names: {[game_info['option_names'][i] for i in selections]}")
+        logger.info(f"🐛 Bowling dice result: {dice_value}")
+        logger.info(f"🐛 Determined outcome: {outcome}")
+        logger.info(f"🐛 Game options: {game_info['options']}")
+        
+        outcome_index = game_info['options'].index(outcome)
+        logger.info(f"🐛 Outcome index: {outcome_index}")
+        logger.info(f"🐛 Player won check: {outcome_index} in {selections} = {outcome_index in selections}")
+            
+        # Wait a moment for the animation to complete
+        await asyncio.sleep(4)
+        
+    elif game_type == "darts":
+        # Send darts emoji animation and determine outcome from result
+        from telegram import Dice
+        
+        # Send the darts emoji which will animate and show the result
+        darts_message = await query.message.reply_dice(emoji="🎯")
+        dice_value = darts_message.dice.value
+        
+        # Map darts dice values (1-6) to our outcomes
+        # Darts emoji values: 1-2=outer, 3-4=middle, 5=inner, 6=bullseye
+        if dice_value in [1, 2]:
+            outcome = "outer"
+        elif dice_value in [3, 4]:
+            outcome = "middle"
+        elif dice_value == 5:
+            outcome = "inner"
+        elif dice_value == 6:
+            outcome = "bullseye"
+        else:
+            # Fallback to random if unexpected value
+            outcome = random.choice(["outer", "middle", "inner", "bullseye"])
+        
+        # DEBUG LOGGING
+        logger.info(f"🐛 DARTS DEBUG - User {user_id}")
+        logger.info(f"🐛 Player selections indices: {selections}")
+        logger.info(f"🐛 Player selections names: {[game_info['option_names'][i] for i in selections]}")
+        logger.info(f"🐛 Darts dice result: {dice_value}")
+        logger.info(f"🐛 Determined outcome: {outcome}")
+        logger.info(f"🐛 Game options: {game_info['options']}")
+        
+        outcome_index = game_info['options'].index(outcome)
+        logger.info(f"🐛 Outcome index: {outcome_index}")
+        logger.info(f"🐛 Player won check: {outcome_index} in {selections} = {outcome_index in selections}")
+            
+        # Wait a moment for the animation to complete
+        await asyncio.sleep(4)
         
     else:
         # For other games like dice, use random selection
