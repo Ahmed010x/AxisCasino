@@ -2399,27 +2399,29 @@ Welcome, {username}! 👋
         earnings_str = await format_usd(stats['earnings'])
         
         text = f"""
-👥 <b>REFERRAL PROGRAM</b>
+<b>REFERRAL PROGRAM</b>
 
-💰 <b>Earn 20% Commission!</b>
+<b>Earn 20% Commission!</b>
 
-Share your referral link and earn <b>20% of what your referrals lose</b> in games!
+Share your unique referral link and earn <b>20% of what your referrals lose</b> in games!
 
-🔗 <b>Your Referral Link:</b>
+<b>Your Referral Link:</b>
 <code>{referral_link}</code>
 
-📊 <b>Your Stats:</b>
+<b>Your Stats:</b>
 Total Referrals: <b>{stats['count']}</b>
 Total Earned: <b>{earnings_str}</b>
 
 <b>How it works:</b>
 1. Share your link with friends
 2. They sign up using your link
-3. They get ${REFERRAL_BONUS_REFEREE:.2f} welcome bonus
-4. You earn 20% commission on their losses
+3. They get a ${REFERRAL_BONUS_REFEREE:.2f} welcome bonus
+4. You earn 20% commission every time they lose a game
 
-💡 <b>Example:</b>
+<b>Example:</b>
 If your referral loses $100, you earn $20!
+
+Start sharing and earning today!
 """
         
         # Add recent referrals if any
@@ -2431,9 +2433,9 @@ If your referral loses $100, you earn $20!
                 text += f"• {username} - Earned: ${bonus:.2f}\n"
         
         keyboard = [
-            [InlineKeyboardButton("📤 Share Link", url=f"https://t.me/share/url?url={referral_link}&text=Join this amazing casino bot!")],
-            [InlineKeyboardButton("🔄 Refresh Stats", callback_data="referral_menu")],
-            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+            [InlineKeyboardButton("Share Link", url=f"https://t.me/share/url?url={referral_link}&text=Join this amazing casino bot!")],
+            [InlineKeyboardButton("Refresh Stats", callback_data="referral_menu")],
+            [InlineKeyboardButton("Main Menu", callback_data="main_panel")]
         ]
         
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
@@ -2617,6 +2619,7 @@ You need at least $1.00 to play games.
 🎯 <b>Roulette</b> - European roulette
 🏀 <b>Basketball</b> - Shoot hoops!
 🔮 <b>Dice Predict</b> - Predict the dice
+⚽ <b>Soccer Predict</b> - Predict emoji outcomes
 """
         else:
             text = f"""
@@ -2633,6 +2636,7 @@ Choose your game:
 🎯 <b>Roulette</b> - European roulette
 🏀 <b>Basketball 1v1</b> - Shoot hoops vs bot!
 🔮 <b>Dice Predict</b> - Predict the dice (5x payout!)
+⚽ <b>Soccer Predict</b> - Predict emoji outcomes!
 
 Good luck! 🍀
 """
@@ -2764,49 +2768,49 @@ If your referral loses $100, you earn $20!
         biggest_win_str = await format_usd(user.get('biggest_win', 0.0))
         
         text = f"""
-📊 <b>YOUR STATISTICS</b>
+<b>YOUR STATISTICS</b>
 
-💰 <b>Current Balance:</b> {balance_str}
-🎮 <b>Games Played:</b> {user.get('games_played', 0):,}
-💸 <b>Total Wagered:</b> {wagered_str}
-🏆 <b>Total Won:</b> {won_str}
-💳 <b>Total Deposited:</b> {deposited_str}
-🏦 <b>Total Withdrawn:</b> {withdrawn_str}
+<b>Current Balance:</b> {balance_str}
+<b>Games Played:</b> {user.get('games_played', 0):,}
+<b>Total Wagered:</b> {wagered_str}
+<b>Total Won:</b> {won_str}
+<b>Total Deposited:</b> {deposited_str}
+<b>Total Withdrawn:</b> {withdrawn_str}
 
-🎯 <b>Performance:</b>
-🔥 <b>Current Win Streak:</b> {user.get('win_streak', 0)}
-⭐ <b>Max Win Streak:</b> {user.get('max_win_streak', 0)}
-💎 <b>Biggest Win:</b> {biggest_win_str}
-🏅 <b>VIP Level:</b> {user.get('vip_level', 0)}
+<b>Performance:</b>
+<b>Current Win Streak:</b> {user.get('win_streak', 0)}
+<b>Max Win Streak:</b> {user.get('max_win_streak', 0)}
+<b>Biggest Win:</b> {biggest_win_str}
+<b>VIP Level:</b> {user.get('vip_level', 0)}
 
-📅 <b>Member Since:</b> {user.get('created_at', '')[:10] if user.get('created_at') else 'Unknown'}
+<b>Member Since:</b> {user.get('created_at', '')[:10] if user.get('created_at') else 'Unknown'}
 """
-        keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]]
+        keyboard = [[InlineKeyboardButton("Back to Menu", callback_data="main_panel")]]
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     
     async def help_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show help menu"""
         text = """
-❓ <b>HELP & SUPPORT</b>
+<b>HELP & SUPPORT</b>
 
-🎮 <b>How to Play:</b>
+<b>How to Play:</b>
 • Use /start to access your panel
 • Deposit funds to start playing
 • Choose games and place bets
 • Withdraw your winnings
 
-💳 <b>Deposits & Withdrawals:</b>
+<b>Deposits & Withdrawals:</b>
 • Supported: Litecoin (LTC)
 • Fast processing times
 • Secure transactions
 
-🎯 <b>Features:</b>
+<b>Features:</b>
 • Multiple casino games
 • Referral system
 • VIP rewards
 • 24/7 support
 
-📞 <b>Need Help?</b>
+<b>Need Help?</b>
 Contact our support team for assistance.
 """
         keyboard = [
@@ -3531,24 +3535,24 @@ async def handle_dice_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Create result message
     result_message = f"""
-🎲 <b>DICE RESULT</b>
+<b>DICE RESULT</b>
 
-🎲 <b>Dice Roll:</b> {die1_emoji} {die2_emoji}
-🔢 <b>Total:</b> {total}
+<b>Dice Roll:</b> {die1_emoji} {die2_emoji}
+<b>Total:</b> {total}
 
 {result_text}
 
-💰 <b>Bet:</b> ${bet_amount:.2f}
-🏆 <b>Won:</b> ${win_amount:.2f}
-📊 <b>Balance:</b> {balance_str}
+<b>Bet:</b> ${bet_amount:.2f}
+<b>Won:</b> ${win_amount:.2f}
+<b>Balance:</b> {balance_str}
 """
     
     keyboard = [
         [
-            InlineKeyboardButton("🎲 Play Again", callback_data="game_dice"),
-            InlineKeyboardButton("🎮 Other Games", callback_data="mini_app_centre")
+            InlineKeyboardButton("Play Again", callback_data="game_dice"),
+            InlineKeyboardButton("Other Games", callback_data="mini_app_centre")
         ],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+        [InlineKeyboardButton("Main Menu", callback_data="main_panel")]
     ]
     
     await query.edit_message_text(result_message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)

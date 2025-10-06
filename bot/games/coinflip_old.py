@@ -137,19 +137,12 @@ async def show_coinflip_choice(update: Update, context: ContextTypes.DEFAULT_TYP
 
 <b>Choose your side:</b>
 Will it be Heads or Tails?
-
-🟡 <b>HEADS</b> = Gold coin side
-🔵 <b>TAILS</b> = Blue coin side
 """
-    
-    # Use custom emojis in button text if available
-    heads_button_text = f"🟡 HEADS"
-    tails_button_text = f"🔵 TAILS"
     
     keyboard = [
         [
-            InlineKeyboardButton(heads_button_text, callback_data=f"coinflip_play_heads_{bet_amount}"),
-            InlineKeyboardButton(tails_button_text, callback_data=f"coinflip_play_tails_{bet_amount}")
+            InlineKeyboardButton("🟡 HEADS", callback_data=f"coinflip_play_heads_{bet_amount}"),
+            InlineKeyboardButton("🔵 TAILS", callback_data=f"coinflip_play_tails_{bet_amount}")
         ],
         [InlineKeyboardButton("🔙 Back", callback_data="game_coinflip")]
     ]
@@ -194,9 +187,36 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # Flip the coin
-    result = random.choice(['heads', 'tails'])
+    # Show game start message
+    await query.edit_message_text(
+        f"🪙 <b>COIN FLIP STARTING!</b> 🪙\n\n"
+        f"🎯 Your choice: {choice.upper()}\n"
+        f"💰 Bet: ${bet_amount:.2f}\n\n"
+        f"<i>Flipping the coin...</i>",
+        parse_mode=ParseMode.HTML
+    )
+    
+    # Dramatic pause
+    import asyncio
+    await asyncio.sleep(2)
+    
+    # Send dice emoji animation and determine outcome from result
+    # Using regular dice (1-6) and mapping to heads/tails
+    # 1,2,3 = heads, 4,5,6 = tails for fair 50/50 split
+    dice_message = await query.message.reply_dice(emoji="🎲")
+    dice_result = dice_message.dice.value
+    
+    # Map dice values to coin flip results
+    # 1,2,3 = heads, 4,5,6 = tails
+    if dice_result in [1, 2, 3]:
+        result = "heads"
+    else:  # 4, 5, 6
+        result = "tails"
+    
     won = (result == choice)
+    
+    # Wait for animation to complete
+    await asyncio.sleep(3)
     
     # Calculate winnings
     win_amount = bet_amount * WIN_MULTIPLIER if won else 0.0
@@ -215,16 +235,17 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
         game_type="coinflip",
         bet_amount=bet_amount,
         win_amount=win_amount,
-        result=f"{'WIN' if won else 'LOSS'} - {result}"
+        result=f"{'WIN' if won else 'LOSS'} - {result} (dice: {dice_result})"
     )
     
     # Get updated balance
     updated_user = await get_user(user_id)
     new_balance_str = await format_usd(updated_user['balance'])
     
-    # Determine which emoji to use
-    emoji_id = HEADS_EMOJI_ID if result == "heads" else TAILS_EMOJI_ID
+    # Determine display elements
     result_text = "HEADS" if result == "heads" else "TAILS"
+    result_emoji = "🟡" if result == "heads" else "🔵"  # Yellow for Heads, Blue for Tails
+    coin_emoji = "🪙"
     result_color = "�" if result == "heads" else "�"  # Yellow for Heads, Blue for Tails
     
     # Delete the old message first
@@ -236,25 +257,16 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Send the custom emoji result
     try:
-        # Send custom emoji animation with proper formatting
-        await context.bot.send_message(
-            chat_id=query.message.chat_id,
-            text="🎰 <b>FLIPPING COIN...</b> 🎰",
-            parse_mode=ParseMode.HTML
-        )
-        
-        # Add a small delay for dramatic effect
-        import asyncio
-        await asyncio.sleep(1)
-        
-        # Send the result with custom emoji
+        # Format custom emoji for Telegram
         custom_emoji_text = f"<tg-emoji emoji-id=\"{emoji_id}\">🪙</tg-emoji>"
         flip_animation = f"""
 🎰 <b>COIN FLIP RESULT</b> 🎰
 
-{custom_emoji_text}  <b>{result_text}!</b>  {custom_emoji_text}
+{result_color * 10}
 
-<i>The coin has landed!</i>
+{custom_emoji_text * 3}  <b>{result_text}</b>  {custom_emoji_text * 3}
+
+{result_color * 10}
 """
         
         await context.bot.send_message(
@@ -266,14 +278,14 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Failed to send animation: {e}")
     
-    # Build result text with custom emoji
+    # Build result text
     custom_emoji_display = f"<tg-emoji emoji-id=\"{emoji_id}\">🪙</tg-emoji>"
     
     if won:
         text = f"""
-🎉 <b>YOU WIN!</b> 🎉
+<b>YOU WIN!</b>
 
-{custom_emoji_display} <b>Result: {result_text}</b> {custom_emoji_display}
+{result_color} <b>Result: {custom_emoji_display} {result_text}</b>
 
 💰 <b>Bet:</b> ${bet_amount:.2f}
 💵 <b>Won:</b> ${win_amount:.2f}
@@ -281,13 +293,13 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 💳 <b>New Balance:</b> {new_balance_str}
 
-<i>🎯 Congratulations! You predicted correctly!</i>
+<i>Congratulations! You predicted correctly!</i>
 """
     else:
         text = f"""
-💔 <b>YOU LOSE</b> 💔
+<b>YOU LOSE</b>
 
-{custom_emoji_display} <b>Result: {result_text}</b> {custom_emoji_display}
+{result_color} <b>Result: {custom_emoji_display} {result_text}</b>
 
 💰 <b>Bet:</b> ${bet_amount:.2f}
 💸 <b>Lost:</b> ${bet_amount:.2f}
@@ -411,9 +423,6 @@ async def handle_custom_bet_input(update: Update, context: ContextTypes.DEFAULT_
 
 <b>Choose your side:</b>
 Will it be Heads or Tails?
-
-🟡 <b>HEADS</b> = Gold coin side
-🔵 <b>TAILS</b> = Blue coin side
 """
         
         keyboard = [

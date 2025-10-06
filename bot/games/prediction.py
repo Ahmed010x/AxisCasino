@@ -52,6 +52,16 @@ PREDICTION_GAMES = {
         "base_multiplier": 3.0,
         "min_selections": 1,
         "max_selections": 2
+    },
+    "soccer": {
+        "name": "⚽ Soccer Prediction",
+        "description": "Predict soccer emoji animation outcomes",
+        "icon": "⚽",
+        "options": ["miss", "bar", "goal"],
+        "option_names": ["Miss", "Bar", "Goal"],
+        "base_multiplier": 3.0,
+        "min_selections": 1,
+        "max_selections": 2
     }
 }
 
@@ -72,6 +82,10 @@ def get_random_outcome(game_type: str):
         # For basketball, we'll use the emoji animation to determine outcome
         # This will be handled in the play function
         return None
+    elif game_type == "soccer":
+        # For soccer, we'll use the soccer emoji animation to determine outcome
+        # This will be handled in the play function
+        return None
     else:
         # For other games like dice, use random selection
         game_info = PREDICTION_GAMES[game_type]
@@ -88,6 +102,13 @@ def format_outcome_display(game_type: str, outcome) -> str:
             "in": "Swish! Nothing but net!"
         }
         return basketball_outcomes.get(outcome, f"{outcome}")
+    elif game_type == "soccer":
+        soccer_outcomes = {
+            "miss": "Complete miss!",
+            "bar": "Hit the bar!",
+            "goal": "GOAL! Perfect shot!"
+        }
+        return soccer_outcomes.get(outcome, f"{outcome}")
     else:
         return str(outcome)
 
@@ -125,9 +146,13 @@ async def show_prediction_menu(update: Update, context: ContextTypes.DEFAULT_TYP
 • 3 numbers: ~1.9x multiplier
 
 🏀 <b>Basketball Prediction:</b> Predict game outcomes
-• Single outcome: ~3.8x multiplier
-• 2 outcomes: ~1.9x multiplier
-• 3 outcomes: ~1.27x multiplier
+• Single outcome: ~2.85x multiplier
+• 2 outcomes: ~1.43x multiplier
+
+⚽ <b>Soccer Prediction:</b> Predict soccer emoji outcomes
+• Single outcome: ~2.85x multiplier
+• 2 outcomes: ~1.43x multiplier
+• Uses ⚽ emoji animation to determine result!
 
 💡 <b>Strategy Tips:</b>
 • Single predictions offer highest multipliers
@@ -144,6 +169,9 @@ Min: ${MIN_BET:.2f} | Max: ${MAX_BET:.2f}
         [
             InlineKeyboardButton("🎲 Dice Prediction", callback_data="prediction_game_dice"),
             InlineKeyboardButton("🏀 Basketball Prediction", callback_data="prediction_game_basketball")
+        ],
+        [
+            InlineKeyboardButton("⚽ Soccer Prediction", callback_data="prediction_game_soccer")
         ],
         [
             InlineKeyboardButton("📊 Game Rules", callback_data="prediction_rules"),
@@ -228,10 +256,12 @@ async def show_game_selection_menu(update: Update, context: ContextTypes.DEFAULT
     game_info = PREDICTION_GAMES[game_type]
     balance_str = await format_usd(user['balance'])
     
-    # Add special note for basketball game
+    # Add special note for games
     game_description = game_info['description']
     if game_type == "basketball":
         game_description += "\n🎬 <i>Watch the basketball emoji animation!</i>"
+    elif game_type == "soccer":
+        game_description += "\n⚽ <i>Watch the soccer emoji animation!</i>"
     
     text = f"""
 {game_info['icon']} <b>{game_info['name']}</b> {game_info['icon']}
@@ -267,8 +297,8 @@ async def show_game_selection_menu(update: Update, context: ContextTypes.DEFAULT
                     callback_data=f"prediction_select_{game_type}_{j}"
                 ))
             keyboard.append(row)
-    elif game_type == "basketball":
-        # Basketball: 3 options in a single row
+    elif game_type in ["basketball", "soccer"]:
+        # Basketball and Soccer: 3 options in a single row
         row = []
         for j in range(len(options)):
             row.append(InlineKeyboardButton(
@@ -557,6 +587,30 @@ async def play_prediction_game(update: Update, context: ContextTypes.DEFAULT_TYP
         await asyncio.sleep(3)
         
         outcome_display = format_outcome_display(game_type, outcome)
+    elif game_type == "soccer":
+        # Send soccer emoji animation and determine outcome from result
+        from telegram import Dice
+        
+        # Send the soccer emoji which will animate and show the result
+        soccer_message = await query.message.reply_dice(emoji="⚽")
+        soccer_result = soccer_message.dice.value
+        
+        # Map soccer dice values (1-5) to our outcomes
+        # Soccer emoji values: 1-2=miss, 3=bar, 4-5=goal
+        if soccer_result in [1, 2]:
+            outcome = "miss"
+        elif soccer_result == 3:
+            outcome = "bar"
+        elif soccer_result in [4, 5]:
+            outcome = "goal"
+        else:
+            # Fallback to random if unexpected value
+            outcome = random.choice(["miss", "bar", "goal"])
+            
+        # Wait a moment for the animation to complete
+        await asyncio.sleep(3)
+        
+        outcome_display = format_outcome_display(game_type, outcome)
     else:
         # For other games like dice, use random selection
         outcome = get_random_outcome(game_type)
@@ -602,10 +656,12 @@ async def play_prediction_game(update: Update, context: ContextTypes.DEFAULT_TYP
     selected_names = [game_info['option_names'][i] for i in selections]
     selections_text = ", ".join(selected_names)
     
-    # Show result with special messaging for basketball emoji animation
-    basketball_animation_note = ""
+    # Show result with special messaging for different game types
+    special_note = ""
     if game_type == "basketball":
-        basketball_animation_note = "\n🏀 <i>Outcome determined by basketball emoji animation</i>"
+        special_note = "\n🏀 <i>Outcome determined by basketball emoji animation</i>"
+    elif game_type == "soccer":
+        special_note = "\n⚽ <i>Outcome determined by soccer emoji animation</i>"
     
     if player_won:
         text = f"""
@@ -613,7 +669,7 @@ async def play_prediction_game(update: Update, context: ContextTypes.DEFAULT_TYP
 
 {game_info['icon']} <b>{game_info['name']}</b>
 
-🎯 <b>The Outcome:</b> {outcome_display}{basketball_animation_note}
+🎯 <b>The Outcome:</b> {outcome_display}{special_note}
 📝 <b>Your Predictions:</b> {selections_text}
 ✅ <b>Result:</b> You predicted correctly!
 
@@ -632,7 +688,7 @@ async def play_prediction_game(update: Update, context: ContextTypes.DEFAULT_TYP
 
 {game_info['icon']} <b>{game_info['name']}</b>
 
-🎯 <b>The Outcome:</b> {outcome_display}{basketball_animation_note}
+🎯 <b>The Outcome:</b> {outcome_display}{special_note}
 📝 <b>Your Predictions:</b> {selections_text}
 ❌ <b>Result:</b> Better luck next time!
 
