@@ -152,8 +152,8 @@ def format_outcome_display(game_type: str, outcome) -> str:
     else:
         return str(outcome)
 
-async def show_prediction_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show main prediction games menu."""
+async def show_prediction_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 0):
+    """Show prediction games menu with pagination."""
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
@@ -167,71 +167,195 @@ async def show_prediction_menu(update: Update, context: ContextTypes.DEFAULT_TYP
     
     balance_str = await format_usd(user['balance'])
     
+    # Define game pages
+    game_pages = [
+        {
+            "type": "dice",
+            "icon": "🎲",
+            "name": "Dice Prediction",
+            "title": "🎲 DICE PREDICTION",
+            "description": "Predict the outcome of a dice roll!",
+            "details": """
+🎯 <b>How to Play:</b>
+• A dice will be rolled (1-6)
+• Choose 1-5 numbers you think will appear
+• The fewer numbers you choose, the higher the payout!
+
+💰 <b>Multipliers:</b>
+• 1 number: <b>~5.7x</b> (highest risk, highest reward!)
+• 2 numbers: <b>~2.85x</b>
+• 3 numbers: <b>~1.9x</b>
+• 4 numbers: <b>~1.43x</b>
+• 5 numbers: <b>~1.14x</b> (lowest risk)
+
+🎲 <b>Example:</b>
+Choose numbers 3 & 5 for ~2.85x
+If dice lands on 3 or 5, you win!
+
+📊 <b>House Edge:</b> 5% (fair & transparent)
+"""
+        },
+        {
+            "type": "basketball",
+            "icon": "🏀",
+            "name": "Basketball Prediction",
+            "title": "🏀 BASKETBALL PREDICTION",
+            "description": "Predict basketball shot outcomes!",
+            "details": """
+🎯 <b>How to Play:</b>
+• Watch the 🏀 emoji animation
+• Predict: Stuck, Miss, or In
+• Animation shows the actual result!
+
+💰 <b>Multipliers:</b>
+• 1 outcome: <b>~2.85x</b> (highest risk!)
+• 2 outcomes: <b>~1.43x</b> (safer bet)
+
+🏀 <b>Outcomes:</b>
+• <b>Stuck:</b> Ball gets stuck on rim
+• <b>Miss:</b> Shot misses completely
+• <b>In:</b> Perfect shot, nothing but net!
+
+🎬 <b>Live Animation:</b>
+Real Telegram emoji shows actual result
+
+📊 <b>House Edge:</b> 5% (fair & transparent)
+"""
+        },
+        {
+            "type": "soccer",
+            "icon": "⚽",
+            "name": "Soccer Prediction",
+            "title": "⚽ SOCCER PREDICTION",
+            "description": "Predict soccer kick outcomes!",
+            "details": """
+🎯 <b>How to Play:</b>
+• Watch the ⚽ emoji animation
+• Predict: Miss, Bar, or Goal
+• Animation shows the actual result!
+
+💰 <b>Multipliers:</b>
+• 1 outcome: <b>~2.85x</b> (highest risk!)
+• 2 outcomes: <b>~1.43x</b> (safer bet)
+
+⚽ <b>Outcomes:</b>
+• <b>Miss:</b> Shot misses completely
+• <b>Bar:</b> Ball hits the crossbar
+• <b>Goal:</b> Perfect shot, GOAL!
+
+🎬 <b>Live Animation:</b>
+Real Telegram emoji shows actual result
+
+📊 <b>House Edge:</b> 5% (fair & transparent)
+"""
+        },
+        {
+            "type": "bowling",
+            "icon": "🎳",
+            "name": "Bowling Prediction",
+            "title": "🎳 BOWLING PREDICTION",
+            "description": "Predict bowling ball outcomes!",
+            "details": """
+🎯 <b>How to Play:</b>
+• Watch the 🎳 emoji animation
+• Predict: Gutter, Few Pins, Many Pins, or Strike
+• Animation shows the actual result!
+
+💰 <b>Multipliers:</b>
+• 1 outcome: <b>~3.8x</b> (highest risk!)
+• 2 outcomes: <b>~1.9x</b>
+• 3 outcomes: <b>~1.27x</b> (safer bet)
+
+🎳 <b>Outcomes:</b>
+• <b>Gutter:</b> Ball goes in gutter
+• <b>Few Pins:</b> Only a few pins down
+• <b>Many Pins:</b> Most pins knocked down
+• <b>Strike:</b> All pins down!
+
+🎬 <b>Live Animation:</b>
+Real Telegram emoji shows actual result
+
+📊 <b>House Edge:</b> 5% (fair & transparent)
+"""
+        },
+        {
+            "type": "darts",
+            "icon": "🎯",
+            "name": "Darts Prediction",
+            "title": "🎯 DARTS PREDICTION",
+            "description": "Predict dart throw outcomes!",
+            "details": """
+🎯 <b>How to Play:</b>
+• Watch the 🎯 emoji animation
+• Predict: Outer, Middle, Inner, or Bullseye
+• Animation shows the actual result!
+
+💰 <b>Multipliers:</b>
+• 1 outcome: <b>~3.8x</b> (highest risk!)
+• 2 outcomes: <b>~1.9x</b>
+• 3 outcomes: <b>~1.27x</b> (safer bet)
+
+🎯 <b>Outcomes:</b>
+• <b>Outer Ring:</b> Dart hits outer area
+• <b>Middle Ring:</b> Closer to center
+• <b>Inner Ring:</b> Very close to center
+• <b>Bullseye:</b> Perfect center shot!
+
+🎬 <b>Live Animation:</b>
+Real Telegram emoji shows actual result
+
+� <b>House Edge:</b> 5% (fair & transparent)
+"""
+        }
+    ]
+    
+    # Ensure page is within bounds
+    total_pages = len(game_pages)
+    page = page % total_pages
+    
+    current_game = game_pages[page]
+    
+    # Build message
     text = f"""
-🔮 <b>PREDICTION GAMES CENTRE</b> 🔮
+{current_game['title']}
 
 💰 <b>Your Balance:</b> {balance_str}
 
-🎯 <b>How It Works:</b>
-• Choose your prediction game type
-• Select 1 or more options you think will win
-• More predictions = lower risk, lower reward
-• Fewer predictions = higher risk, higher reward
+{current_game['description']}
+{current_game['details']}
 
-🎮 <b>Available Games:</b>
+💵 <b>Betting Limits:</b> ${MIN_BET:.2f} - ${MAX_BET:.2f}
 
-🎲 <b>Dice Prediction:</b> Predict dice roll (1-6)
-• Single number: ~5.7x multiplier
-• 2 numbers: ~2.85x multiplier
-• 3 numbers: ~1.9x multiplier
-
-🏀 <b>Basketball Prediction:</b> Predict game outcomes
-• Single outcome: ~2.85x multiplier
-• 2 outcomes: ~1.43x multiplier
-
-⚽ <b>Soccer Prediction:</b> Predict soccer emoji outcomes
-• Single outcome: ~2.85x multiplier
-• 2 outcomes: ~1.43x multiplier
-• Uses ⚽ emoji animation to determine result!
-
-🎳 <b>Bowling Prediction:</b> Predict bowling emoji outcomes
-• Single outcome: ~3.8x multiplier
-• 2 outcomes: ~1.9x multiplier
-• Uses 🎳 emoji animation to determine result!
-
-🎯 <b>Darts Prediction:</b> Predict darts emoji outcomes
-• Single outcome: ~3.8x multiplier
-• 2 outcomes: ~1.9x multiplier
-• Uses 🎯 emoji animation to determine result!
-
-💡 <b>Strategy Tips:</b>
-• Single predictions offer highest multipliers
-• Multiple predictions increase win chances
-• House edge: 5% (fair and competitive)
-
-💵 <b>Betting Limits:</b>
-Min: ${MIN_BET:.2f} | Max: ${MAX_BET:.2f}
-
-<b>🎯 Choose your prediction game:</b>
+<b>Page {page + 1}/{total_pages}</b>
 """
     
-    keyboard = [
-        [
-            InlineKeyboardButton("🎲 Dice Prediction", callback_data="prediction_game_dice"),
-            InlineKeyboardButton("🏀 Basketball Prediction", callback_data="prediction_game_basketball")
-        ],
-        [
-            InlineKeyboardButton("⚽ Soccer Prediction", callback_data="prediction_game_soccer")
-        ],
-        [
-            InlineKeyboardButton("🎳 Bowling Prediction", callback_data="prediction_game_bowling"),
-            InlineKeyboardButton("🎯 Darts Prediction", callback_data="prediction_game_darts")
-        ],
-        [
-            InlineKeyboardButton("📊 Game Rules", callback_data="prediction_rules"),
-            InlineKeyboardButton("🔙 Back", callback_data="mini_app_centre")
-        ]
-    ]
+    # Build keyboard with navigation
+    keyboard = []
+    
+    # Navigation row
+    nav_buttons = []
+    if total_pages > 1:
+        # Previous button
+        prev_page = (page - 1) % total_pages
+        nav_buttons.append(InlineKeyboardButton("◀️ Previous", callback_data=f"prediction_page_{prev_page}"))
+        
+        # Next button
+        next_page = (page + 1) % total_pages
+        nav_buttons.append(InlineKeyboardButton("Next ▶️", callback_data=f"prediction_page_{next_page}"))
+    
+    if nav_buttons:
+        keyboard.append(nav_buttons)
+    
+    # Play button for current game
+    keyboard.append([
+        InlineKeyboardButton(f"▶️ Play {current_game['name']}", callback_data=f"prediction_game_{current_game['type']}")
+    ])
+    
+    # Additional options
+    keyboard.append([
+        InlineKeyboardButton("📊 All Games Rules", callback_data="prediction_rules"),
+        InlineKeyboardButton("🔙 Back", callback_data="mini_app_centre")
+    ])
     
     await query.edit_message_text(
         text,
@@ -983,7 +1107,11 @@ async def handle_prediction_callback(update: Update, context: ContextTypes.DEFAU
     
     try:
         if data == "game_prediction" or data == "prediction":
-            await show_prediction_menu(update, context)
+            await show_prediction_menu(update, context, page=0)
+        elif data.startswith("prediction_page_"):
+            # Handle pagination
+            page = int(data.split("prediction_page_")[1])
+            await show_prediction_menu(update, context, page=page)
         elif data == "prediction_rules":
             await show_prediction_rules(update, context)
         elif data.startswith("prediction_game_"):
