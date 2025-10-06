@@ -15,6 +15,7 @@ with higher multipliers for fewer selections (higher risk).
 import random
 import asyncio
 import time
+import logging
 from typing import Dict, List, Tuple, Optional
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Dice
 from telegram.constants import ParseMode
@@ -25,6 +26,9 @@ import os
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 # Game Configuration
 MIN_BET = 0.50
@@ -562,6 +566,10 @@ async def play_prediction_game(update: Update, context: ContextTypes.DEFAULT_TYP
     # Dramatic pause
     await asyncio.sleep(2)
     
+    # Initialize variables for debugging
+    dice_value = None
+    outcome = None
+    
     # Generate outcome based on game type
     if game_type == "basketball":
         # Send basketball emoji animation and determine outcome from result
@@ -569,15 +577,15 @@ async def play_prediction_game(update: Update, context: ContextTypes.DEFAULT_TYP
         
         # Send the basketball emoji which will animate and show the result
         basketball_message = await query.message.reply_dice(emoji="🏀")
-        basketball_result = basketball_message.dice.value
+        dice_value = basketball_message.dice.value
         
         # Map basketball dice values (1-5) to our outcomes
         # Basketball emoji values: 1=miss, 2=miss, 3=stuck, 4=in, 5=in  
-        if basketball_result in [1, 2]:
+        if dice_value in [1, 2]:
             outcome = "miss"
-        elif basketball_result == 3:
+        elif dice_value == 3:
             outcome = "stuck"
-        elif basketball_result in [4, 5]:
+        elif dice_value in [4, 5]:
             outcome = "in"
         else:
             # Fallback to random if unexpected value
@@ -586,51 +594,76 @@ async def play_prediction_game(update: Update, context: ContextTypes.DEFAULT_TYP
         # Wait a moment for the animation to complete
         await asyncio.sleep(3)
         
-        outcome_display = format_outcome_display(game_type, outcome)
     elif game_type == "soccer":
         # Send soccer emoji animation and determine outcome from result
         from telegram import Dice
         
         # Send the soccer emoji which will animate and show the result
         soccer_message = await query.message.reply_dice(emoji="⚽")
-        soccer_result = soccer_message.dice.value
+        dice_value = soccer_message.dice.value
         
         # Map soccer dice values (1-5) to our outcomes
         # Soccer emoji values: 1-2=miss, 3=bar, 4-5=goal
-        if soccer_result in [1, 2]:
+        if dice_value in [1, 2]:
             outcome = "miss"
-        elif soccer_result == 3:
+        elif dice_value == 3:
             outcome = "bar"
-        elif soccer_result in [4, 5]:
+        elif dice_value in [4, 5]:
             outcome = "goal"
         else:
             # Fallback to random if unexpected value
             outcome = random.choice(["miss", "bar", "goal"])
+        
+        # DEBUG LOGGING
+        logger.info(f"🐛 SOCCER DEBUG - User {user_id}")
+        logger.info(f"🐛 Player selections indices: {selections}")
+        logger.info(f"🐛 Player selections names: {[game_info['option_names'][i] for i in selections]}")
+        logger.info(f"🐛 Soccer dice result: {dice_value}")
+        logger.info(f"🐛 Determined outcome: {outcome}")
+        logger.info(f"🐛 Game options: {game_info['options']}")
+        
+        outcome_index = game_info['options'].index(outcome)
+        logger.info(f"🐛 Outcome index: {outcome_index}")
+        logger.info(f"🐛 Player won check: {outcome_index} in {selections} = {outcome_index in selections}")
             
         # Wait a moment for the animation to complete
         await asyncio.sleep(3)
         
-        outcome_display = format_outcome_display(game_type, outcome)
     else:
         # For other games like dice, use random selection
         outcome = get_random_outcome(game_type)
-        outcome_display = format_outcome_display(game_type, outcome)
+    
+    # Format outcome display
+    outcome_display = format_outcome_display(game_type, outcome)
     
     # Determine if player won
-    if game_type == "dice":
-        outcome_index = game_info['options'].index(outcome)
-    elif game_type == "basketball":
-        outcome_index = game_info['options'].index(outcome)
-    else:
-        outcome_index = game_info['options'].index(outcome)
-    
+    outcome_index = game_info['options'].index(outcome)
     player_won = outcome_index in selections
+    
+    # DEBUG LOGGING FOR RESULT
+    logger.info(f"🐛 RESULT DEBUG - User {user_id}")
+    logger.info(f"🐛 Final outcome: {outcome}")
+    logger.info(f"🐛 Final outcome_index: {outcome_index}")
+    logger.info(f"🐛 Player selections: {selections}")
+    logger.info(f"🐛 Player won: {player_won}")
+    
+    # Store debug info for display
+    debug_info = {
+        'dice_value': dice_value,
+        'outcome': outcome,
+        'outcome_index': outcome_index,
+        'selections': selections,
+        'match_found': outcome_index in selections,
+        'game_type': game_type
+    }
     
     # Calculate winnings
     if player_won:
         multiplier = calculate_multiplier(game_type, len(selections))
         win_amount = bet_amount * multiplier
         net_profit = win_amount - bet_amount
+        
+        logger.info(f"🐛 WIN: multiplier={multiplier:.2f}, win_amount=${win_amount:.2f}, net_profit=${net_profit:.2f}")
         
         # Update balance
         await update_balance(user_id, win_amount)
@@ -641,6 +674,9 @@ async def play_prediction_game(update: Update, context: ContextTypes.DEFAULT_TYP
     else:
         win_amount = 0
         net_profit = -bet_amount
+        
+        logger.info(f"🐛 LOSS: bet_amount=${bet_amount:.2f} lost")
+        
         result_text = "LOSS"
         result_emoji = "💔"
         result_message = f"<b>PREDICTION INCORRECT</b>"
@@ -673,6 +709,13 @@ async def play_prediction_game(update: Update, context: ContextTypes.DEFAULT_TYP
 📝 <b>Your Predictions:</b> {selections_text}
 ✅ <b>Result:</b> You predicted correctly!
 
+🔍 <b>DEBUG INFO:</b>
+• Emoji dice value: {dice_value if dice_value else "N/A"}
+• Determined outcome: {outcome}
+• Your selections (indices): {selections}
+• Outcome index: {outcome_index}
+• Match found: {outcome_index in selections}
+
 💰 <b>Bet Amount:</b> {await format_usd(bet_amount)}
 🏆 <b>Total Winnings:</b> {await format_usd(win_amount)}
 💎 <b>Net Profit:</b> {await format_usd(net_profit)}
@@ -691,6 +734,13 @@ async def play_prediction_game(update: Update, context: ContextTypes.DEFAULT_TYP
 🎯 <b>The Outcome:</b> {outcome_display}{special_note}
 📝 <b>Your Predictions:</b> {selections_text}
 ❌ <b>Result:</b> Better luck next time!
+
+🔍 <b>DEBUG INFO:</b>
+• Emoji dice value: {dice_value if dice_value else "N/A"}
+• Determined outcome: {outcome}
+• Your selections (indices): {selections}
+• Outcome index: {outcome_index}
+• Match found: {outcome_index in selections}
 
 💰 <b>Bet Amount:</b> {await format_usd(bet_amount)}
 📉 <b>Amount Lost:</b> {await format_usd(bet_amount)}
