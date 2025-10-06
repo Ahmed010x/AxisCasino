@@ -2276,11 +2276,10 @@ async def run_telegram_bot_async():
     application = ApplicationBuilder().token(BOT_TOKEN).build()
     
     # Register specific deposit/withdrawal handlers first (higher priority)
-    application.add_handler(CommandHandler("deposit", deposit_callback))
-    application.add_handler(CommandHandler("withdraw", withdraw_start))
     application.add_handler(CallbackQueryHandler(deposit_callback, pattern=r"^deposit$"))
     application.add_handler(CallbackQueryHandler(deposit_crypto_callback, pattern=r"^deposit_LTC$"))
     application.add_handler(CallbackQueryHandler(check_payment_callback, pattern=r"^check_payment_"))
+    application.add_handler(CommandHandler("withdraw", withdraw_start))
     application.add_handler(CallbackQueryHandler(withdraw_start, pattern=r"^withdraw$"))
     application.add_handler(CallbackQueryHandler(withdraw_crypto_callback, pattern=r"^withdraw_LTC$"))
 
@@ -2361,6 +2360,40 @@ Welcome, {username}! 👋
         )
 
     application.add_handler(CommandHandler("start", start_handler))
+    
+    # Deposit command handler
+    async def deposit_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /deposit command"""
+        user_id = update.effective_user.id
+        
+        # Get user data
+        user = await get_user(user_id)
+        if not user:
+            await update.message.reply_text(
+                "❌ User not found. Please use /start to register first.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Start", callback_data="main_panel")]])
+            )
+            return
+        
+        balance_str = await format_usd(user['balance'])
+        
+        text = f"""
+💳 <b>DEPOSIT</b>
+
+💰 Balance: {balance_str}
+
+🪙 Litecoin (LTC) - Fast & secure
+• Min: $1.00 • Instant processing
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("🪙 Deposit Litecoin (LTC)", callback_data="deposit_LTC")],
+            [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
+        ]
+        
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    application.add_handler(CommandHandler("deposit", deposit_command_handler))
     
     # Referral command handler
     async def referral_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
