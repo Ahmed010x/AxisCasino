@@ -2442,6 +2442,48 @@ Start sharing and earning today!
     
     application.add_handler(CommandHandler("referral", referral_command_handler))
     
+    # Test sticker command for debugging
+    async def test_sticker_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Test sending crypto stickers directly"""
+        user_id = update.effective_user.id
+        
+        # Import sticker IDs
+        from bot.games.coinflip import COIN_STICKER_PACKS
+        
+        await update.message.reply_text("🧪 Testing crypto stickers...")
+        
+        # Test Bitcoin sticker (heads)
+        try:
+            bitcoin_id = COIN_STICKER_PACKS["heads"][0]
+            await update.message.reply_text(f"📤 Sending Bitcoin sticker: {bitcoin_id[:30]}...")
+            
+            bitcoin_msg = await context.bot.send_sticker(
+                chat_id=update.effective_chat.id,
+                sticker=bitcoin_id
+            )
+            await update.message.reply_text(f"✅ Bitcoin sticker sent! Message ID: {bitcoin_msg.message_id}")
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Bitcoin sticker failed: {type(e).__name__}: {e}")
+        
+        # Test Ethereum sticker (tails)
+        try:
+            ethereum_id = COIN_STICKER_PACKS["tails"][0]
+            await update.message.reply_text(f"📤 Sending Ethereum sticker: {ethereum_id[:30]}...")
+            
+            ethereum_msg = await context.bot.send_sticker(
+                chat_id=update.effective_chat.id,
+                sticker=ethereum_id
+            )
+            await update.message.reply_text(f"✅ Ethereum sticker sent! Message ID: {ethereum_msg.message_id}")
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ethereum sticker failed: {type(e).__name__}: {e}")
+        
+        await update.message.reply_text("🎯 Sticker test complete!")
+    
+    application.add_handler(CommandHandler("teststicker", test_sticker_command))
+
     # Basic callback handlers for user panel navigation
     async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle callback queries from inline keyboards (general fallback)"""
@@ -2653,48 +2695,6 @@ Good luck! 🍀
             ],
             [
                 InlineKeyboardButton("🎯 Roulette", callback_data="game_roulette"),
-                InlineKeyboardButton("🏀 Basketball", callback_data="game_basketball")
-            ],
-            [
-                InlineKeyboardButton("🔮 Prediction", callback_data="game_prediction")
-            ]
-        ]
-        
-        # Add funding options if balance is low
-        if balance < 1.0:
-            keyboard.append([
-                InlineKeyboardButton("� Deposit", callback_data="deposit"),
-                InlineKeyboardButton("🎁 Bonus", callback_data="weekly_bonus")
-            ])
-        
-        keyboard.append([InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")])
-        
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-    
-    async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Show withdraw menu"""
-        text = """
-🏦 <b>WITHDRAW FUNDS</b> 🏦
-
-Withdraw your winnings securely:
-
-• <b>Cryptocurrency:</b> Fast and secure
-• <b>Minimum:</b> $1.00 USD equivalent
-• <b>Fee:</b> 2% (minimum $1.00)
-• <b>Processing:</b> Usually within 1 hour
-
-<i>Currently supporting Litecoin (LTC) withdrawals</i>
-"""
-        keyboard = [
-            [InlineKeyboardButton("🪙 Withdraw Litecoin (LTC)", callback_data="withdraw_LTC")],
-            [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
-        ]
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-    
-    async def referral_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Show referral menu"""
-        user_id = update.callback_query.from_user.id
-        referral_code = await get_or_create_referral_code(user_id)
         stats = await get_referral_stats(user_id)
         
         # Get bot username

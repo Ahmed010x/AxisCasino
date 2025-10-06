@@ -31,7 +31,7 @@ COIN_STICKER_PACKS = {
 # Alternative: Use Telegram's built-in dice emoji for coin flip animation
 # The slot machine emoji can serve as a coin flip with visual enhancement
 USE_DICE_ANIMATION = True
-USE_STICKERS = True  # Using verified working sticker file IDs
+USE_STICKERS = False  # Disabled until fresh sticker IDs are obtained (current IDs are expired)
 
 # Log configuration on module load
 logger.info("🪙 Coinflip Module Configuration:")
