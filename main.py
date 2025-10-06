@@ -1686,17 +1686,12 @@ async def deposit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     balance_str = await format_usd(user['balance'])
     
     text = f"""
-💳 <b>DEPOSIT FUNDS</b>
+💳 <b>DEPOSIT</b>
 
-💰 <b>Current Balance:</b> {balance_str}
+💰 Balance: {balance_str}
 
-🔒 <b>Payment Method:</b>
-We accept Litecoin (LTC) deposits for fast transactions.
-
-📋 <b>Details:</b>
-• Minimum: $1.00 USD
-• Processing: Usually within minutes
-• Low fees and enhanced privacy
+🪙 Litecoin (LTC) - Fast & secure
+• Min: $1.00 • Instant processing
 """
     
     keyboard = [
@@ -1726,18 +1721,11 @@ async def deposit_crypto_callback(update: Update, context: ContextTypes.DEFAULT_
     text = f"""
 <b>DEPOSIT {crypto_type}</b>
 
-<b>Current Rate:</b> 1 {crypto_type} = {rate_text} USD
+Rate: 1 {crypto_type} = {rate_text} USD
 
-<b>Enter Deposit Amount</b>
-Please type the amount you want to deposit in USD.
+Enter amount in USD (e.g., "50")
 
-<b>Limits:</b>
-• Minimum: $1.00 USD
-• Maximum: $10,000.00 USD per transaction
-
-Simply type your amount in USD (e.g., type "50" for $50.00)
-
-<b>Waiting for your input...</b>
+• Min: $1.00 • Max: $10,000
 """
     
     keyboard = [[InlineKeyboardButton("Cancel", callback_data="main_panel")]]
@@ -1863,17 +1851,12 @@ async def withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     text = f"""
 🏦 <b>WITHDRAW FUNDS</b>
 
-💰 <b>Current Balance:</b> {await format_usd(balance)}
-💸 <b>Available to Withdraw:</b> {await format_usd(max_withdrawal)}
+💰 Balance: {await format_usd(balance)}
+💸 Available: {await format_usd(max_withdrawal)}
 
-📋 <b>Limits:</b>
-• Minimum: {await format_usd(MIN_WITHDRAWAL_USD)}
-• Maximum: {await format_usd(MAX_WITHDRAWAL_USD)} per transaction
-• Daily Limit: {await format_usd(MAX_WITHDRAWAL_USD_DAILY)}
+• Min: {await format_usd(MIN_WITHDRAWAL_USD)} | Max: {await format_usd(MAX_WITHDRAWAL_USD)}
 • Fee: {WITHDRAWAL_FEE_PERCENT * 100:.1f}% (min ${MIN_WITHDRAWAL_FEE:.2f})
-
-🔒 <b>Supported:</b> Litecoin (LTC) withdrawals
-⏰ <b>Processing Time:</b> Usually within 24 hours
+• Processing: 24h
 """
     keyboard = [
         [InlineKeyboardButton("🪙 Withdraw Litecoin (LTC)", callback_data="withdraw_LTC")],
@@ -1896,10 +1879,10 @@ async def withdraw_crypto_callback(update: Update, context: ContextTypes.DEFAULT
     text = f"""
 <b>WITHDRAW LITECOIN (LTC)</b>
 
-<b>Current Balance:</b> {balance_str}
-<b>Available to Withdraw:</b> {await format_usd(max_withdrawal)}
+💰 Balance: {balance_str}
+💸 Available: {await format_usd(max_withdrawal)}
 
-Please enter the amount you wish to withdraw in USD (e.g., "50" for $50.00).
+Enter withdrawal amount in USD (e.g., "50")
 """
     keyboard = [[InlineKeyboardButton("Back to Withdraw", callback_data="withdraw")]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
@@ -2401,27 +2384,23 @@ Welcome, {username}! 👋
         text = f"""
 <b>REFERRAL PROGRAM</b>
 
-<b>Earn 20% Commission!</b>
+💰 <b>Earn 20% Commission!</b>
 
-Share your unique referral link and earn <b>20% of what your referrals lose</b> in games!
+Share your link and earn <b>20% of losses</b> from referrals!
 
-<b>Your Referral Link:</b>
+🔗 <b>Your Link:</b>
 <code>{referral_link}</code>
 
-<b>Your Stats:</b>
-Total Referrals: <b>{stats['count']}</b>
-Total Earned: <b>{earnings_str}</b>
+📊 <b>Stats:</b>
+Referrals: <b>{stats['count']}</b>
+Earned: <b>{earnings_str}</b>
 
 <b>How it works:</b>
-1. Share your link with friends
-2. They sign up using your link
-3. They get a ${REFERRAL_BONUS_REFEREE:.2f} welcome bonus
-4. You earn 20% commission every time they lose a game
+1. Share your link
+2. Friends sign up & get ${REFERRAL_BONUS_REFEREE:.2f}
+3. You earn 20% when they lose
 
-<b>Example:</b>
-If your referral loses $100, you earn $20!
-
-Start sharing and earning today!
+<b>Example:</b> They lose $100 → You earn $20!
 """
         
         # Add recent referrals if any
@@ -2645,40 +2624,26 @@ Welcome, {username}! 👋
             text = f"""
 🎮 <b>CASINO GAMES</b>
 
-💰 <b>Your Balance:</b> {balance_str}
+💰 Balance: {balance_str}
 
-⚠️ <b>INSUFFICIENT BALANCE TO PLAY</b>
-You need at least $1.00 to play games.
+⚠️ <b>Need $1.00 minimum to play</b>
 
-💡 <b>Get funds:</b> Deposit • Weekly Bonus • Referrals
+💡 Get funds: Deposit • Weekly Bonus • Referrals
 
-<b>Available Games:</b>
-
-🎰 <b>Slots</b> - Classic slot machine
-🃏 <b>Blackjack</b> - Beat the dealer
-🎲 <b>Dice</b> - Roll to win
-🪙 <b>Coin Flip</b> - Bitcoin vs Ethereum stickers
-🎯 <b>Roulette</b> - European roulette
-🏀 <b>Basketball</b> - Shoot hoops!
-🔮 <b>Dice Predict</b> - Predict the dice
-⚽ <b>Soccer Predict</b> - Predict emoji outcomes
+<b>Games:</b>
+🎰 Slots • 🃏 Blackjack • 🎲 Dice • 🪙 Coin Flip
+🎯 Roulette • 🏀 Basketball • 🔮 Prediction
 """
         else:
             text = f"""
 🎮 <b>CASINO GAMES</b>
 
-💰 <b>Your Balance:</b> {balance_str}
+💰 Balance: {balance_str}
 
 Choose your game:
 
-🎰 <b>Slots</b> - Classic slot machine
-🃏 <b>Blackjack</b> - Beat the dealer
-🎲 <b>Dice 1v1</b> - Roll against the bot
-🪙 <b>Coin Flip</b> - Bitcoin vs Ethereum stickers
-🎯 <b>Roulette</b> - European roulette
-🏀 <b>Basketball 1v1</b> - Shoot hoops vs bot!
-🔮 <b>Dice Predict</b> - Predict the dice (5x payout!)
-⚽ <b>Soccer Predict</b> - Predict emoji outcomes!
+🎰 Slots • 🃏 Blackjack • 🎲 Dice • 🪙 Coin Flip
+🎯 Roulette • 🏀 Basketball • 🔮 Prediction
 
 Good luck! 🍀
 """
@@ -2812,48 +2777,39 @@ If your referral loses $100, you earn $20!
         text = f"""
 <b>YOUR STATISTICS</b>
 
-<b>Current Balance:</b> {balance_str}
-<b>Games Played:</b> {user.get('games_played', 0):,}
-<b>Total Wagered:</b> {wagered_str}
-<b>Total Won:</b> {won_str}
-<b>Total Deposited:</b> {deposited_str}
-<b>Total Withdrawn:</b> {withdrawn_str}
+💰 Balance: {balance_str}
+🎮 Games: {user.get('games_played', 0):,}
+💵 Wagered: {wagered_str}
+🏆 Won: {won_str}
+📥 Deposited: {deposited_str}
+📤 Withdrawn: {withdrawn_str}
 
 <b>Performance:</b>
-<b>Current Win Streak:</b> {user.get('win_streak', 0)}
-<b>Max Win Streak:</b> {user.get('max_win_streak', 0)}
-<b>Biggest Win:</b> {biggest_win_str}
-<b>VIP Level:</b> {user.get('vip_level', 0)}
+🔥 Streak: {user.get('win_streak', 0)} (Max: {user.get('max_win_streak', 0)})
+💎 Biggest Win: {biggest_win_str}
+⭐ VIP Level: {user.get('vip_level', 0)}
 
-<b>Member Since:</b> {user.get('created_at', '')[:10] if user.get('created_at') else 'Unknown'}
+Member since: {user.get('created_at', '')[:10] if user.get('created_at') else 'Unknown'}
 """
         keyboard = [[InlineKeyboardButton("Back to Menu", callback_data="main_panel")]]
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     
     async def help_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show help menu"""
-        text = """
+        text = f"""
 <b>HELP & SUPPORT</b>
 
-<b>How to Play:</b>
-• Use /start to access your panel
-• Deposit funds to start playing
-• Choose games and place bets
+<b>Getting Started:</b>
+• /start - Access your panel
+• Deposit funds to play
+• Choose games & place bets
 • Withdraw your winnings
 
-<b>Deposits & Withdrawals:</b>
-• Supported: Litecoin (LTC)
-• Fast processing times
-• Secure transactions
+<b>Payments:</b>
+• Litecoin (LTC) supported
+• Fast & secure transactions
 
-<b>Features:</b>
-• Multiple casino games
-• Referral system
-• VIP rewards
-• 24/7 support
-
-<b>Need Help?</b>
-Contact our support team for assistance.
+Need help? Contact support.
 """
         keyboard = [
             [InlineKeyboardButton("Game Rules", callback_data="game_rules")],
@@ -2898,13 +2854,13 @@ Contact our support team for assistance.
         text = """
 <b>BONUSES & REWARDS</b>
 
-Claim your available bonuses and see current promotions!
+Claim your available bonuses!
 
 • <b>Weekly Bonus</b>: Claim every 7 days
-• <b>Referral Bonus</b>: Earn for inviting friends
+• <b>Referral Bonus</b>: Earn for invites
 • <b>Special Events</b>: Watch for announcements
 
-More bonus types coming soon!
+More coming soon!
 """
         keyboard = [
             [InlineKeyboardButton("Claim Weekly Bonus", callback_data="claim_weekly_bonus")],
@@ -2919,14 +2875,14 @@ More bonus types coming soon!
         
         if can_claim:
             text = f"""
-🎁 <b>WEEKLY BONUS</b> 🎁
+🎁 <b>WEEKLY BONUS</b>
 
 ✅ <b>Available!</b>
 
-💰 <b>Bonus Amount:</b> ${WEEKLY_BONUS_AMOUNT}
-🎯 <b>Frequency:</b> Every {WEEKLY_BONUS_INTERVAL} days
+💰 Bonus: ${WEEKLY_BONUS_AMOUNT}
+🎯 Frequency: Every {WEEKLY_BONUS_INTERVAL} days
 
-<i>Click the button below to claim your bonus!</i>
+Click below to claim!
 """
             keyboard = [
                 [InlineKeyboardButton("🎉 Claim Bonus", callback_data="claim_weekly_bonus")],
@@ -2938,16 +2894,14 @@ More bonus types coming soon!
             minutes_remaining = (seconds_remaining % 3600) // 60
             
             text = f"""
-🎁 <b>WEEKLY BONUS</b> 🎁
+🎁 <b>WEEKLY BONUS</b>
 
 ⏰ <b>Not Available Yet</b>
 
-💰 <b>Bonus Amount:</b> ${WEEKLY_BONUS_AMOUNT}
-🎯 <b>Frequency:</b> Every {WEEKLY_BONUS_INTERVAL} days
+💰 Bonus: ${WEEKLY_BONUS_AMOUNT}
+⏳ Time left: {hours_remaining}h {minutes_remaining}m
 
-⏳ <b>Time Remaining:</b> {hours_remaining}h {minutes_remaining}m
-
-<i>Come back later to claim your next bonus!</i>
+Come back later!
 """
             keyboard = [
                 [InlineKeyboardButton("🔙 Back", callback_data="bonus_menu")]
@@ -2983,18 +2937,18 @@ You can claim your next weekly bonus in {hours_remaining}h {minutes_remaining}m.
             balance_str = await format_usd(user['balance'])
             
             text = f"""
-🎉 <b>BONUS CLAIMED!</b> 🎉
+🎉 <b>BONUS CLAIMED!</b>
 
-💰 <b>Bonus Amount:</b> ${WEEKLY_BONUS_AMOUNT}
-💳 <b>New Balance:</b> {balance_str}
+💰 Bonus: ${WEEKLY_BONUS_AMOUNT}
+💳 Balance: {balance_str}
 
-<i>Congratulations! Your bonus has been added to your account.</i>
+Enjoy!
 """
         else:
-            text = f"""
+            text = """
 ❌ <b>Error Claiming Bonus</b>
 
-Something went wrong while processing your bonus. Please try again later or contact support.
+Please try again or contact support.
 """
         
         keyboard = [
@@ -3071,23 +3025,15 @@ async def game_slots_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     balance_str = await format_usd(user['balance'])
     
     text = f"""
-🎰 <b>SLOTS GAME</b>
+🎰 <b>SLOTS</b>
 
-💰 <b>Your Balance:</b> {balance_str}
+💰 Balance: {balance_str}
 
-🎮 <b>How to Play:</b>
-• Choose your bet amount
-• Spin the reels for matching symbols
-• Win up to 100x your bet!
+<b>Payouts:</b>
+🍒🍒🍒 10x • 🍋🍋🍋 20x • 🍊🍊🍊 30x
+🔔🔔🔔 50x • 💎💎💎 100x
 
-🍒 <b>Symbol Payouts:</b>
-• 🍒🍒🍒 = 10x bet
-• 🍋🍋🍋 = 20x bet  
-• 🍊🍊🍊 = 30x bet
-• 🔔🔔🔔 = 50x bet
-• 💎💎💎 = 100x bet
-
-Choose your bet amount:
+Choose bet:
 """
     
     keyboard = [
@@ -3122,19 +3068,15 @@ async def game_blackjack_callback(update: Update, context: ContextTypes.DEFAULT_
     text = f"""
 🃏 <b>BLACKJACK</b>
 
-💰 <b>Your Balance:</b> {balance_str}
+💰 Balance: {balance_str}
 
-🎮 <b>How to Play:</b>
-• Get as close to 21 as possible
-• Beat the dealer without going over
-• Blackjack pays 3:2!
+<b>Rules:</b>
+Get to 21 • Beat dealer • Blackjack pays 3:2
 
-📊 <b>Card Values:</b>
-• Number cards = Face value
-• Face cards = 10 points
-• Ace = 1 or 11 points
+<b>Card Values:</b>
+Numbers = face • Face cards = 10 • Ace = 1 or 11
 
-Choose your bet amount:
+Choose bet:
 """
     
     keyboard = [
@@ -3167,21 +3109,14 @@ async def game_dice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     balance_str = await format_usd(user['balance'])
     
     text = f"""
-🎲 <b>DICE GAME</b>
+🎲 <b>DICE</b>
 
-💰 <b>Your Balance:</b> {balance_str}
+💰 Balance: {balance_str}
 
-🎮 <b>How to Play:</b>
-• Two dice are rolled
-• Predict if the sum will be HIGH or LOW
-• HIGH (8-12) and LOW (2-7) both pay 2x
+<b>Options:</b>
+HIGH (8-12) = 2x • LOW (2-7) = 2x • Lucky 7 = 5x
 
-🎯 <b>Betting Options:</b>
-• HIGH (8-12) = 2x payout
-• LOW (2-7) = 2x payout
-• Lucky 7 = 5x payout
-
-Choose your bet amount:
+Choose bet:
 """
     
     keyboard = [
@@ -3210,15 +3145,7 @@ async def game_roulette_callback(update: Update, context: ContextTypes.DEFAULT_T
 
 <b>Coming Soon!</b>
 
-This European roulette game is currently under development.
-
-Features coming soon:
-• European wheel (single zero)
-• Multiple betting options
-• Live spinning animation
-• High payout multipliers
-
-Stay tuned for updates!
+European wheel with multiple betting options and high payouts.
 """
     
     keyboard = [[InlineKeyboardButton("Back to Games", callback_data="mini_app_centre")]]
@@ -3341,11 +3268,9 @@ async def handle_slots_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 {result_text}
 
-💰 <b>Bet:</b> ${bet_amount:.2f}
-🏆 <b>Won:</b> ${win_amount:.2f}
-📊 <b>Balance:</b> {balance_str}
-
-Keep spinning! 🍀
+💰 Bet: ${bet_amount:.2f}
+🏆 Won: ${win_amount:.2f}
+📊 Balance: {balance_str}
 """
     else:
         result_message = f"""
@@ -3355,11 +3280,9 @@ Keep spinning! 🍀
 
 {result_text}
 
-💰 <b>Bet:</b> ${bet_amount:.2f}
-💸 <b>Lost:</b> ${bet_amount:.2f}
-📊 <b>Balance:</b> {balance_str}
-
-Better luck next time! 🍀
+💰 Bet: ${bet_amount:.2f}
+💸 Lost: ${bet_amount:.2f}
+📊 Balance: {balance_str}
 """
     
     keyboard = [
@@ -3449,16 +3372,16 @@ async def handle_blackjack_bet(update: Update, context: ContextTypes.DEFAULT_TYP
     dealer_cards = " ".join(dealer_hand)
     
     result_message = f"""
-🃏 <b>BLACKJACK RESULT</b>
+🃏 <b>BLACKJACK</b>
 
-👤 <b>Your Hand:</b> {player_cards} (Value: {player_value})
-🤖 <b>Dealer Hand:</b> {dealer_cards} (Value: {dealer_value})
+👤 Your: {player_cards} ({player_value})
+🤖 Dealer: {dealer_cards} ({dealer_value})
 
 {result_text}
 
-💰 <b>Bet:</b> ${bet_amount:.2f}
-🏆 <b>Won:</b> ${win_amount:.2f}
-📊 <b>Balance:</b> {balance_str}
+💰 Bet: ${bet_amount:.2f}
+🏆 Won: ${win_amount:.2f}
+📊 Balance: {balance_str}
 """
     
     keyboard = [
@@ -3495,10 +3418,10 @@ async def handle_dice_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     balance_str = await format_usd(user['balance'])
     
     text = f"""
-🎲 <b>DICE GAME</b>
+🎲 <b>DICE</b>
 
-💰 <b>Your Balance:</b> {balance_str}
-💵 <b>Bet Amount:</b> ${bet_amount:.2f}
+💰 Balance: {balance_str}
+💵 Bet: ${bet_amount:.2f}
 
 Choose your prediction:
 """
@@ -3577,16 +3500,15 @@ async def handle_dice_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Create result message
     result_message = f"""
-<b>DICE RESULT</b>
+🎲 <b>DICE</b>
 
-<b>Dice Roll:</b> {die1_emoji} {die2_emoji}
-<b>Total:</b> {total}
+Roll: {die1_emoji} {die2_emoji} = {total}
 
 {result_text}
 
-<b>Bet:</b> ${bet_amount:.2f}
-<b>Won:</b> ${win_amount:.2f}
-<b>Balance:</b> {balance_str}
+💰 Bet: ${bet_amount:.2f}
+🏆 Won: ${win_amount:.2f}
+📊 Balance: {balance_str}
 """
     
     keyboard = [
