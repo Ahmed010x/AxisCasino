@@ -266,20 +266,28 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 sticker_ids = COIN_STICKER_PACKS.get(result, [])
                 if sticker_ids:
+                    sticker_id = sticker_ids[0]  # Use first available sticker
+                    
                     # Send coin sticker
-                    await context.bot.send_sticker(
+                    sent_sticker = await context.bot.send_sticker(
                         chat_id=query.message.chat_id,
-                        sticker=sticker_ids[0]  # Use first available sticker
+                        sticker=sticker_id
                     )
                     
                     await asyncio.sleep(2)
+                    
+                    # Get sticker identifier from sent message
+                    sticker_file_id = sent_sticker.sticker.file_id if sent_sticker.sticker else "Unknown"
+                    sticker_unique_id = sent_sticker.sticker.file_unique_id if sent_sticker.sticker else "Unknown"
                     
                     result_message = f"""🪙 <b>COIN FLIP RESULT</b> 🪙
 
 🎯 <b>Your Choice:</b> {"HEADS (Bitcoin)" if choice == "heads" else "TAILS (Ethereum)"}
 🎰 <b>Result:</b> {"HEADS (Bitcoin)" if result == "heads" else "TAILS (Ethereum)"}
 
-<i>The crypto coin sticker shows the result!</i>"""
+<i>The crypto coin sticker shows the result!</i>
+
+🆔 <b>Sticker ID:</b> <code>{sticker_file_id[:30]}...</code>"""
                     
                     await context.bot.send_message(
                         chat_id=query.message.chat_id,
@@ -288,6 +296,8 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                     
                     logger.info(f"✅ Successfully sent coin sticker for {result}")
+                    logger.info(f"📋 Sticker File ID: {sticker_file_id}")
+                    logger.info(f"🔑 Sticker Unique ID: {sticker_unique_id}")
                     sticker_sent = True
                 else:
                     sticker_sent = False
