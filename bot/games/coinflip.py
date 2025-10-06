@@ -138,13 +138,13 @@ async def show_coinflip_choice(update: Update, context: ContextTypes.DEFAULT_TYP
 <b>Choose your side:</b>
 Will it be Heads or Tails?
 
-🟡 <b>HEADS</b> = Gold coin side
-🔵 <b>TAILS</b> = Blue coin side
+🟡 <b>HEADS</b> = Custom gold coin emoji
+🔵 <b>TAILS</b> = Custom blue coin emoji
 """
     
-    # Use custom emojis in button text if available
-    heads_button_text = f"🟡 HEADS"
-    tails_button_text = f"🔵 TAILS"
+    # Button text with descriptions since custom emojis might not display in buttons
+    heads_button_text = "🟡 HEADS"
+    tails_button_text = "🔵 TAILS"
     
     keyboard = [
         [
@@ -247,33 +247,68 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
         import asyncio
         await asyncio.sleep(1)
         
-        # Send the result with custom emoji
-        custom_emoji_text = f"<tg-emoji emoji-id=\"{emoji_id}\">🪙</tg-emoji>"
-        flip_animation = f"""
-🎰 <b>COIN FLIP RESULT</b> 🎰
-
-{custom_emoji_text}  <b>{result_text}!</b>  {custom_emoji_text}
-
-<i>The coin has landed!</i>
-"""
+        # Try to send as custom emoji sticker first
+        try:
+            await context.bot.send_sticker(
+                chat_id=query.message.chat_id,
+                sticker=emoji_id  # Send as custom emoji sticker
+            )
+            logger.info(f"Sent coin flip custom emoji sticker for {result}")
+        except Exception as sticker_error:
+            logger.warning(f"Custom emoji sticker failed, trying as emoji: {sticker_error}")
+            # Alternative: Send custom emoji in message using custom_emoji_id
+            try:
+                # This is the correct way to send custom emojis via Bot API
+                from telegram import MessageEntity
+                
+                result_message = f"🎰 COIN FLIP RESULT 🎰\n\n🪙 {result_text}! 🪙\n\nThe coin has landed!"
+                
+                # Create message entity for custom emoji
+                entities = [
+                    MessageEntity(
+                        type=MessageEntity.CUSTOM_EMOJI,
+                        offset=result_message.find("🪙"),
+                        length=1,
+                        custom_emoji_id=emoji_id
+                    ),
+                    MessageEntity(
+                        type=MessageEntity.CUSTOM_EMOJI,
+                        offset=result_message.rfind("🪙"),
+                        length=1,
+                        custom_emoji_id=emoji_id
+                    )
+                ]
+                
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=result_message,
+                    entities=entities
+                )
+                logger.info(f"Sent coin flip with custom emoji entities for {result}")
+            except Exception as entity_error:
+                logger.error(f"Custom emoji entities failed: {entity_error}")
+                # Final fallback to regular message
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=f"🎰 <b>COIN FLIP RESULT</b> 🎰\n\n<b>{result_text}!</b>\n\n<i>The coin has landed!</i>",
+                    parse_mode=ParseMode.HTML
+                )
         
+    except Exception as e:
+        logger.error(f"Failed to send coin flip result: {e}")
+        # Fallback to regular message
         await context.bot.send_message(
             chat_id=query.message.chat_id,
-            text=flip_animation,
+            text=f"🎰 <b>COIN FLIP RESULT</b> 🎰\n\n<b>{result_text}!</b>\n\n<i>The coin has landed!</i>",
             parse_mode=ParseMode.HTML
         )
-        logger.info(f"Sent coin flip animation for {result}")
-    except Exception as e:
-        logger.error(f"Failed to send animation: {e}")
     
-    # Build result text with custom emoji
-    custom_emoji_display = f"<tg-emoji emoji-id=\"{emoji_id}\">🪙</tg-emoji>"
-    
+    # Build result text without custom emoji in text (since we sent it as sticker)
     if won:
         text = f"""
 🎉 <b>YOU WIN!</b> 🎉
 
-{custom_emoji_display} <b>Result: {result_text}</b> {custom_emoji_display}
+<b>Result: {result_text}</b>
 
 💰 <b>Bet:</b> ${bet_amount:.2f}
 💵 <b>Won:</b> ${win_amount:.2f}
@@ -287,7 +322,7 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = f"""
 💔 <b>YOU LOSE</b> 💔
 
-{custom_emoji_display} <b>Result: {result_text}</b> {custom_emoji_display}
+<b>Result: {result_text}</b>
 
 💰 <b>Bet:</b> ${bet_amount:.2f}
 💸 <b>Lost:</b> ${bet_amount:.2f}
