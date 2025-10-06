@@ -72,9 +72,13 @@ async def show_coinflip_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 💡 <b>Game Info:</b>
 • Fair 50/50 odds
-• Instant results with custom emoji
+• Animated coin flip results
 • Win probability: 50%
 • Payout: {WIN_MULTIPLIER}x bet
+
+🎨 <b>Visual Effects:</b>
+• Custom coin emojis (Telegram Premium)
+• Colored fallback emojis (Standard)
 
 <b>Choose your bet amount:</b>
 """
@@ -138,8 +142,11 @@ async def show_coinflip_choice(update: Update, context: ContextTypes.DEFAULT_TYP
 <b>Choose your side:</b>
 Will it be Heads or Tails?
 
-🟡 <b>HEADS</b> = Custom gold coin emoji
-🔵 <b>TAILS</b> = Custom blue coin emoji
+🟡 <b>HEADS</b> = Gold coin side
+🔵 <b>TAILS</b> = Blue coin side
+
+💡 <i>Results shown with animated coin emojis
+(Custom emojis available with Telegram Premium)</i>
 """
     
     # Button text with descriptions since custom emojis might not display in buttons
@@ -234,64 +241,120 @@ async def play_coinflip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Could not delete message: {e}")
     
-    # Send the custom emoji result
+    # Send the custom emoji result with improved handling
     try:
-        # Send custom emoji animation with proper formatting
+        # Send animation message
         await context.bot.send_message(
             chat_id=query.message.chat_id,
             text="🎰 <b>FLIPPING COIN...</b> 🎰",
             parse_mode=ParseMode.HTML
         )
         
-        # Add a small delay for dramatic effect
+        # Add dramatic effect delay
         import asyncio
-        await asyncio.sleep(1)
+        await asyncio.sleep(1.5)
         
-        # Send custom emoji in message using MessageEntity (custom emoji IDs are not sticker IDs)
-        logger.info(f"Using custom emoji ID: {emoji_id} for result: {result}")
+        # Determine display elements
+        emoji_char = "🟡" if result == "heads" else "🔵"  # Gold for heads, Blue for tails
+        coin_emoji = "🪙"
+        
+        logger.info(f"Attempting to send custom emoji for {result} with ID: {emoji_id}")
+        
+        # Try multiple methods to display custom emoji result
+        custom_emoji_success = False
+        
+        # Method 1: MessageEntity with custom_emoji_id (most reliable)
         try:
-                # This is the correct way to send custom emojis via Bot API
-                from telegram import MessageEntity
-                
-                result_message = f"🎰 COIN FLIP RESULT 🎰\n\n🪙 {result_text}! 🪙\n\nThe coin has landed!"
-                
-                # Create message entity for custom emoji
-                entities = [
-                    MessageEntity(
-                        type=MessageEntity.CUSTOM_EMOJI,
-                        offset=result_message.find("🪙"),
-                        length=1,
-                        custom_emoji_id=emoji_id
-                    ),
-                    MessageEntity(
-                        type=MessageEntity.CUSTOM_EMOJI,
-                        offset=result_message.rfind("🪙"),
-                        length=1,
-                        custom_emoji_id=emoji_id
-                    )
-                ]
-                
+            from telegram import MessageEntity
+            
+            # Create message with coin emojis that will be replaced with custom ones
+            result_message = f"🎰 COIN FLIP RESULT 🎰\n\n{coin_emoji} {result_text}! {coin_emoji}\n\nThe coin has landed!"
+            
+            # Find all coin emoji positions
+            coin_positions = []
+            start = 0
+            while True:
+                pos = result_message.find(coin_emoji, start)
+                if pos == -1:
+                    break
+                coin_positions.append(pos)
+                start = pos + 1
+            
+            # Create custom emoji entities for each coin emoji
+            entities = []
+            for pos in coin_positions:
+                entities.append(MessageEntity(
+                    type=MessageEntity.CUSTOM_EMOJI,
+                    offset=pos,
+                    length=len(coin_emoji),
+                    custom_emoji_id=emoji_id
+                ))
+            
+            if entities:
                 await context.bot.send_message(
                     chat_id=query.message.chat_id,
                     text=result_message,
                     entities=entities
                 )
-                logger.info(f"Sent coin flip with custom emoji entities for {result}")
+                custom_emoji_success = True
+                logger.info(f"✅ Custom emoji MessageEntity sent successfully for {result}")
+            else:
+                raise Exception("No coin emojis found in message")
+                
         except Exception as entity_error:
-                logger.error(f"Custom emoji entities failed: {entity_error}")
-                # Final fallback to regular message
+            logger.warning(f"⚠️ MessageEntity custom emoji failed: {entity_error}")
+        
+        # Method 2: HTML <tg-emoji> tags (alternative approach)
+        if not custom_emoji_success:
+            try:
+                custom_emoji_tag = f'<tg-emoji emoji-id="{emoji_id}">{coin_emoji}</tg-emoji>'
+                result_message_html = f"""🎰 <b>COIN FLIP RESULT</b> 🎰
+
+{custom_emoji_tag} <b>{result_text}!</b> {custom_emoji_tag}
+
+<i>The coin has landed!</i>"""
+                
                 await context.bot.send_message(
                     chat_id=query.message.chat_id,
-                    text=f"🎰 <b>COIN FLIP RESULT</b> 🎰\n\n<b>{result_text}!</b>\n\n<i>The coin has landed!</i>",
+                    text=result_message_html,
                     parse_mode=ParseMode.HTML
                 )
+                custom_emoji_success = True
+                logger.info(f"✅ HTML custom emoji sent successfully for {result}")
+                
+            except Exception as html_error:
+                logger.warning(f"⚠️ HTML <tg-emoji> method failed: {html_error}")
+        
+        # Method 3: Enhanced fallback with colored emojis and explanation
+        if not custom_emoji_success:
+            result_message_fallback = f"""🎰 <b>COIN FLIP RESULT</b> 🎰
+
+{emoji_char} <b>{result_text}!</b> {emoji_char}
+
+<i>The coin has landed!</i>
+
+💡 <i>Note: Using standard emoji display
+Custom coin animations require Telegram Premium</i>"""
+            
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=result_message_fallback,
+                parse_mode=ParseMode.HTML
+            )
+            logger.info(f"ℹ️ Fallback emoji sent for {result} (custom emojis unavailable)")
         
     except Exception as e:
-        logger.error(f"Failed to send coin flip result: {e}")
-        # Fallback to regular message
+        logger.error(f"❌ Failed to send coin flip result: {e}")
+        # Absolute final fallback
+        fallback_text = f"""🎰 <b>COIN FLIP RESULT</b> 🎰
+
+<b>{result_text}!</b>
+
+<i>The coin has landed!</i>"""
+        
         await context.bot.send_message(
             chat_id=query.message.chat_id,
-            text=f"🎰 <b>COIN FLIP RESULT</b> 🎰\n\n<b>{result_text}!</b>\n\n<i>The coin has landed!</i>",
+            text=fallback_text,
             parse_mode=ParseMode.HTML
         )
     
