@@ -2137,7 +2137,7 @@ import threading
 import asyncio
 
 def run_flask():
-    port = int(os.environ.get("PORT", 8001))
+    port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port)
 
 async def run_telegram_bot_async():
@@ -3200,24 +3200,43 @@ Please try again or contact support.
 def run_telegram_bot():
     """Run the telegram bot with proper event loop management for deployment"""
     try:
-        # Simple direct approach for deployment
-        asyncio.run(run_telegram_bot_async())
-    except RuntimeError as e:
-        if "cannot be called from a running event loop" in str(e):
-            # We're in an environment with an existing event loop
-            # Create and run in a new thread
-            import threading
-            def run_in_thread():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+        # Check if we're in an existing event loop environment
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # We're in a running event loop, create new loop in thread
+                def run_in_new_loop():
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
+                    try:
+                        new_loop.run_until_complete(run_telegram_bot_async())
+                    finally:
+                        new_loop.close()
+                
+                # Run in thread if called from deployment context
+                if bool(os.environ.get("RENDER") or os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("HEROKU")):
+                    run_in_new_loop()
+                else:
+                    thread = threading.Thread(target=run_in_new_loop)
+                    thread.daemon = True
+                    thread.start()
+                    thread.join()
+            else:
+                # Event loop exists but not running, safe to use
                 loop.run_until_complete(run_telegram_bot_async())
-                loop.close()
+        except RuntimeError:
+            # No event loop, create one
+            asyncio.run(run_telegram_bot_async())
             
-            thread = threading.Thread(target=run_in_thread)
-            thread.daemon = True
-            thread.start()
-            thread.join()  # Wait for completion in deployment
-        else:
+    except Exception as e:
+        logger.error(f"Error running telegram bot: {e}")
+        # Try alternative approach for deployment
+        try:
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            new_loop.run_until_complete(run_telegram_bot_async())
+        except Exception as e2:
+            logger.error(f"Alternative bot startup failed: {e2}")
             raise
 
 if __name__ == "__main__":
@@ -3225,18 +3244,20 @@ if __name__ == "__main__":
     is_deployment = bool(os.environ.get("RENDER") or os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("HEROKU"))
     
     if is_deployment:
-        # In deployment, run bot directly and Flask on different port
+        # In deployment, run Flask in main thread and bot in background
         print("🚀 Starting in deployment mode...")
-        # Start Flask in background for health checks
-        flask_thread = threading.Thread(target=run_flask)
-        flask_thread.daemon = True
-        flask_thread.start()
         
-        # Run telegram bot in main thread
-        run_telegram_bot()
+        # Start Telegram bot in background thread
+        bot_thread = threading.Thread(target=run_telegram_bot)
+        bot_thread.daemon = True
+        bot_thread.start()
+        
+        # Run Flask in main thread for health checks
+        run_flask()
     else:
-        # Local development
+        # Local development - run bot directly
         print("🏠 Starting in development mode...")
+        run_telegram_bot()
 
 # --- Game Callback Handlers ---
 
