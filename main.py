@@ -1,12 +1,10 @@
 # main.py
 """
-Enhanced Telegram Casino Bot v2.1
-Professional-grade casino with security, anti-fraud, and comprehensive features.
-Stake-style interface with advanced game mechanics and user protection.
+Simplified Telegram Casino Bot v2.1
+Clean and maintainable casino bot with essential features
 """
 
 import os
-import sys
 import time
 import random
 import asyncio
@@ -19,41 +17,17 @@ import hmac
 import sqlite3
 import aiosqlite
 import aiohttp
-import nest_asyncio
 from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass
-from enum import Enum
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
-from collections import defaultdict, deque
 from flask import Flask, request
 
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    Message,
-    User as TelegramUser,
-    WebAppInfo
-)
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import (
-    Application,
-    ApplicationBuilder,
-    CommandHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-    MessageHandler,
-    filters,
-    ConversationHandler
+    Application, ApplicationBuilder, CommandHandler,
+    CallbackQueryHandler, ContextTypes, MessageHandler, filters, ConversationHandler
 )
-from telegram.error import BadRequest, TelegramError
-
-# Apply nest_asyncio only if needed
-try:
-    nest_asyncio.apply()
-except ImportError:
-    pass  # nest_asyncio not available
 
 # Configure logging
 logging.basicConfig(
@@ -66,162 +40,73 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Import game modules
-try:
-    from bot.games.slots import handle_slots_callback
-    from bot.games.dice import handle_dice_callback, handle_custom_bet_input as handle_dice_custom_bet
-    from bot.games.blackjack import handle_blackjack_callback, handle_custom_bet_input as handle_blackjack_custom_bet
-    from bot.games.roulette import handle_roulette_callback, handle_custom_bet_input as handle_roulette_custom_bet
-    from bot.games.coinflip import handle_coinflip_callback, handle_custom_bet_input as handle_coinflip_custom_bet
-    from bot.games.prediction import handle_prediction_callback, handle_custom_bet_input as handle_prediction_custom_bet
-    from bot.games.basketball import handle_basketball_callback, handle_custom_bet_input as handle_basketball_custom_bet
-except ImportError as e:
-    logger.warning(f"Could not import game modules: {e}")
-    # Define placeholder functions
-    async def handle_slots_callback(update, context):
-        await update.callback_query.edit_message_text("🚧 Slots game temporarily unavailable")
-    async def handle_dice_callback(update, context):
-        await update.callback_query.edit_message_text("🚧 Dice game temporarily unavailable")
-    async def handle_prediction_callback(update, context):
-        await update.callback_query.edit_message_text("🚧 Prediction games temporarily unavailable")
-    async def handle_blackjack_callback(update, context):
-        await update.callback_query.edit_message_text("🚧 Blackjack game temporarily unavailable")
-    async def handle_roulette_callback(update, context):
-        await update.callback_query.edit_message_text("🚧 Roulette game temporarily unavailable")
-    async def handle_coinflip_callback(update, context):
-        await update.callback_query.edit_message_text("🚧 Coin Flip game temporarily unavailable")
-    async def handle_basketball_callback(update, context):
-        await update.callback_query.edit_message_text("🚧 Basketball game temporarily unavailable")
+# --- Configuration ---
+load_dotenv()
 
-# --- Owner (Super Admin) Configuration ---
-load_dotenv(".env.owner")  # Load owner ID from dedicated file
+# Owner and Admin Configuration
 OWNER_USER_ID = int(os.environ.get("OWNER_USER_ID", "0"))
+ADMIN_USER_IDS = list(map(int, os.environ.get("ADMIN_USER_IDS", "").split(","))) if os.environ.get("ADMIN_USER_IDS") else []
 
 def is_owner(user_id: int) -> bool:
     """Check if user is the owner (super admin)"""
     return user_id == OWNER_USER_ID
 
-# --- Config ---
-load_dotenv()
-# Load additional environment from env.litecoin file
+def is_admin(user_id: int) -> bool:
+    """Check if user is an admin/owner"""
+    return user_id in ADMIN_USER_IDS or is_owner(user_id)
+
+# Bot Configuration
 load_dotenv("env.litecoin")
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 DB_PATH = os.environ.get("CASINO_DB", "casino.db")
-
-# Global demo mode flag
 DEMO_MODE = os.environ.get("DEMO_MODE", "false").lower() == "true"
+BOT_VERSION = "2.1.0"
 
 # CryptoBot configuration
 CRYPTOBOT_API_TOKEN = os.environ.get("CRYPTOBOT_API_TOKEN")
 CRYPTOBOT_USD_ASSET = os.environ.get("CRYPTOBOT_USD_ASSET", "LTC")
 CRYPTOBOT_WEBHOOK_SECRET = os.environ.get("CRYPTOBOT_WEBHOOK_SECRET")
 
-# Render hosting configuration
+# Deployment configuration
 PORT = int(os.environ.get("PORT", "8001"))
-RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
-HEARTBEAT_INTERVAL = int(os.environ.get("HEARTBEAT_INTERVAL", "300"))  # 5 minutes default
+
+# Withdrawal limits
+MIN_WITHDRAWAL_USD = float(os.environ.get("MIN_WITHDRAWAL_USD", "1.00"))
+MAX_WITHDRAWAL_USD = float(os.environ.get("MAX_WITHDRAWAL_USD", "10000.00"))
+MAX_WITHDRAWAL_USD_DAILY = float(os.environ.get("MAX_WITHDRAWAL_USD_DAILY", "10000.00"))
+WITHDRAWAL_FEE_PERCENT = 0.02  # 2%
+MIN_WITHDRAWAL_FEE = 1.0
+WITHDRAWAL_COOLDOWN_SECONDS = int(os.environ.get("WITHDRAWAL_COOLDOWN_SECONDS", "300"))
 
 if not BOT_TOKEN:
     raise RuntimeError("Set BOT_TOKEN in environment or .env")
 
-# Security Configuration
-MAX_BET_PER_GAME = int(os.environ.get("MAX_BET_PER_GAME", "1000"))
-MAX_DAILY_LOSSES = int(os.environ.get("MAX_DAILY_LOSSES", "5000"))
-ANTI_SPAM_WINDOW = int(os.environ.get("ANTI_SPAM_WINDOW", "10"))  # seconds
-MAX_COMMANDS_PER_WINDOW = int(os.environ.get("MAX_COMMANDS_PER_WINDOW", "20"))
-
-# Admin Configuration
-ADMIN_USER_IDS = list(map(int, os.environ.get("ADMIN_USER_IDS", "").split(","))) if os.environ.get("ADMIN_USER_IDS") else []
-SUPPORT_CHANNEL = os.environ.get("SUPPORT_CHANNEL", "@casino_support")
-BOT_VERSION = "2.0.1"
-
-# --- Admin Helper Functions ---
-def is_admin(user_id: int) -> bool:
-    """Check if user is an admin/owner with logging"""
-    is_admin_user = user_id in ADMIN_USER_IDS
-    if is_admin_user:
-        logger.info(f"Admin access granted to user {user_id}")
-    return is_admin_user
-
-def log_admin_action(user_id: int, action: str):
-    """Log admin actions for debugging"""
-    logger.info(f"🔧 Admin action by {user_id}: {action}")
-
 # Global variables
-start_time = time.time()  # Record bot start time for metrics
+start_time = time.time()
 
-# --- Message Prioritization System ---
-import uuid
-
-def generate_request_id() -> str:
-    """Generate a unique request ID for amount input prioritization"""
-    return f"{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
-
-async def set_pending_amount_request(context: ContextTypes.DEFAULT_TYPE, state: str, prompt_type: str) -> str:
-    """Set a new pending amount request and return its ID"""
-    request_id = generate_request_id()
-    context.user_data['pending_amount_request'] = {
-        'id': request_id,
-        'state': state,
-        'type': prompt_type,
-        'timestamp': time.time()
-    }
-    logger.info(f"Set pending amount request: {request_id} for state {state}")
-    return request_id
-
-async def validate_amount_request(context: ContextTypes.DEFAULT_TYPE, expected_state: str) -> bool:
-    """Check if the current amount input is for the latest request"""
-    pending = context.user_data.get('pending_amount_request')
-    if not pending:
-        return True  # No pending request, allow
-    
-    if pending.get('state') != expected_state:
-        # Different state - newer request has taken priority
-        return False
-    
-    # Check if request is too old (5 minutes timeout)
-    if time.time() - pending.get('timestamp', 0) > 300:
-        context.user_data.pop('pending_amount_request', None)
-        return False
-    
-    return True
-
-async def clear_amount_request(context: ContextTypes.DEFAULT_TYPE):
-    """Clear the pending amount request"""
-    context.user_data.pop('pending_amount_request', None)
-
-async def send_priority_message(update: Update, prompt_type: str) -> None:
-    """Send a message when a newer request has taken priority"""
-    await update.message.reply_text(
-        f"⚠️ **Request Superseded**\n\n"
-        f"A newer {prompt_type} request is pending.\n"
-        f"Please respond to the latest prompt or use the menu buttons to navigate.",
-        parse_mode=ParseMode.MARKDOWN
-    )
-
-# --- Deposit/Withdrawal Helper Functions ---
-
-DEPOSIT_LTC_AMOUNT = "DEPOSIT_LTC_AMOUNT"
-WITHDRAW_LTC_AMOUNT = "WITHDRAW_LTC_AMOUNT"
-WITHDRAW_LTC_ADDRESS = "WITHDRAW_LTC_ADDRESS"
-
-MIN_WITHDRAWAL_USD = float(os.environ.get("MIN_WITHDRAWAL_USD", "1.00"))
-MAX_WITHDRAWAL_USD = float(os.environ.get("MAX_WITHDRAWAL_USD", "10000.00"))
-MAX_WITHDRAWAL_USD_DAILY = float(os.environ.get("MAX_WITHDRAWAL_USD_DAILY", "10000.00"))
-WITHDRAWAL_FEE_PERCENT = float(os.environ.get("WITHDRAWAL_FEE_PERCENT", "0.01"))
-WITHDRAWAL_COOLDOWN_SECONDS = int(os.environ.get("WITHDRAWAL_COOLDOWN_SECONDS", "300"))
-MIN_WITHDRAWAL_FEE = 1.0
-
-# --- Supported Crypto Assets ---
-# Only allow LTC, TON, SOL
-SUPPORTED_CRYPTO_ASSETS = ["LTC", "TON", "SOL"]
-
+# --- Crypto Configuration ---
+SUPPORTED_CRYPTO_ASSETS = ["LTC"]
 CRYPTO_ADDRESS_PATTERNS = {
     'LTC': r'^[LM3][a-km-zA-HJ-NP-Z1-9]{26,33}$|^ltc1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{39,59}$',
-    'TON': r'^UQ[a-zA-Z0-9_-]{46,}$',
-    'SOL': r'^[1-9A-HJ-NP-Za-km-z]{32,44}$',
 }
+
+# --- Helper Functions ---
+async def format_usd(amount: float) -> str:
+    """Format USD amount for display"""
+    return f"${amount:.2f}"
+
+def validate_crypto_address(address: str, asset: str) -> bool:
+    """Validate cryptocurrency address format"""
+    pattern = CRYPTO_ADDRESS_PATTERNS.get(asset)
+    if not pattern:
+        return False
+    return bool(re.match(pattern, address))
+
+def calculate_withdrawal_fee(amount: float) -> float:
+    """Calculate withdrawal fee"""
+    fee = amount * WITHDRAWAL_FEE_PERCENT
+    return max(fee, MIN_WITHDRAWAL_FEE)
 
 
 
@@ -1637,7 +1522,7 @@ async def cancel_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def handle_text_input_main(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle text input for deposit/withdrawal/game custom bet states."""
+    """Handle text input for deposit/withdrawal states."""
     # Check for deposit/withdrawal states
     if 'awaiting_deposit_amount' in context.user_data:
         await handle_deposit_amount_input(update, context)
@@ -1645,23 +1530,8 @@ async def handle_text_input_main(update: Update, context: ContextTypes.DEFAULT_T
         await handle_withdraw_amount_input(update, context)
     elif 'awaiting_withdraw_address' in context.user_data:
         await handle_withdraw_address_input(update, context)
-    # Check for game custom bet states
-    elif 'awaiting_coinflip_custom_bet' in context.user_data:
-        await handle_coinflip_custom_bet(update, context)
-    elif 'awaiting_dice_custom_bet' in context.user_data:
-        await handle_dice_custom_bet(update, context)
-    elif 'awaiting_prediction_custom_bet' in context.user_data:
-        await handle_prediction_custom_bet(update, context)
-    elif 'awaiting_basketball_custom_bet' in context.user_data:
-        await handle_basketball_custom_bet(update, context)
-    elif 'awaiting_blackjack_bet' in context.user_data:
-        await handle_blackjack_custom_bet(update, context)
-    elif 'awaiting_roulette_bet' in context.user_data or 'awaiting_roulette_number_bet' in context.user_data:
-        await handle_roulette_custom_bet(update, context)
     else:
-        # Ignore text messages that don't match any expected state
-        # This prevents interference with conversation handlers for games
-        # Log ignored input for debugging
+        # Ignore unexpected text input
         logger.debug(f"Ignored text input from user {update.effective_user.id}: {update.message.text}")
 
 # --- Deposit/Withdrawal Handlers ---
@@ -2330,6 +2200,8 @@ Welcome, {username}! 👋
 🔗 <b>Referral Code:</b> <code>{referral_code}</code>
 
 <b>Choose an action:</b>
+
+💡 <i>Quick tip: Use /games, /slots, /blackjack, /dice, or /roulette for direct access!</i>
 """
         
         # Create navigation keyboard
@@ -2345,6 +2217,7 @@ Welcome, {username}! 👋
             ],
             [
                 InlineKeyboardButton("📊 Statistics", callback_data="user_stats"),
+                InlineKeyboardButton("⚡ Commands", callback_data="commands_menu"),
                 InlineKeyboardButton("❓ Help", callback_data="help_menu")
             ]
         ]
@@ -2454,47 +2327,320 @@ Earned: <b>{earnings_str}</b>
     
     application.add_handler(CommandHandler("referral", referral_command_handler))
     
-    # Test sticker command for debugging
-    async def test_sticker_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Test sending crypto stickers directly"""
+    # Game command handlers
+    async def slots_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /slots command"""
         user_id = update.effective_user.id
+        user = await get_user(user_id)
         
-        # Import sticker IDs
-        from bot.games.coinflip import COIN_STICKER_PACKS
-        
-        await update.message.reply_text("🧪 Testing crypto stickers...")
-        
-        # Test Bitcoin sticker (heads)
-        try:
-            bitcoin_id = COIN_STICKER_PACKS["heads"][0]
-            await update.message.reply_text(f"📤 Sending Bitcoin sticker: {bitcoin_id[:30]}...")
-            
-            bitcoin_msg = await context.bot.send_sticker(
-                chat_id=update.effective_chat.id,
-                sticker=bitcoin_id
+        if not user:
+            await update.message.reply_text(
+                "❌ User not found. Please use /start to register first.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Start", callback_data="main_panel")]])
             )
-            await update.message.reply_text(f"✅ Bitcoin sticker sent! Message ID: {bitcoin_msg.message_id}")
-            
-        except Exception as e:
-            await update.message.reply_text(f"❌ Bitcoin sticker failed: {type(e).__name__}: {e}")
+            return
         
-        # Test Ethereum sticker (tails)
-        try:
-            ethereum_id = COIN_STICKER_PACKS["tails"][0]
-            await update.message.reply_text(f"📤 Sending Ethereum sticker: {ethereum_id[:30]}...")
-            
-            ethereum_msg = await context.bot.send_sticker(
-                chat_id=update.effective_chat.id,
-                sticker=ethereum_id
-            )
-            await update.message.reply_text(f"✅ Ethereum sticker sent! Message ID: {ethereum_msg.message_id}")
-            
-        except Exception as e:
-            await update.message.reply_text(f"❌ Ethereum sticker failed: {type(e).__name__}: {e}")
+        balance_str = await format_usd(user['balance'])
         
-        await update.message.reply_text("🎯 Sticker test complete!")
+        text = f"""
+🎰 <b>SLOTS</b>
+
+💰 Balance: {balance_str}
+
+<b>Payouts:</b>
+🍒🍒🍒 10x • 🍋🍋🍋 20x • 🍊🍊🍊 30x
+🔔🔔🔔 50x • 💎💎💎 100x
+
+Choose bet:
+"""
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("$1", callback_data="slots_bet_1"),
+                InlineKeyboardButton("$5", callback_data="slots_bet_5"),
+                InlineKeyboardButton("$10", callback_data="slots_bet_10")
+            ],
+            [
+                InlineKeyboardButton("$25", callback_data="slots_bet_25"),
+                InlineKeyboardButton("$50", callback_data="slots_bet_50"),
+                InlineKeyboardButton("$100", callback_data="slots_bet_100")
+            ],
+            [InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]
+        ]
+        
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     
-    application.add_handler(CommandHandler("teststicker", test_sticker_command))
+    async def blackjack_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /blackjack command"""
+        user_id = update.effective_user.id
+        user = await get_user(user_id)
+        
+        if not user:
+            await update.message.reply_text(
+                "❌ User not found. Please use /start to register first.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Start", callback_data="main_panel")]])
+            )
+            return
+        
+        balance_str = await format_usd(user['balance'])
+        
+        text = f"""
+🃏 <b>BLACKJACK</b>
+
+💰 Balance: {balance_str}
+
+<b>Rules:</b>
+• Get as close to 21 as possible
+• Aces = 1 or 11, Face cards = 10
+• Beat the dealer without going over 21
+• Blackjack pays 3:2
+
+Choose bet:
+"""
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("$1", callback_data="blackjack_bet_1"),
+                InlineKeyboardButton("$5", callback_data="blackjack_bet_5"),
+                InlineKeyboardButton("$10", callback_data="blackjack_bet_10")
+            ],
+            [
+                InlineKeyboardButton("$25", callback_data="blackjack_bet_25"),
+                InlineKeyboardButton("$50", callback_data="blackjack_bet_50"),
+                InlineKeyboardButton("$100", callback_data="blackjack_bet_100")
+            ],
+            [InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]
+        ]
+        
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    async def dice_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /dice command"""
+        user_id = update.effective_user.id
+        user = await get_user(user_id)
+        
+        if not user:
+            await update.message.reply_text(
+                "❌ User not found. Please use /start to register first.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Start", callback_data="main_panel")]])
+            )
+            return
+        
+        balance_str = await format_usd(user['balance'])
+        
+        text = f"""
+🎲 <b>DICE</b>
+
+💰 Balance: {balance_str}
+
+<b>How to play:</b>
+• Roll two dice (2-12 total)
+• Win 2x on 7 or 11
+• Win 10x on doubles (snake eyes, etc.)
+• Other numbers lose
+
+Choose bet:
+"""
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("$1", callback_data="dice_bet_1"),
+                InlineKeyboardButton("$5", callback_data="dice_bet_5"),
+                InlineKeyboardButton("$10", callback_data="dice_bet_10")
+            ],
+            [
+                InlineKeyboardButton("$25", callback_data="dice_bet_25"),
+                InlineKeyboardButton("$50", callback_data="dice_bet_50"),
+                InlineKeyboardButton("$100", callback_data="dice_bet_100")
+            ],
+            [InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]
+        ]
+        
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    async def roulette_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /roulette command"""
+        user_id = update.effective_user.id
+        user = await get_user(user_id)
+        
+        if not user:
+            await update.message.reply_text(
+                "❌ User not found. Please use /start to register first.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Start", callback_data="main_panel")]])
+            )
+            return
+        
+        balance_str = await format_usd(user['balance'])
+        
+        text = f"""
+🎯 <b>ROULETTE</b>
+
+💰 Balance: {balance_str}
+
+<b>Bet Options:</b>
+• Red/Black: 2x payout
+• Odd/Even: 2x payout  
+• High/Low: 2x payout
+• Single Number: 36x payout
+
+Choose your bet type:
+"""
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("🔴 Red", callback_data="roulette_red"),
+                InlineKeyboardButton("⚫ Black", callback_data="roulette_black")
+            ],
+            [
+                InlineKeyboardButton("📈 Odd", callback_data="roulette_odd"),
+                InlineKeyboardButton("📊 Even", callback_data="roulette_even")
+            ],
+            [
+                InlineKeyboardButton("⬇️ Low (1-18)", callback_data="roulette_low"),
+                InlineKeyboardButton("⬆️ High (19-36)", callback_data="roulette_high")
+            ],
+            [InlineKeyboardButton("🎯 Pick Number", callback_data="roulette_number")],
+            [InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]
+        ]
+        
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    async def games_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /games command - show games menu"""
+        user_id = update.effective_user.id
+        user = await get_user(user_id)
+        
+        if not user:
+            await update.message.reply_text(
+                "❌ User not found. Please use /start to register first.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Start", callback_data="main_panel")]])
+            )
+            return
+        
+        balance = user['balance']
+        balance_str = await format_usd(balance)
+        
+        if balance < 1.0:
+            text = f"""
+🎮 <b>CASINO GAMES</b>
+
+💰 Balance: {balance_str}
+
+⚠️ <b>Need $1.00 minimum to play</b>
+
+💡 Get funds: Deposit • Weekly Bonus • Referrals
+
+<b>Available Games:</b>
+🎰 Slots • 🃏 Blackjack • 🎲 Dice • 🎯 Roulette
+
+<b>Quick Access:</b>
+/slots - Play slots directly
+/blackjack - Play blackjack directly  
+/dice - Play dice directly
+/roulette - Play roulette directly
+"""
+        else:
+            text = f"""
+🎮 <b>CASINO GAMES</b>
+
+💰 Balance: {balance_str}
+
+Choose your game:
+
+🎰 Slots • 🃏 Blackjack • 🎲 Dice • 🎯 Roulette
+
+<b>Quick Access:</b>
+/slots - Play slots directly
+/blackjack - Play blackjack directly  
+/dice - Play dice directly
+/roulette - Play roulette directly
+
+Good luck! 🍀
+"""
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("🎰 Slots", callback_data="game_slots"),
+                InlineKeyboardButton("🃏 Blackjack", callback_data="game_blackjack")
+            ],
+            [
+                InlineKeyboardButton("🎲 Dice", callback_data="game_dice"),
+                InlineKeyboardButton("🎯 Roulette", callback_data="game_roulette")
+            ]
+        ]
+        
+        if balance < 1.0:
+            keyboard.append([
+                InlineKeyboardButton("💳 Deposit", callback_data="deposit"),
+                InlineKeyboardButton("🎁 Bonus", callback_data="weekly_bonus")
+            ])
+        
+        keyboard.append([InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")])
+        
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    # Register game command handlers
+    application.add_handler(CommandHandler("slots", slots_command_handler))
+    application.add_handler(CommandHandler("blackjack", blackjack_command_handler))
+    application.add_handler(CommandHandler("dice", dice_command_handler))
+    application.add_handler(CommandHandler("roulette", roulette_command_handler))
+    application.add_handler(CommandHandler("games", games_command_handler))
+    
+    # Help command handler
+    async def help_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /help command"""
+        text = f"""
+<b>🎰 AXIS CASINO - HELP</b>
+
+<b>🚀 Getting Started:</b>
+• /start - Access your main panel
+• Make a deposit to start playing
+• Choose games & place bets
+• Withdraw your winnings anytime
+
+<b>🎮 Game Commands:</b>
+• /games - Show all available games
+• /slots - Play slots directly
+• /blackjack - Play blackjack directly
+• /dice - Play dice directly
+• /roulette - Play roulette directly
+
+<b>💰 Money Commands:</b>
+• /deposit - Make a deposit
+• /referral - View referral program & earn commissions
+
+<b>💳 Payment Info:</b>
+• Litecoin (LTC) supported
+• Minimum deposit: $1.00
+• Minimum withdrawal: $1.00
+• Withdrawal fee: 2% (min $1.00)
+• Fast & secure transactions
+
+<b>🎁 Bonuses:</b>
+• Weekly bonus: $5.00 every 7 days
+• Referral bonus: 20% commission on referral losses
+• Welcome bonus: $5.00 for new referrals
+
+<b>📞 Support:</b>
+Need help? Contact our support team!
+
+Good luck at the tables! 🍀
+"""
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("🎮 Play Games", callback_data="mini_app_centre"),
+                InlineKeyboardButton("💳 Deposit", callback_data="deposit")
+            ],
+            [
+                InlineKeyboardButton("👥 Referrals", callback_data="referral_menu"),
+                InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")
+            ]
+        ]
+        
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
+    application.add_handler(CommandHandler("help", help_command_handler))
 
     # Basic callback handlers for user panel navigation
     async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2525,28 +2671,24 @@ Earned: <b>{earnings_str}</b>
             await referral_menu_callback(update, context)
         elif data == "user_stats":
             await user_stats_callback(update, context)
+        elif data == "commands_menu":
+            await commands_menu_callback(update, context)
         elif data == "help_menu":
             await help_menu_callback(update, context)
         elif data == "admin_panel" and (is_admin(user_id) or is_owner(user_id)):
             await admin_panel_callback(update, context)
         elif data == "bonus_menu":
             await bonus_menu_callback(update, context)
-        # Game handlers
+        # Game handlers - only include working games
         elif data == "game_slots":
             await game_slots_callback(update, context)
         elif data == "game_blackjack":
             await game_blackjack_callback(update, context)
         elif data == "game_dice":
             await game_dice_callback(update, context)
-        elif data == "game_prediction":
-            await handle_prediction_callback(update, context)
-        elif data == "game_basketball":
-            await handle_basketball_callback(update, context)
-        elif data == "game_coinflip":
-            await handle_coinflip_callback(update, context)
         elif data == "game_roulette":
             await game_roulette_callback(update, context)
-        # Game betting handlers
+        # Game betting handlers - only include working games
         elif data.startswith("slots_bet_"):
             await handle_slots_bet(update, context)
         elif data.startswith("blackjack_bet_"):
@@ -2555,14 +2697,16 @@ Earned: <b>{earnings_str}</b>
             await handle_dice_bet(update, context)
         elif data.startswith("dice_play_"):
             await handle_dice_play(update, context)
-        elif data.startswith("prediction_"):
-            await handle_prediction_callback(update, context)
-        elif data.startswith("basketball_"):
-            await handle_basketball_callback(update, context)
-        elif data.startswith("coinflip_"):
-            await handle_coinflip_callback(update, context)
         elif data.startswith("roulette_"):
-            await handle_roulette_callback(update, context)
+            await game_roulette_callback(update, context)
+        # Unsupported games - show coming soon message
+        elif data in ["game_prediction", "game_basketball", "game_coinflip"] or \
+             data.startswith(("prediction_", "basketball_", "coinflip_")):
+            await query.edit_message_text(
+                "🚧 <b>Coming Soon!</b>\n\nThis game is under development.\n\nTry our working games: Slots, Blackjack, Dice, or Roulette!",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎮 Back to Games", callback_data="mini_app_centre")]]),
+                parse_mode=ParseMode.HTML
+            )
         elif data == "weekly_bonus":
             await weekly_bonus_callback(update, context)
         elif data == "claim_weekly_bonus":
@@ -2623,6 +2767,7 @@ Welcome, {username}! 👋
             ],
             [
                 InlineKeyboardButton("📊 Statistics", callback_data="user_stats"),
+                InlineKeyboardButton("⚡ Commands", callback_data="commands_menu"),
                 InlineKeyboardButton("❓ Help", callback_data="help_menu")
             ]
         ]
@@ -2663,9 +2808,8 @@ Welcome, {username}! 👋
 
 💡 Get funds: Deposit • Weekly Bonus • Referrals
 
-<b>Games:</b>
-🎰 Slots • 🃏 Blackjack • 🎲 Dice • 🪙 Coin Flip
-🎯 Roulette • 🏀 Basketball • 🔮 Prediction
+<b>Available Games:</b>
+🎰 Slots • 🃏 Blackjack • 🎲 Dice • 🎯 Roulette
 """
         else:
             text = f"""
@@ -2675,13 +2819,12 @@ Welcome, {username}! 👋
 
 Choose your game:
 
-🎰 Slots • 🃏 Blackjack • 🎲 Dice • 🪙 Coin Flip
-🎯 Roulette • 🏀 Basketball • 🔮 Prediction
+🎰 Slots • 🃏 Blackjack • 🎲 Dice • 🎯 Roulette
 
 Good luck! 🍀
 """
         
-        # Always show all game buttons
+        # Show only working games
         keyboard = [
             [
                 InlineKeyboardButton("🎰 Slots", callback_data="game_slots"),
@@ -2689,14 +2832,7 @@ Good luck! 🍀
             ],
             [
                 InlineKeyboardButton("🎲 Dice", callback_data="game_dice"),
-                InlineKeyboardButton("🪙 Coin Flip", callback_data="game_coinflip")
-            ],
-            [
-                InlineKeyboardButton("🎯 Roulette", callback_data="game_roulette"),
-                InlineKeyboardButton("🏀 Basketball", callback_data="game_basketball")
-            ],
-            [
-                InlineKeyboardButton("🔮 Prediction", callback_data="game_prediction")
+                InlineKeyboardButton("🎯 Roulette", callback_data="game_roulette")
             ]
         ]
         
@@ -2827,6 +2963,55 @@ Member since: {user.get('created_at', '')[:10] if user.get('created_at') else 'U
         keyboard = [[InlineKeyboardButton("Back to Menu", callback_data="main_panel")]]
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     
+    async def commands_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show commands menu with clickable command buttons"""
+        text = f"""
+⚡ <b>BOT COMMANDS</b> ⚡
+
+Click any command below to use it instantly!
+
+<b>🎮 Game Commands:</b>
+• /games - All games menu
+• /slots - Play slots directly
+• /blackjack - Play blackjack directly
+• /dice - Play dice directly
+• /roulette - Play roulette directly
+
+<b>💰 Money Commands:</b>
+• /deposit - Make a deposit
+• /referral - Referral program
+
+<b>ℹ️ Info Commands:</b>
+• /start - Main menu
+• /help - Full help guide
+
+<b>🚀 Quick Tips:</b>
+• Type any command in chat
+• Use buttons for easy access
+• Commands work anywhere in the bot
+"""
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("/games", callback_data="mini_app_centre"),
+                InlineKeyboardButton("/slots", callback_data="game_slots"),
+                InlineKeyboardButton("/blackjack", callback_data="game_blackjack")
+            ],
+            [
+                InlineKeyboardButton("/dice", callback_data="game_dice"),
+                InlineKeyboardButton("/roulette", callback_data="game_roulette"),
+                InlineKeyboardButton("/deposit", callback_data="deposit")
+            ],
+            [
+                InlineKeyboardButton("/referral", callback_data="referral_menu"),
+                InlineKeyboardButton("/help", callback_data="help_menu"),
+                InlineKeyboardButton("/start", callback_data="main_panel")
+            ],
+            [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
+        ]
+        
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+    
     async def help_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show help menu"""
         text = f"""
@@ -2837,6 +3022,17 @@ Member since: {user.get('created_at', '')[:10] if user.get('created_at') else 'U
 • Deposit funds to play
 • Choose games & place bets
 • Withdraw your winnings
+
+<b>Game Commands:</b>
+• /games - Show all games
+• /slots - Play slots directly
+• /blackjack - Play blackjack directly
+• /dice - Play dice directly
+• /roulette - Play roulette directly
+
+<b>Other Commands:</b>
+• /deposit - Make a deposit
+• /referral - View referral program
 
 <b>Payments:</b>
 • Litecoin (LTC) supported
