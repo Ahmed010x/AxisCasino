@@ -3202,9 +3202,24 @@ Please try again or contact support.
     application.add_handler(CallbackQueryHandler(callback_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input_main))
 
-    # Run polling - stop_signals=None allows graceful shutdown without signal handler conflicts
-    logger.info("🤖 Starting Telegram bot polling...")
-    await application.run_polling(stop_signals=None)
+    # Initialize the application
+    logger.info("🤖 Initializing Telegram bot...")
+    await application.initialize()
+    await application.start()
+    
+    # Start polling for updates
+    logger.info("🤖 Starting bot polling...")
+    await application.updater.start_polling(drop_pending_updates=True)
+    
+    # Keep the bot running
+    try:
+        while True:
+            await asyncio.sleep(1)
+    finally:
+        # Cleanup on shutdown
+        await application.updater.stop()
+        await application.stop()
+        await application.shutdown()
 
 async def run_both_services():
     """Run both web server and Telegram bot in the same event loop"""
