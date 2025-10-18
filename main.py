@@ -8,7 +8,6 @@ import os
 import time
 import random
 import asyncio
-import threading
 import logging
 import hashlib
 import uuid
@@ -2099,7 +2098,6 @@ Please create a new deposit request.
 
 import os
 from aiohttp import web
-import threading
 import asyncio
 
 async def health_check(request):
@@ -2142,19 +2140,17 @@ async def start_web_server():
     await site.start()
     logger.info(f"🌐 Web server started on port {port}")
     
-    # Keep the server running
-    while True:
-        await asyncio.sleep(3600)
+    # Keep the server running indefinitely
+    try:
+        while True:
+            await asyncio.sleep(3600)
+    finally:
+        await runner.cleanup()
 
-# --- Web Server and Telegram Bot Runner ---
+# --- Telegram Bot Runner ---
 
-def run_web_server_thread():
-    """Run web server in a separate thread"""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(start_web_server())
-
-async def run_telegram_bot_async(use_signal_handlers=True):
+async def run_telegram_bot_async():
+    """Run the Telegram bot with proper initialization"""
     await init_db()  # Ensure DB is ready
 
     application = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -3205,46 +3201,34 @@ Please try again or contact support.
     
     application.add_handler(CallbackQueryHandler(callback_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input_main))
-    # Add your other handlers here, e.g.:
-    # application.add_handler(CallbackQueryHandler(callback_handler))
-    # application.add_handler(MessageHandler(filters.TEXT, handle_text_input_main))
 
-    # Run polling with or without signal handlers based on thread context
-    await application.run_polling(stop_signals=None if not use_signal_handlers else ('SIGINT', 'SIGTERM', 'SIGABRT'))
+    # Run polling - stop_signals=None allows graceful shutdown without signal handler conflicts
+    logger.info("🤖 Starting Telegram bot polling...")
+    await application.run_polling(stop_signals=None)
 
-def run_telegram_bot():
-    """Run the telegram bot with proper event loop management for deployment"""
-    try:
-        # Create a new event loop for this thread
-        new_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(new_loop)
-        
-        # Run the bot without signal handlers (since we're in a thread)
-        new_loop.run_until_complete(run_telegram_bot_async(use_signal_handlers=False))
-            
-    except Exception as e:
-        logger.error(f"Error running telegram bot: {e}")
-        raise
+async def run_both_services():
+    """Run both web server and Telegram bot in the same event loop"""
+    logger.info("🚀 Starting Axis Casino Bot...")
+    
+    # Run both services concurrently using asyncio.gather
+    await asyncio.gather(
+        start_web_server(),
+        run_telegram_bot_async()
+    )
+
 
 if __name__ == "__main__":
-    # Environment detection for proper startup
-    is_deployment = bool(os.environ.get("RENDER") or os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("HEROKU"))
+    # Run both web server and bot in the same event loop
+    # This works for both deployment and local development
+    print("🚀 Starting Axis Casino Bot...")
     
-    if is_deployment:
-        # In deployment, run web server in background and bot in main thread
-        print("🚀 Starting in deployment mode...")
-        
-        # Start web server in background thread
-        web_thread = threading.Thread(target=run_web_server_thread)
-        web_thread.daemon = True
-        web_thread.start()
-        
-        # Run Telegram bot in main thread without signal handlers
-        run_telegram_bot()
-    else:
-        # Local development - run bot directly in main thread with signal handlers
-        print("🏠 Starting in development mode...")
-        asyncio.run(run_telegram_bot_async(use_signal_handlers=True))
+    try:
+        asyncio.run(run_both_services())
+    except KeyboardInterrupt:
+        print("\n👋 Shutting down gracefully...")
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")
+        raise
 
 # --- Game Callback Handlers ---
 
