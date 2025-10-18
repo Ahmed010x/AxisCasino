@@ -20,7 +20,7 @@ import aiohttp
 from typing import Dict, List, Optional, Tuple
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
-from flask import Flask, request
+from aiohttp import web
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
@@ -2098,47 +2098,61 @@ Please create a new deposit request.
 # --- Keep-Alive Endpoint and Port Binding for Deployment ---
 
 import os
-from flask import Flask
-
-app = Flask(__name__)
-
-@app.route('/keepalive')
-def keep_alive():
-    return "OK", 200
-
-@app.route('/cryptobot_webhook', methods=['POST'])
-def cryptobot_webhook():
-    """Handle CryptoBot webhook notifications"""
-    try:
-        signature = request.headers.get('Crypto-Pay-API-Signature', '')
-        request_data = request.get_json()
-        
-        if not request_data:
-            return "Invalid request", 400
-        
-        # Handle webhook in async context
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        success = loop.run_until_complete(handle_cryptobot_webhook(request_data, signature))
-        loop.close()
-        
-        if success:
-            return "OK", 200
-        else:
-            return "Error processing webhook", 500
-            
-    except Exception as e:
-        logger.error(f"Error in CryptoBot webhook: {e}")
-        return "Internal error", 500
-
-# --- Flask and Telegram Bot Runner ---
-
+from aiohttp import web
 import threading
 import asyncio
 
-def run_flask():
+async def health_check(request):
+    """Health check endpoint for deployment platforms"""
+    return web.json_response({"status": "ok", "bot": "running"})
+
+async def cryptobot_webhook_handler(request):
+    """Handle CryptoBot webhook notifications"""
+    try:
+        signature = request.headers.get('Crypto-Pay-API-Signature', '')
+        request_data = await request.json()
+        
+        if not request_data:
+            return web.json_response({"error": "Invalid request"}, status=400)
+        
+        # Handle webhook
+        success = await handle_cryptobot_webhook(request_data, signature)
+        
+        if success:
+            return web.json_response({"status": "ok"})
+        else:
+            return web.json_response({"error": "Error processing webhook"}, status=500)
+            
+    except Exception as e:
+        logger.error(f"Error in CryptoBot webhook: {e}")
+        return web.json_response({"error": "Internal error"}, status=500)
+
+async def start_web_server():
+    """Start aiohttp web server for health checks"""
+    app = web.Application()
+    app.router.add_get('/', health_check)
+    app.router.add_get('/health', health_check)
+    app.router.add_get('/keepalive', health_check)
+    app.router.add_post('/cryptobot_webhook', cryptobot_webhook_handler)
+    
     port = int(os.environ.get("PORT", 8000))
-    app.run(host="0.0.0.0", port=port)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    logger.info(f"🌐 Web server started on port {port}")
+    
+    # Keep the server running
+    while True:
+        await asyncio.sleep(3600)
+
+# --- Web Server and Telegram Bot Runner ---
+
+def run_web_server_thread():
+    """Run web server in a separate thread"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(start_web_server())
 
 async def run_telegram_bot_async(use_signal_handlers=True):
     await init_db()  # Ensure DB is ready
@@ -3217,16 +3231,16 @@ if __name__ == "__main__":
     is_deployment = bool(os.environ.get("RENDER") or os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("HEROKU"))
     
     if is_deployment:
-        # In deployment, run Flask in main thread and bot in background
+        # In deployment, run web server in background and bot in main thread
         print("🚀 Starting in deployment mode...")
         
-        # Start Telegram bot in background thread
-        bot_thread = threading.Thread(target=run_telegram_bot)
-        bot_thread.daemon = True
-        bot_thread.start()
+        # Start web server in background thread
+        web_thread = threading.Thread(target=run_web_server_thread)
+        web_thread.daemon = True
+        web_thread.start()
         
-        # Run Flask in main thread for health checks
-        run_flask()
+        # Run Telegram bot in main thread without signal handlers
+        run_telegram_bot()
     else:
         # Local development - run bot directly in main thread with signal handlers
         print("🏠 Starting in development mode...")
