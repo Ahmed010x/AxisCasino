@@ -1408,9 +1408,6 @@ async def process_referral(referee_id: int, referral_code: str) -> bool:
                 VALUES (?, ?, ?, 'active')
             """, (referrer_id, referee_id, referral_code))
             
-            # Give welcome bonus to referee
-            await update_balance(referee_id, REFERRAL_BONUS_REFEREE)
-            
             # Update referrer stats
             await db.execute("""
                 UPDATE users 
@@ -1810,7 +1807,7 @@ async def handle_withdraw_amount_input(update: Update, context: ContextTypes.DEF
         context.user_data['awaiting_withdraw_address'] = crypto_type
         
         fee_str = await format_usd(fee)
-        net_str = await format_usd(net_amount)
+        net_str = await format_usd(net_amount);
         
         await update.message.reply_text(
             f"<b>Withdrawal Details</b>\n\n"
@@ -1840,7 +1837,7 @@ async def handle_withdraw_address_input(update: Update, context: ContextTypes.DE
     
     # Clear states
     del context.user_data['awaiting_withdraw_address']
-    del context.user_data['withdraw_details']
+    del context
     
     # Process withdrawal
     user_id = update.message.from_user.id
@@ -2297,27 +2294,21 @@ Welcome, {username}! 👋
         earnings_str = await format_usd(stats['earnings'])
         
         text = f"""
-👥 <b>REFERRAL PROGRAM</b> 👥
+👥 <b>REFERRAL PROGRAM</b>
 
-� <b>Earn 20% Commission!</b>
+Invite friends and earn rewards!
 
-Share your unique referral link and earn <b>20% of what your referrals lose</b> in games!
-
-�🔗 <b>Your Referral Link:</b>
+🔗 <b>Your Referral Link:</b>
 <code>{referral_link}</code>
 
 📊 <b>Your Stats:</b>
-� Total Referrals: <b>{stats['count']}</b>
-� Total Earned: <b>{earnings_str}</b>
+👥 Total Referrals: <b>{stats['count']}</b>
+💰 Total Earned: <b>{earnings_str}</b>
 
 <b>How it works:</b>
 1. Share your link with friends
 2. They sign up using your link
-3. They get a ${REFERRAL_BONUS_REFEREE:.2f} welcome bonus
-4. You earn 20% commission every time they lose a game
-
-💡 <b>Example:</b>
-If your referral loses $100, you earn $20!
+3. You earn rewards when they play
 
 <i>Start sharing and earning today!</i>
 """
@@ -2628,8 +2619,7 @@ Good luck! 🍀
 
 <b>🎁 Bonuses:</b>
 • Weekly bonus: $5.00 every 7 days
-• Referral bonus: 20% commission on referral losses
-• Welcome bonus: $5.00 for new referrals
+• Referral rewards: Earn when your referrals play
 
 <b>📞 Support:</b>
 Need help? Contact our support team!
@@ -2698,6 +2688,10 @@ Good luck at the tables! 🍀
             await game_dice_callback(update, context)
         elif data == "game_roulette":
             await game_roulette_callback(update, context)
+        elif data == "game_basketball":
+            await game_basketball_callback(update, context)
+        elif data == "game_darts":
+            await game_darts_callback(update, context)
         # Game betting handlers - only include working games
         elif data.startswith("slots_bet_"):
             await handle_slots_bet(update, context)
@@ -2707,11 +2701,19 @@ Good luck at the tables! 🍀
             await handle_dice_bet(update, context)
         elif data.startswith("dice_play_"):
             await handle_dice_play(update, context)
+        elif data.startswith("basketball_bet_"):
+            await handle_basketball_bet(update, context)
+        elif data.startswith("basketball_shoot_"):
+            await handle_basketball_shoot(update, context)
+        elif data.startswith("darts_bet_"):
+            await handle_darts_bet(update, context)
+        elif data.startswith("darts_throw_"):
+            await handle_darts_throw(update, context)
         elif data.startswith("roulette_"):
             await game_roulette_callback(update, context)
         # Unsupported games - show coming soon message
-        elif data in ["game_prediction", "game_basketball", "game_coinflip"] or \
-             data.startswith(("prediction_", "basketball_", "coinflip_")):
+        elif data in ["game_prediction", "game_coinflip"] or \
+             data.startswith(("prediction_", "coinflip_")):
             await query.edit_message_text(
                 "🚧 <b>Coming Soon!</b>\n\nThis game is under development.\n\nTry our working games: Slots, Blackjack, Dice, or Roulette!",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎮 Back to Games", callback_data="mini_app_centre")]]),
@@ -2842,6 +2844,10 @@ Good luck! 🍀
             ],
             [
                 InlineKeyboardButton("🎲 Dice", callback_data="game_dice"),
+                InlineKeyboardButton("🏀 Basketball", callback_data="game_basketball")
+            ],
+            [
+                InlineKeyboardButton("🎯 Darts", callback_data="game_darts"),
                 InlineKeyboardButton("🎯 Roulette", callback_data="game_roulette")
             ]
         ]
@@ -2896,27 +2902,21 @@ Withdraw your winnings securely:
         earnings_str = await format_usd(stats['earnings'])
         
         text = f"""
-👥 <b>REFERRAL PROGRAM</b> 👥
+👥 <b>REFERRAL PROGRAM</b>
 
-� <b>Earn 20% Commission!</b>
+Invite friends and earn rewards!
 
-Share your unique referral link and earn <b>20% of what your referrals lose</b> in games!
-
-�🔗 <b>Your Referral Link:</b>
+🔗 <b>Your Referral Link:</b>
 <code>{referral_link}</code>
 
 📊 <b>Your Stats:</b>
-� Total Referrals: <b>{stats['count']}</b>
-� Total Earned: <b>{earnings_str}</b>
+👥 Total Referrals: <b>{stats['count']}</b>
+💰 Total Earned: <b>{earnings_str}</b>
 
 <b>How it works:</b>
 1. Share your link with friends
 2. They sign up using your link
-3. They get a ${REFERRAL_BONUS_REFEREE:.2f} welcome bonus
-4. You earn 20% commission every time they lose a game
-
-💡 <b>Example:</b>
-If your referral loses $100, you earn $20!
+3. You earn rewards when they play
 
 <i>Start sharing and earning today!</i>
 """
@@ -3369,6 +3369,98 @@ European wheel with multiple betting options and high payouts.
     keyboard = [[InlineKeyboardButton("Back to Games", callback_data="mini_app_centre")]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
 
+async def game_basketball_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show basketball game betting interface"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    user = await get_user(user_id)
+    if not user:
+        await query.edit_message_text("❌ User not found. Please restart with /start")
+        return
+    
+    balance_str = await format_usd(user['balance'])
+    
+    text = f"""
+🏀 <b>BASKETBALL 1v1</b>
+
+💰 Balance: {balance_str}
+
+<b>Game Mode:</b>
+First to score wins! You vs Bot
+
+<b>Shot Success Rates:</b>
+🎯 Free Throw: 70% - 2x payout
+⛹️ Jump Shot: 50% - 3x payout
+🔥 3-Pointer: 30% - 5x payout
+💥 Half Court: 5% - 20x payout
+
+Choose bet:
+"""
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("$1", callback_data="basketball_bet_1"),
+            InlineKeyboardButton("$5", callback_data="basketball_bet_5"),
+            InlineKeyboardButton("$10", callback_data="basketball_bet_10")
+        ],
+        [
+            InlineKeyboardButton("$25", callback_data="basketball_bet_25"),
+            InlineKeyboardButton("$50", callback_data="basketball_bet_50"),
+            InlineKeyboardButton("$100", callback_data="basketball_bet_100")
+        ],
+        [InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def game_darts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show darts game betting interface"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    user = await get_user(user_id)
+    if not user:
+        await query.edit_message_text("❌ User not found. Please restart with /start")
+        return
+    
+    balance_str = await format_usd(user['balance'])
+    
+    text = f"""
+🎯 <b>DARTS 1v1</b>
+
+💰 Balance: {balance_str}
+
+<b>Game Mode:</b>
+Highest score wins! You vs Bot
+
+<b>Target Hit Rates:</b>
+🟢 Outer Bull: 65% - 2x payout (25 pts)
+🔴 Inner Bull: 45% - 3x payout (50 pts)
+💎 Triple 20: 30% - 5x payout (60 pts)
+🏆 Triple Bull: 10% - 15x payout (180 pts)
+
+Choose bet:
+"""
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("$1", callback_data="darts_bet_1"),
+            InlineKeyboardButton("$5", callback_data="darts_bet_5"),
+            InlineKeyboardButton("$10", callback_data="darts_bet_10")
+        ],
+        [
+            InlineKeyboardButton("$25", callback_data="darts_bet_25"),
+            InlineKeyboardButton("$50", callback_data="darts_bet_50"),
+            InlineKeyboardButton("$100", callback_data="darts_bet_100")
+        ],
+        [InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
 # --- Game Logic Functions ---
 
 def generate_slot_reels() -> List[str]:
@@ -3430,6 +3522,37 @@ def calculate_hand_value(hand: List[str]) -> int:
 def roll_dice() -> Tuple[int, int]:
     """Roll two dice"""
     return random.randint(1, 6), random.randint(1, 6)
+
+def shoot_basketball(difficulty: str) -> bool:
+    """Simulate a basketball shot based on difficulty"""
+    # Success probabilities for each shot type
+    probabilities = {
+        'free_throw': 0.70,  # 70% success - Easy
+        'jump_shot': 0.50,   # 50% success - Medium
+        'three_pointer': 0.30, # 30% success - Hard
+        'half_court': 0.05   # 5% success - Very Hard
+    }
+    
+    success_chance = probabilities.get(difficulty, 0.50)
+    return random.random() < success_chance
+
+def throw_dart(target: str) -> int:
+    """Simulate a dart throw based on target difficulty"""
+    # Scoring system for different targets
+    # Returns actual score achieved (0 if missed)
+    scoring = {
+        'outer_bull': {'hit_chance': 0.65, 'score': 25, 'multiplier': 2},  # 65% chance, 2x payout
+        'inner_bull': {'hit_chance': 0.45, 'score': 50, 'multiplier': 3},  # 45% chance, 3x payout
+        'triple_20': {'hit_chance': 0.30, 'score': 60, 'multiplier': 5},   # 30% chance, 5x payout
+        'triple_bull': {'hit_chance': 0.10, 'score': 180, 'multiplier': 15} # 10% chance, 15x payout
+    }
+    
+    target_info = scoring.get(target, scoring['outer_bull'])
+    hit_chance = target_info['hit_chance']
+    
+    if random.random() < hit_chance:
+        return target_info['score']
+    return 0
 
 # --- Game Betting Handlers ---
 
@@ -3735,6 +3858,298 @@ Roll: {die1_emoji} {die2_emoji} = {total}
             InlineKeyboardButton("Other Games", callback_data="mini_app_centre")
         ],
         [InlineKeyboardButton("Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(result_message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def handle_basketball_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle basketball betting - show shot type options"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    # Extract bet amount from callback data
+    bet_amount = float(query.data.split("_")[-1])
+    
+    # Check user balance
+    user = await get_user(user_id)
+    if not user or user['balance'] < bet_amount:
+        await query.edit_message_text(
+            "❌ Insufficient balance! Please deposit more funds.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("💳 Deposit", callback_data="deposit")]])
+        )
+        return
+    
+    # Store bet amount in user data for the next step
+    context.user_data['basketball_bet_amount'] = bet_amount
+    
+    balance_str = await format_usd(user['balance'])
+    
+    text = f"""
+🏀 <b>BASKETBALL 1v1</b>
+
+💰 Balance: {balance_str}
+💵 Bet: ${bet_amount:.2f}
+
+<b>⚔️ YOU vs BOT</b>
+First to score wins!
+
+Choose your shot type:
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🎯 Free Throw - 2x (70%)", callback_data=f"basketball_shoot_free_throw_{bet_amount}")],
+        [InlineKeyboardButton("⛹️ Jump Shot - 3x (50%)", callback_data=f"basketball_shoot_jump_shot_{bet_amount}")],
+        [InlineKeyboardButton("🔥 3-Pointer - 5x (30%)", callback_data=f"basketball_shoot_three_pointer_{bet_amount}")],
+        [InlineKeyboardButton("💥 Half Court - 20x (5%)", callback_data=f"basketball_shoot_half_court_{bet_amount}")],
+        [InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def handle_basketball_shoot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle basketball 1v1 match"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    # Parse callback data: basketball_shoot_free_throw_10 or basketball_shoot_three_pointer_25
+    parts = query.data.split("_")
+    shot_type = "_".join(parts[2:-1])  # free_throw, jump_shot, three_pointer, half_court
+    bet_amount = float(parts[-1])
+    
+    # Deduct bet amount
+    success = await deduct_balance(user_id, bet_amount)
+    if not success:
+        await query.edit_message_text("❌ Error processing bet. Please try again.")
+        return
+    
+    # 1v1 Match: Both players shoot
+    player_made_shot = shoot_basketball(shot_type)
+    bot_made_shot = shoot_basketball(shot_type)
+    
+    # Calculate result
+    win_amount = 0.0
+    result_text = ""
+    match_result = ""
+    multipliers = {
+        'free_throw': 2,
+        'jump_shot': 3,
+        'three_pointer': 5,
+        'half_court': 20
+    }
+    
+    shot_names = {
+        'free_throw': '🎯 Free Throw',
+        'jump_shot': '⛹️ Jump Shot',
+        'three_pointer': '🔥 3-Pointer',
+        'half_court': '💥 Half Court Shot'
+    }
+    
+    multiplier = multipliers.get(shot_type, 2)
+    shot_name = shot_names.get(shot_type, 'Shot')
+    
+    # Determine match outcome
+    player_emoji = "✅" if player_made_shot else "❌"
+    bot_emoji = "✅" if bot_made_shot else "❌"
+    
+    if player_made_shot and not bot_made_shot:
+        # Player wins
+        win_amount = bet_amount * multiplier
+        result_text = f"� <b>YOU WIN!</b> 🏆"
+        match_result = f"{player_emoji} YOU SCORED • BOT MISSED {bot_emoji}"
+    elif bot_made_shot and not player_made_shot:
+        # Bot wins
+        result_text = f"😔 <b>BOT WINS!</b>"
+        match_result = f"{player_emoji} YOU MISSED • BOT SCORED {bot_emoji}"
+    elif player_made_shot and bot_made_shot:
+        # Both scored - tie, return bet
+        win_amount = bet_amount
+        result_text = f"🤝 <b>TIE GAME!</b>"
+        match_result = f"{player_emoji} BOTH SCORED {bot_emoji}"
+    else:
+        # Both missed - tie, return bet
+        win_amount = bet_amount
+        result_text = f"🤝 <b>TIE GAME!</b>"
+        match_result = f"{player_emoji} BOTH MISSED {bot_emoji}"
+    
+    # Update balance if won
+    if win_amount > 0:
+        await update_balance(user_id, win_amount)
+    
+    # Log game session
+    await log_game_session(user_id, 'basketball', bet_amount, win_amount, f"{result_text} - {match_result}")
+    
+    # Update house balance
+    await update_house_balance_on_game(bet_amount, win_amount)
+    
+    # Get updated balance
+    user = await get_user(user_id)
+    balance_str = await format_usd(user['balance'])
+    
+    # Create result message
+    result_message = f"""
+🏀 <b>BASKETBALL 1v1</b>
+
+<b>{shot_name}</b>
+
+{result_text}
+
+{match_result}
+
+💰 Bet: ${bet_amount:.2f}
+🏆 Won: ${win_amount:.2f}
+📊 Balance: {balance_str}
+"""
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("🏀 Play Again", callback_data="game_basketball"),
+            InlineKeyboardButton("🎮 Other Games", callback_data="mini_app_centre")
+        ],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
+    ]
+    
+    await query.edit_message_text(result_message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def handle_darts_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle darts betting - show target options"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    # Extract bet amount from callback data
+    bet_amount = float(query.data.split("_")[-1])
+    
+    # Check user balance
+    user = await get_user(user_id)
+    if not user or user['balance'] < bet_amount:
+        await query.edit_message_text(
+            "❌ Insufficient balance! Please deposit more funds.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("💳 Deposit", callback_data="deposit")]])
+        )
+        return
+    
+    # Store bet amount in user data for the next step
+    context.user_data['darts_bet_amount'] = bet_amount
+    
+    balance_str = await format_usd(user['balance'])
+    
+    text = f"""
+🎯 <b>DARTS 1v1</b>
+
+💰 Balance: {balance_str}
+💵 Bet: ${bet_amount:.2f}
+
+<b>⚔️ YOU vs BOT</b>
+Highest score wins!
+
+Choose your target:
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🟢 Outer Bull - 2x (65%)", callback_data=f"darts_throw_outer_bull_{bet_amount}")],
+        [InlineKeyboardButton("🔴 Inner Bull - 3x (45%)", callback_data=f"darts_throw_inner_bull_{bet_amount}")],
+        [InlineKeyboardButton("💎 Triple 20 - 5x (30%)", callback_data=f"darts_throw_triple_20_{bet_amount}")],
+        [InlineKeyboardButton("🏆 Triple Bull - 15x (10%)", callback_data=f"darts_throw_triple_bull_{bet_amount}")],
+        [InlineKeyboardButton("🔙 Back to Games", callback_data="mini_app_centre")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+async def handle_darts_throw(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle darts 1v1 match"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    # Parse callback data: darts_throw_outer_bull_10 or darts_throw_triple_20_25
+    parts = query.data.split("_")
+    target_type = "_".join(parts[2:-1])  # outer_bull, inner_bull, triple_20, triple_bull
+    bet_amount = float(parts[-1])
+    
+    # Deduct bet amount
+    success = await deduct_balance(user_id, bet_amount)
+    if not success:
+        await query.edit_message_text("❌ Error processing bet. Please try again.")
+        return
+    
+    # 1v1 Match: Both players throw
+    player_score = throw_dart(target_type)
+    bot_score = throw_dart(target_type)
+    
+    # Calculate result
+    win_amount = 0.0
+    result_text = ""
+    match_result = ""
+    multipliers = {
+        'outer_bull': 2,
+        'inner_bull': 3,
+        'triple_20': 5,
+        'triple_bull': 15
+    }
+    
+    target_names = {
+        'outer_bull': '🟢 Outer Bull',
+        'inner_bull': '🔴 Inner Bull',
+        'triple_20': '💎 Triple 20',
+        'triple_bull': '🏆 Triple Bull'
+    }
+    
+    multiplier = multipliers.get(target_type, 2)
+    target_name = target_names.get(target_type, 'Target')
+    
+    # Determine match outcome based on scores
+    if player_score > bot_score:
+        # Player wins
+        win_amount = bet_amount * multiplier
+        result_text = f"🎉 <b>YOU WIN!</b> 🏆"
+        match_result = f"📊 YOU: {player_score} pts • BOT: {bot_score} pts"
+    elif bot_score > player_score:
+        # Bot wins
+        result_text = f"😔 <b>BOT WINS!</b>"
+        match_result = f"📊 YOU: {player_score} pts • BOT: {bot_score} pts"
+    else:
+        # Tie - return bet
+        win_amount = bet_amount
+        result_text = f"🤝 <b>TIE GAME!</b>"
+        match_result = f"📊 BOTH: {player_score} pts"
+    
+    # Update balance if won
+    if win_amount > 0:
+        await update_balance(user_id, win_amount)
+    
+    # Log game session
+    await log_game_session(user_id, 'darts', bet_amount, win_amount, f"{result_text} - {match_result}")
+    
+    # Update house balance
+    await update_house_balance_on_game(bet_amount, win_amount)
+    
+    # Get updated balance
+    user = await get_user(user_id)
+    balance_str = await format_usd(user['balance'])
+    
+    # Create result message
+    result_message = f"""
+🎯 <b>DARTS 1v1</b>
+
+<b>{target_name}</b>
+
+{result_text}
+
+{match_result}
+
+💰 Bet: ${bet_amount:.2f}
+🏆 Won: ${win_amount:.2f}
+📊 Balance: {balance_str}
+"""
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("🎯 Play Again", callback_data="game_darts"),
+            InlineKeyboardButton("🎮 Other Games", callback_data="mini_app_centre")
+        ],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_panel")]
     ]
     
     await query.edit_message_text(result_message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
