@@ -2200,7 +2200,6 @@ async def run_telegram_bot_async():
         net_emoji = "📈" if net_result >= 0 else "📉"
         net_str = await format_usd(abs(net_result))
         
-        # Build user panel message
         welcome_text = f"""
 🎰 <b>AXIS CASINO</b>
 
@@ -2298,41 +2297,44 @@ Welcome, {username}! 👋
         earnings_str = await format_usd(stats['earnings'])
         
         text = f"""
-<b>REFERRAL PROGRAM</b>
+👥 <b>REFERRAL PROGRAM</b> 👥
 
-💰 <b>Earn 20% Commission!</b>
+� <b>Earn 20% Commission!</b>
 
-Share your link and earn <b>20% of losses</b> from referrals!
+Share your unique referral link and earn <b>20% of what your referrals lose</b> in games!
 
-🔗 <b>Your Link:</b>
+�🔗 <b>Your Referral Link:</b>
 <code>{referral_link}</code>
 
-📊 <b>Stats:</b>
-Referrals: <b>{stats['count']}</b>
-Earned: <b>{earnings_str}</b>
+📊 <b>Your Stats:</b>
+� Total Referrals: <b>{stats['count']}</b>
+� Total Earned: <b>{earnings_str}</b>
 
 <b>How it works:</b>
-1. Share your link
-2. Friends sign up & get ${REFERRAL_BONUS_REFEREE:.2f}
-3. You earn 20% when they lose
+1. Share your link with friends
+2. They sign up using your link
+3. They get a ${REFERRAL_BONUS_REFEREE:.2f} welcome bonus
+4. You earn 20% commission every time they lose a game
 
-<b>Example:</b> They lose $100 → You earn $20!
+💡 <b>Example:</b>
+If your referral loses $100, you earn $20!
+
+<i>Start sharing and earning today!</i>
 """
         
         # Add recent referrals if any
         if stats['recent']:
-            text += "\n\n<b>Recent Referrals:</b>\n"
+            text += "\n\n📋 <b>Recent Referrals:</b>\n"
             for ref in stats['recent'][:5]:
                 username = ref['username'] or 'User'
                 bonus = ref['bonus']
                 text += f"• {username} - Earned: ${bonus:.2f}\n"
         
         keyboard = [
-            [InlineKeyboardButton("Share Link", url=f"https://t.me/share/url?url={referral_link}&text=Join this amazing casino bot!")],
-            [InlineKeyboardButton("Refresh Stats", callback_data="referral_menu")],
-            [InlineKeyboardButton("Main Menu", callback_data="main_panel")]
+            [InlineKeyboardButton("� Share Link", url=f"https://t.me/share/url?url={referral_link}&text=Join this amazing casino bot!")],
+            [InlineKeyboardButton("🔄 Refresh Stats", callback_data="referral_menu")],
+            [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
         ]
-        
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     
     application.add_handler(CommandHandler("referral", referral_command_handler))
@@ -2363,7 +2365,7 @@ Earned: <b>{earnings_str}</b>
 
 Choose bet:
 """
-        
+    
         keyboard = [
             [
                 InlineKeyboardButton("$1", callback_data="slots_bet_1"),
@@ -2400,14 +2402,14 @@ Choose bet:
 💰 Balance: {balance_str}
 
 <b>Rules:</b>
-• Get as close to 21 as possible
-• Aces = 1 or 11, Face cards = 10
-• Beat the dealer without going over 21
-• Blackjack pays 3:2
+Get to 21 • Beat dealer • Blackjack pays 3:2
+
+<b>Card Values:</b>
+Numbers = face • Face cards = 10 • Ace = 1 or 11
 
 Choose bet:
 """
-        
+    
         keyboard = [
             [
                 InlineKeyboardButton("$1", callback_data="blackjack_bet_1"),
@@ -2423,7 +2425,7 @@ Choose bet:
         ]
         
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-    
+
     async def dice_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /dice command"""
         user_id = update.effective_user.id
@@ -2443,15 +2445,12 @@ Choose bet:
 
 💰 Balance: {balance_str}
 
-<b>How to play:</b>
-• Roll two dice (2-12 total)
-• Win 2x on 7 or 11
-• Win 10x on doubles (snake eyes, etc.)
-• Other numbers lose
+<b>Options:</b>
+HIGH (8-12) = 2x • LOW (2-7) = 2x • Lucky 7 = 5x
 
 Choose bet:
 """
-        
+    
         keyboard = [
             [
                 InlineKeyboardButton("$1", callback_data="dice_bet_1"),
@@ -2467,7 +2466,7 @@ Choose bet:
         ]
         
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-    
+
     async def roulette_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /roulette command"""
         user_id = update.effective_user.id
@@ -2495,7 +2494,7 @@ Choose bet:
 
 Choose your bet type:
 """
-        
+    
         keyboard = [
             [
                 InlineKeyboardButton("🔴 Red", callback_data="roulette_red"),
@@ -2545,6 +2544,7 @@ Choose your bet type:
 
 <b>Quick Access:</b>
 /slots - Play slots directly
+/black
 /blackjack - Play blackjack directly  
 /dice - Play dice directly
 /roulette - Play roulette directly
@@ -2978,8 +2978,6 @@ Member since: {user.get('created_at', '')[:10] if user.get('created_at') else 'U
         text = f"""
 ⚡ <b>BOT COMMANDS</b> ⚡
 
-Click any command below to use it instantly!
-
 <b>🎮 Game Commands:</b>
 • /games - All games menu
 • /slots - Play slots directly
@@ -2997,26 +2995,10 @@ Click any command below to use it instantly!
 
 <b>🚀 Quick Tips:</b>
 • Type any command in chat
-• Use buttons for easy access
 • Commands work anywhere in the bot
 """
         
         keyboard = [
-            [
-                InlineKeyboardButton("/games", callback_data="mini_app_centre"),
-                InlineKeyboardButton("/slots", callback_data="game_slots"),
-                InlineKeyboardButton("/blackjack", callback_data="game_blackjack")
-            ],
-            [
-                InlineKeyboardButton("/dice", callback_data="game_dice"),
-                InlineKeyboardButton("/roulette", callback_data="game_roulette"),
-                InlineKeyboardButton("/deposit", callback_data="deposit")
-            ],
-            [
-                InlineKeyboardButton("/referral", callback_data="referral_menu"),
-                InlineKeyboardButton("/help", callback_data="help_menu"),
-                InlineKeyboardButton("/start", callback_data="main_panel")
-            ],
             [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_panel")]
         ]
         
